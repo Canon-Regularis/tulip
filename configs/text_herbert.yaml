@@ -1,0 +1,36 @@
+# HerBERT fine-tuning: raw texts go straight to the transformer wrapper
+# (features stays empty). Requires: pip install "tulip[transformers]"
+name: text-herbert
+seed: 42
+task: text
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: dialektarium
+    - name: dgp
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features: []
+
+model:
+  name: herbert
+  params:
+    max_length: 256
+
+training:
+  batch_size: 16
+  epochs: 3
+  learning_rate: 2.0e-5
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts

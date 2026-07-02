@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Experiment outputs and trained models
+artifacts/
+runs/
+*.joblib
+*.ckpt
+
+# Raw and processed corpora (acquire locally; see docs/datasets.md)
+data/
+!data/README.md
+
+# Secrets — never commit environment or key material
+.env
+.env.*
+*.pem
+*.pfx
+secrets/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,38 @@
+# Calibrated linear SVM over the full classical text feature set.
+name: text-svm
+seed: 42
+task: text
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: dialektarium
+    - name: dgp
+    - name: korpus_spiski
+    - name: mackowce
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features:
+  - name: char_tfidf
+  - name: word_tfidf
+  - name: stylometry
+  - name: affix_frequency
+  - name: dialect_keywords
+
+model:
+  name: linear_svm
+  params:
+    method: sigmoid
+    cv: 3
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts

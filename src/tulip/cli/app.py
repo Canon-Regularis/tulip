@@ -1,0 +1,355 @@
+"""The ``tulip`` command-line interface.
+
+One operator surface over the whole toolkit: dataset inspection and
+preparation, training, benchmarking, evaluation, single-sample prediction
+(with optional map export and explanations), and the HTTP service.
+
+Library errors (:class:`~tulip.core.exceptions.TulipError`) are caught at the
+command boundary and rendered as one clean red line; full tracebacks appear
+only under ``--verbose``.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable, Iterable
+from pathlib import Path
+from typing import Any
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from tulip import __version__
+from tulip.core.exceptions import TulipError
+from tulip.core.types import Prediction, Sample
+from tulip.utils.logging import configure_logging, get_logger
+
+app = typer.Typer(
+    name="tulip",
+    help="Polish dialect detection from text, transcribed speech, and audio.",
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+datasets_app = typer.Typer(help="Inspect and prepare the source corpora.", no_args_is_help=True)
+app.add_typer(datasets_app, name="data")
+
+_console = Console()
+_errors = Console(stderr=True, style="bold red")
+_logger = get_logger(__name__)
+
+_state = {"verbose": False}
+
+
+def _print_version(value: bool) -> None:
+    if value:
+        _console.print(f"tulip {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _global_options(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Debug logging and tracebacks."),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_print_version,
+        is_eager=True,  # handled during parsing, before "missing command" validation
+        help="Print the tulip version and exit.",
+    ),
+) -> None:
+    _state["verbose"] = verbose
+    configure_logging(logging.DEBUG if verbose else logging.WARNING)
+
+
+def _run(action: Callable[[], None]) -> None:
+    """Execute a command body with uniform TulipError handling."""
+    try:
+        action()
+    except TulipError as exc:
+        if _state["verbose"]:
+            raise
+        _errors.print(f"error: {exc}")
+        raise typer.Exit(code=1) from exc
+
+
+# ------------------------------------------------------------------ datasets
+
+
+@datasets_app.command("list")
+def datasets_list(
+    root: Path = typer.Option(Path("data/raw"), help="Local corpora root directory."),
+) -> None:
+    """List the catalogued corpora, their tiers, and local availability."""
+
+    def action() -> None:
+        from tulip.data import DATASETS, catalog
+
+        table = Table(title="tulip dataset catalog", show_lines=False)
+        table.add_column("name", style="bold")
+        table.add_column("tier", justify="center")
+        table.add_column("tasks")
+        table.add_column("local", justify="center")
+        table.add_column("url", overflow="fold")
+        for info in catalog():
+            loader = DATASETS.create(info.name)
+            available = loader.is_available(root / info.name)
+            table.add_row(
+                info.name,
+                str(info.tier),
+                ", ".join(info.tasks),
+                "[green]yes[/green]" if available else "[dim]no[/dim]",
+                info.url,
+            )
+        _console.print(table)
+        _console.print(f"[dim]local root: {root} -- acquisition notes: docs/datasets.md[/dim]")
+
+    _run(action)
+
+
+@datasets_app.command("prepare")
+def data_prepare(
+    config_path: Path = typer.Argument(..., help="Experiment config YAML."),
+    output: Path | None = typer.Option(
+        None, help="Split output directory (default: <output_dir>/<name>/splits)."
+    ),
+) -> None:
+    """Build speaker-disjoint splits (load, clean, dedup, split, persist)."""
+
+    def action() -> None:
+        from tulip.config import load_experiment_config
+        from tulip.data import DatasetBuilder
+
+        config = load_experiment_config(config_path)
+        destination = output or config.output_dir / config.name / "splits"
+        splits = DatasetBuilder(config.data).build(
+            config.split, target=config.target, output_dir=destination
+        )
+        for split_name, size in splits.sizes().items():
+            _console.print(f"{split_name}: {size} samples")
+        _console.print(f"[green]splits written to {destination}[/green]")
+
+    _run(action)
+
+
+# --------------------------------------------------------------- train/eval
+
+
+@app.command()
+def train(config_path: Path = typer.Argument(..., help="Experiment config YAML.")) -> None:
+    """Run one experiment end to end (build data, train, evaluate, persist)."""
+
+    def action() -> None:
+        from tulip.config import load_experiment_config
+        from tulip.pipeline import run_experiment
+
+        result = run_experiment(load_experiment_config(config_path))
+        _console.print(result.summary())
+        _console.print(f"[green]model saved to {result.model_path}[/green]")
+
+    _run(action)
+
+
+@app.command()
+def benchmark(
+    config_path: Path = typer.Argument(..., help="Base experiment config YAML."),
+    model: list[str] = typer.Option(
+        [], "--model", "-m", help="Model registry name (repeatable); default: config's model."
+    ),
+    split: str = typer.Option("test", help="Split shown in the comparison table."),
+) -> None:
+    """Compare several models over one identical frozen split."""
+
+    def action() -> None:
+        from tulip.config import load_experiment_config
+        from tulip.evaluation.benchmark import comparison_table
+        from tulip.pipeline import run_benchmark
+
+        config = load_experiment_config(config_path)
+        results = run_benchmark(config, models=model or None)
+        frame = comparison_table(results, split=split)
+        table = Table(title=f"benchmark {config.name!r} ({split} split)")
+        for column in frame.columns:
+            table.add_column(str(column))
+        for _, row in frame.iterrows():
+            table.add_row(*(_format_cell(value) for value in row))
+        _console.print(table)
+        _console.print(
+            f"[green]benchmark artifacts under {config.output_dir / config.name}[/green]"
+        )
+
+    _run(action)
+
+
+@app.command()
+def evaluate(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    data: Path = typer.Argument(
+        ..., help="Labelled samples: split .jsonl, manifest file, or manifest directory."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+) -> None:
+    """Evaluate a saved model on labelled samples."""
+
+    def action() -> None:
+        from tulip.pipeline import DialectClassifier, evaluate_samples
+
+        classifier = DialectClassifier.load(model_path)
+        report = evaluate_samples(classifier, list(_read_samples(data)), name=str(data))
+        if json_output:
+            _console.print_json(report.model_dump_json())
+        else:
+            _console.print(report.to_markdown())
+
+    _run(action)
+
+
+# ------------------------------------------------------------------ predict
+
+
+@app.command()
+def predict(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    text: str | None = typer.Argument(None, help="Text to classify."),
+    audio: Path | None = typer.Option(None, "--audio", help="Audio file to classify."),
+    top_k: int = typer.Option(3, "--top-k", min=1, help="How many classes to display."),
+    json_output: bool = typer.Option(False, "--json", help="Emit the prediction as JSON."),
+    map_out: Path | None = typer.Option(
+        None, "--map", help="Write an interactive prediction map to this HTML file."
+    ),
+    explain: str | None = typer.Option(
+        None, "--explain", help="Explainer name (e.g. top_tfidf, lime, nearest_examples)."
+    ),
+) -> None:
+    """Classify one text (argument) or one audio file (--audio)."""
+
+    def action() -> None:
+        from tulip.core.exceptions import ConfigurationError
+        from tulip.pipeline import DialectClassifier
+
+        if (text is None) == (audio is None):
+            raise ConfigurationError("provide exactly one input: a TEXT argument or --audio PATH")
+        raw: Any = text if text is not None else audio
+        classifier = DialectClassifier.load(model_path)
+        prediction = classifier.predict(raw)
+
+        if json_output:
+            _console.print_json(prediction.model_dump_json())
+        else:
+            _print_prediction(prediction, top_k)
+
+        if map_out is not None:
+            _export_map(prediction, map_out)
+        if explain is not None:
+            _print_explanation(classifier, raw, explain)
+
+    _run(action)
+
+
+def _print_prediction(prediction: Prediction, top_k: int) -> None:
+    """Render a prediction as a probability table."""
+    if prediction.abstained:
+        _console.print(
+            f"[yellow]abstained[/yellow] (top confidence {prediction.confidence:.1%} "
+            "below the model's threshold)"
+        )
+    else:
+        _console.print(f"prediction: [bold]{prediction.label}[/bold] ({prediction.confidence:.1%})")
+    table = Table(show_header=True)
+    table.add_column(prediction.level.value)
+    table.add_column("probability", justify="right")
+    for entry in prediction.top_k(top_k):
+        table.add_row(entry.label, f"{entry.probability:.1%}")
+    _console.print(table)
+
+
+def _export_map(prediction: Prediction, destination: Path) -> None:
+    """Write the interactive prediction map (needs the viz extra)."""
+    from tulip.viz.map import prediction_map, save_map
+
+    save_map(prediction_map(prediction), destination)
+    _console.print(f"[green]map written to {destination}[/green]")
+
+
+def _print_explanation(classifier: Any, raw: Any, method: str) -> None:
+    """Render an explanation's attributions and/or neighbours."""
+    explanation = classifier.explain(raw, method=method)
+    if explanation.attributions:
+        table = Table(title=f"evidence ({explanation.method})")
+        table.add_column("token")
+        table.add_column("weight", justify="right")
+        for attribution in explanation.top_attributions(10):
+            colour = "green" if attribution.weight > 0 else "red"
+            table.add_row(attribution.token, f"[{colour}]{attribution.weight:+.4f}[/{colour}]")
+        _console.print(table)
+    if explanation.neighbors:
+        table = Table(title="most similar training examples")
+        table.add_column("label")
+        table.add_column("similarity", justify="right")
+        table.add_column("text", overflow="fold")
+        for neighbor in explanation.neighbors:
+            table.add_row(neighbor.label or "?", f"{neighbor.similarity:.2f}", neighbor.text or "")
+        _console.print(table)
+
+
+# -------------------------------------------------------------------- serve
+
+
+@app.command()
+def serve(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    host: str = typer.Option("127.0.0.1", help="Bind address."),
+    port: int = typer.Option(8000, help="Bind port."),
+) -> None:
+    """Serve the model over HTTP (text + audio upload; needs the serve extra)."""
+
+    def action() -> None:
+        from tulip.serve.app import create_app
+        from tulip.utils.optional import optional_import
+
+        uvicorn = optional_import("uvicorn", extra="serve", purpose="the HTTP service")
+        uvicorn.run(create_app(model_path), host=host, port=port)
+
+    _run(action)
+
+
+# ------------------------------------------------------------------ helpers
+
+
+def _read_samples(path: Path) -> Iterable[Sample]:
+    """Read labelled samples from a split JSONL, manifest file, or directory."""
+    from tulip.core.exceptions import DataError
+    from tulip.data import DATASETS, read_manifest
+    from tulip.utils.io import read_jsonl
+
+    if path.is_dir():
+        yield from DATASETS.create("manifest").load(path)
+        return
+    if not path.is_file():
+        raise DataError(f"no such file or directory: {path}")
+    if path.suffix.lower() in {".jsonl", ".ndjson"}:
+        # Parse fully before yielding: a mid-stream validation failure must
+        # fall back to the manifest format without emitting partial results.
+        try:
+            samples = [Sample.model_validate(record) for record in read_jsonl(path)]
+        except (ValueError, TypeError) as exc:  # not split-file records
+            _logger.debug("%s is not a split file (%s); trying manifest format", path, exc)
+        else:
+            yield from samples
+            return
+    yield from read_manifest(path)
+
+
+def _format_cell(value: Any) -> str:
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    return str(value)
+
+
+def main() -> None:
+    """Console entry point (see ``[project.scripts]`` in pyproject.toml)."""
+    app()
+
+
+if __name__ == "__main__":
+    main()

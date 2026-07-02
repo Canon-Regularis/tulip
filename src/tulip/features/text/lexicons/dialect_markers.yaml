@@ -1,0 +1,89 @@
+# Starter lexicon of Polish dialect-marker lexemes for the `dialect_keywords`
+# feature extractor (tulip.features.text.keywords).
+#
+# Format: a YAML mapping from dialect/region key to a list of single-word
+# markers. Matching is whole-word, case-insensitive, and diacritic-exact, so
+# entries must be spelled exactly as they occur in dialect texts (diacritics
+# included). Multi-word phrases are not supported. Keys follow the tulip label
+# taxonomy where possible (podhale, silesia, kashubia, kurpie, greater_poland);
+# "masovia" groups general Masovian markers (taxonomy: mazovia_proper).
+#
+# Provenance: this starter list contains only well-attested markers drawn from
+# standard Polish dialectological reference material:
+#   - Jan Karlowicz, "Slownik gwar polskich" (1900-1911)
+#   - University of Warsaw dialectology compendium (dialektologia.uw.edu.pl)
+#   - Jozef Kas, "Ilustrowany leksykon gwary i kultury podhalanskiej" (2015-)
+#   - Silesian dictionaries (e.g. B. Kallus, "Slownik gornoslaski")
+#   - M. Gruchmanowa & B. Walczak (eds.), "Slownik gwary miejskiej Poznania" (1997)
+#   - Kashubian dictionaries: S. Ramult (1893), J. Trepczyk (1994)
+#   - A. Chetnik, "Kurpie" (1924) and Kurpie dialect texts
+#
+# The list is intentionally small and high-precision; extend or replace it via
+# the `lexicon_path` parameter of DialectKeywordExtractor.
+
+podhale:
+  # Podhale (Goralic, Lesser Polish). Sources: Kas; dialektologia.uw.edu.pl.
+  - kaj       # 'where' (also Silesian; attested in both)
+  - ka        # 'where', short Podhale form
+  - hej       # affirmative particle, 'yes'
+  - baca      # head shepherd of a mountain pasture
+  - juhas     # young shepherd, shepherd's helper
+  - holny     # the halny foehn wind (dialectal form)
+  - ciupaga   # shepherd's axe
+  - gazda     # farmstead owner, host
+  - watra     # campfire
+  - dutki     # money
+
+silesia:
+  # Silesian (slonska godka). Sources: Kallus; dialektologia.uw.edu.pl.
+  - godać     # 'to speak'
+  - godo      # 'speaks' (3sg of godac)
+  - jo        # 'I' (Silesian; also Kashubian 'yes')
+  - żech      # 1sg past auxiliary clitic ('jo zech byl')
+  - kaj       # 'where' (also Podhale)
+  - bajtel    # 'child, kid'
+  - fana      # 'flag' (German loan)
+  - richtig   # 'really, exactly' (German loan)
+  - gryfny    # 'pretty, handsome'
+  - frelka    # 'young woman, miss' (German loan)
+  - pieron    # expletive/intensifier ('thunder')
+  - niy       # 'no, not' (Silesian spelling)
+
+kashubia:
+  # Kashubian ethnolect. Sources: Ramult (1893); Trepczyk (1994).
+  - jo        # 'yes' (also Silesian 'I')
+  - kaszëbë   # 'Kashubia' (endonym)
+  - chëcz     # 'house, cottage'
+  - białka    # 'woman, wife'
+  - brutka    # 'bride, fiancee'
+  - wiedno    # 'always'
+
+kurpie:
+  # Kurpie (Masovian). Mazurzenie (cz/sz/z -> c/s/z) and asynchronous
+  # soft-labial (pi -> psi, bi -> bzi) respellings characteristic of Kurpie
+  # texts. Sources: Chetnik (1924); dialektologia.uw.edu.pl.
+  - psiwo     # 'beer' (piwo)
+  - psies     # 'dog' (pies)
+  - jesce     # 'still, yet' (jeszcze, mazurzenie)
+  - cego      # 'what/why' (czego, mazurzenie)
+  - kobzieta  # 'woman' (kobieta)
+  - bziały    # 'white' (bialy)
+
+greater_poland:
+  # Greater Poland, incl. Poznan urban speech. Source: Gruchmanowa & Walczak.
+  - tej       # vocative tag particle ('hey')
+  - wuchta    # 'a lot, a heap'
+  - szneka    # 'sweet bun' (German loan; 'szneka z glancem')
+  - pyry      # 'potatoes'
+  - bimba     # 'tram'
+  - gzik      # cottage-cheese spread eaten with potatoes
+  - bejmy     # 'money'
+  - blubrać   # 'to chatter, babble'
+
+masovia:
+  # General Masovian lexical markers (taxonomy key: mazovia_proper).
+  # Sources: Karlowicz; dialektologia.uw.edu.pl (Mazowsze).
+  - chojak    # 'young pine/conifer'
+  - sośnia    # 'pine tree' (sosna)
+  - gula      # 'turkey hen'
+  - latoś     # 'this year'

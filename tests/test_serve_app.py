@@ -1,0 +1,78 @@
+"""Tests for the FastAPI inference service (optional extra ``serve``)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from conftest import make_samples
+from tulip.pipeline import DialectClassifier
+
+fastapi = pytest.importorskip("fastapi")
+from fastapi.testclient import TestClient  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def client(tmp_path_factory: pytest.TempPathFactory) -> TestClient:
+    from tulip.serve.app import create_app
+
+    artifact = tmp_path_factory.mktemp("serve-model") / "model"
+    classifier = DialectClassifier(model="logistic_regression", features=["char_tfidf"], seed=42)
+    classifier.fit(make_samples())
+    classifier.save(artifact)
+    return TestClient(create_app(artifact))
+
+
+class TestHealth:
+    def test_health_reports_model_identity(self, client: TestClient) -> None:
+        response = client.get("/health")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["task"] == "text"
+        assert set(payload["classes"]) == {"podhale", "silesia", "kurpie"}
+
+
+class TestPredictText:
+    def test_returns_full_prediction_json(self, client: TestClient) -> None:
+        response = client.post(
+            "/predict/text", json={"text": "Hej, baca się pyto, kaj się owce pasą na holi."}
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["label"] == "podhale"
+        assert payload["abstained"] is False
+        probabilities = [entry["probability"] for entry in payload["probabilities"]]
+        assert probabilities == sorted(probabilities, reverse=True)
+        assert sum(probabilities) == pytest.approx(1.0)
+
+    def test_top_k_truncates_distribution(self, client: TestClient) -> None:
+        response = client.post("/predict/text", json={"text": "Godom po naszymu.", "top_k": 1})
+        assert response.status_code == 200
+        assert len(response.json()["probabilities"]) == 1
+
+    def test_empty_text_is_rejected(self, client: TestClient) -> None:
+        assert client.post("/predict/text", json={"text": ""}).status_code == 422
+        assert client.post("/predict/text", json={"text": "   "}).status_code == 400
+
+    def test_malformed_body_is_rejected(self, client: TestClient) -> None:
+        assert client.post("/predict/text", json={"tekst": "zła nazwa pola"}).status_code == 422
+
+
+class TestPredictAudio:
+    def test_text_model_rejects_audio_uploads(self, client: TestClient) -> None:
+        response = client.post(
+            "/predict/audio", files={"file": ("clip.wav", b"RIFF....", "audio/wav")}
+        )
+        assert response.status_code == 400
+        assert "not audio" in response.json()["detail"]
+
+
+class TestCreateApp:
+    def test_missing_artifact_raises_data_error(self, tmp_path: Path) -> None:
+        from tulip.core.exceptions import DataError
+        from tulip.serve.app import create_app
+
+        with pytest.raises(DataError):
+            create_app(tmp_path / "missing")

@@ -1,0 +1,34 @@
+# Classical audio baseline: pooled MFCC + prosody features into logistic
+# regression. Requires: pip install "tulip[audio]"
+name: audio-baseline
+seed: 42
+task: audio
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: dialektarium
+  clean: false          # text cleaning is irrelevant for audio-only inputs
+  deduplicate: false    # text-hash dedup cannot judge audio
+  min_text_chars: 0
+
+features:
+  - name: mfcc
+    params:
+      n_mfcc: 20
+  - name: pitch
+  - name: spectral_centroid
+  - name: energy
+
+model:
+  name: logistic_regression
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts

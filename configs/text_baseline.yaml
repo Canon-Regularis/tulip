@@ -1,0 +1,38 @@
+# Classical text baseline: TF-IDF + stylometry into logistic regression.
+# Requires locally acquired corpora under data/raw/ (see docs/datasets.md).
+name: text-baseline
+seed: 42
+task: text
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: dialektarium
+    - name: dgp
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features:
+  - name: char_tfidf
+    params:
+      ngram_range: [2, 5]
+  - name: word_tfidf
+  - name: stylometry
+
+model:
+  name: logistic_regression
+  params:
+    C: 1.0
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  group_by: speaker_id
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts
+abstain_threshold: null
