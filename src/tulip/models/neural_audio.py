@@ -689,7 +689,13 @@ class EmbeddingSpeechClassifier(ClassifierMixin, BaseEstimator):
 
 def _register_factories() -> None:
     for name, checkpoint in FINETUNE_CHECKPOINTS.items():
-        MODELS.add(name, checkpoint_factory(FinetunedSpeechClassifier, checkpoint))
+        MODELS.add(
+            name,
+            checkpoint_factory(FinetunedSpeechClassifier, checkpoint),
+            # training_aware: accepts the shared TrainingConfig knobs; the
+            # embedding models below do not (frozen encoder + sklearn head).
+            metadata={"training_aware": True},
+        )
     for name, checkpoint in EMBEDDING_CHECKPOINTS.items():
         MODELS.add(name, checkpoint_factory(EmbeddingSpeechClassifier, checkpoint))
 

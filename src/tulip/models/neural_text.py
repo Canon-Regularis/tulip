@@ -496,7 +496,14 @@ class TransformerTextClassifier(ClassifierMixin, BaseEstimator):
 
 def _register_factories() -> None:
     for name, checkpoint in TEXT_CHECKPOINTS.items():
-        MODELS.add(name, checkpoint_factory(TransformerTextClassifier, checkpoint))
+        MODELS.add(
+            name,
+            checkpoint_factory(TransformerTextClassifier, checkpoint),
+            # training_aware: the constructor accepts the shared TrainingConfig
+            # knobs (batch_size/epochs/learning_rate), so the experiment runner
+            # may merge them into the model params.
+            metadata={"training_aware": True},
+        )
 
 
 _register_factories()

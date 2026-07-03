@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 
 @TEXT_FEATURES.register("affix_frequency")
-class AffixFrequencyExtractor(BaseEstimator, TransformerMixin):
+class AffixFrequencyExtractor(TransformerMixin, BaseEstimator):
     """Relative frequencies of learned word-final suffixes and word-initial prefixes.
 
     The affix vocabulary is learned in :meth:`fit` by document frequency: every

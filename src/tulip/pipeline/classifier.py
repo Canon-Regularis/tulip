@@ -11,6 +11,7 @@ top-k, optional abstention) instead of bare labels. Explanations delegate to
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ from tulip.core.types import ClassProbability, Explanation, Prediction, Sample, 
 from tulip.labels.taxonomy import LabelLevel
 from tulip.models import MODELS
 from tulip.models.persistence import load_model, save_model
+from tulip.pipeline.explaining import PredictionExplainer
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
 
@@ -38,6 +40,22 @@ def _coerce_component(entry: ComponentLike) -> ComponentConfig:
     if isinstance(entry, str):
         return ComponentConfig(name=entry)
     return ComponentConfig.model_validate(dict(entry))
+
+
+@dataclass(frozen=True)
+class LabelledBatch:
+    """Raw model inputs paired with labels at one granularity.
+
+    Produced by :meth:`DialectClassifier.labelled_batch`; consumed by training
+    and by evaluation (:func:`tulip.pipeline.experiment.evaluate_samples`).
+    """
+
+    raws: list[Any]
+    labels: list[str]
+    n_skipped: int
+
+    def __len__(self) -> int:
+        return len(self.raws)
 
 
 class DialectClassifier:
@@ -88,8 +106,7 @@ class DialectClassifier:
         self.pipeline_: Any | None = None
         self.classes_: tuple[str, ...] = ()
         self._train_samples: list[Sample] = []
-        self._neighbor_explainer: Any | None = None
-        self._retrieval_vectorizer: Any | None = None
+        self._prediction_explainer: PredictionExplainer | None = None
 
     # ------------------------------------------------------------------ fit
 
@@ -104,17 +121,17 @@ class DialectClassifier:
         Raises:
             DataError: if no trainable samples remain.
         """
-        raws, labels, skipped = self._trainable(samples)
-        if not raws:
+        batch = self.labelled_batch(samples)
+        if not batch.raws:
             raise DataError(
                 f"none of the {len(samples)} samples are trainable for task={self.task.value} "
-                f"at level={self.target.value} (skipped: {skipped})"
+                f"at level={self.target.value} (skipped: {batch.n_skipped})"
             )
-        if skipped:
+        if batch.n_skipped:
             _logger.info(
                 "training on %d samples (skipped %d without %s input or %r label)",
-                len(raws),
-                skipped,
+                len(batch),
+                batch.n_skipped,
                 self.task.value,
                 self.target.value,
             )
@@ -124,10 +141,10 @@ class DialectClassifier:
             self.pipeline_ = Pipeline([("features", self._build_features()), ("model", estimator)])
         else:
             self.pipeline_ = estimator
-        self.pipeline_.fit(raws, labels)
+        self.pipeline_.fit(batch.raws, batch.labels)
         self.classes_ = tuple(str(label) for label in np.asarray(self.pipeline_.classes_))
         self._train_samples = [sample for sample in samples if self._raw_of(sample) is not None]
-        self._neighbor_explainer = None  # index is rebuilt lazily on demand
+        self._prediction_explainer = None  # explainer state is rebuilt lazily on demand
         return self
 
     def _build_features(self) -> Any:
@@ -146,8 +163,14 @@ class DialectClassifier:
             return sample.text
         return sample.audio_path
 
-    def _trainable(self, samples: Sequence[Sample]) -> tuple[list[Any], list[str], int]:
-        """Collect (raw, label) training pairs, counting skipped samples."""
+    def labelled_batch(self, samples: Sequence[Sample]) -> LabelledBatch:
+        """Pair each sample's raw input with its label at the target level.
+
+        Samples missing the task's input modality or the target-level label
+        are skipped and counted, not errors: corpora are heterogeneous and
+        partial labelling is the norm. Callers (training, evaluation) decide
+        whether an empty batch is acceptable.
+        """
         raws: list[Any] = []
         labels: list[str] = []
         skipped = 0
@@ -159,7 +182,7 @@ class DialectClassifier:
                 continue
             raws.append(raw)
             labels.append(str(label))
-        return raws, labels, skipped
+        return LabelledBatch(raws=raws, labels=labels, n_skipped=skipped)
 
     # -------------------------------------------------------------- predict
 
@@ -169,8 +192,7 @@ class DialectClassifier:
 
     def predict_batch(self, raws: Sequence[Any]) -> list[Prediction]:
         """Classify a batch of raw inputs, one :class:`Prediction` each."""
-        self._require_fitted()
-        probabilities = self._predict_proba(list(raws))
+        probabilities = self.predict_proba(raws)
         predictions: list[Prediction] = []
         for row in probabilities:
             ranked = tuple(
@@ -189,17 +211,28 @@ class DialectClassifier:
             )
         return predictions
 
-    def _predict_proba(self, raws: list[Any]) -> np.ndarray:
-        """Probability matrix aligned with ``classes_`` (one-hot fallback)."""
-        assert self.pipeline_ is not None  # _require_fitted ran
+    def predict_proba(self, raws: Sequence[Any]) -> np.ndarray:
+        """Return the probability matrix for a batch, columns aligned with ``classes_``.
+
+        Models without native probabilities degrade to one-hot rows built from
+        their hard predictions (with a logged warning), so downstream code can
+        rely on this method existing — the same guarantee the
+        :class:`~tulip.core.interfaces.Classifier` protocol makes.
+
+        Raises:
+            ConfigurationError: if the classifier is not fitted.
+        """
+        self._require_fitted()
+        assert self.pipeline_ is not None  # narrowed by _require_fitted
+        inputs = list(raws)
         if hasattr(self.pipeline_, "predict_proba"):
-            return np.asarray(self.pipeline_.predict_proba(raws), dtype=np.float64)
+            return np.asarray(self.pipeline_.predict_proba(inputs), dtype=np.float64)
         _logger.warning(
             "%s has no predict_proba; probabilities degrade to one-hot predictions",
             type(self.pipeline_).__name__,
         )
-        predicted = np.asarray(self.pipeline_.predict(raws)).astype(str)
-        matrix = np.zeros((len(raws), len(self.classes_)), dtype=np.float64)
+        predicted = np.asarray(self.pipeline_.predict(inputs)).astype(str)
+        matrix = np.zeros((len(inputs), len(self.classes_)), dtype=np.float64)
         index_of = {label: i for i, label in enumerate(self.classes_)}
         for row, label in enumerate(predicted):
             matrix[row, index_of[label]] = 1.0
@@ -221,59 +254,13 @@ class DialectClassifier:
                 is incompatible with the composed pipeline.
         """
         self._require_fitted()
-        from tulip.explain import get_explainer
-
-        if method == "nearest_examples":
-            explainer = self._nearest_examples_explainer(get_explainer)
-            return explainer.explain(self.pipeline_, raw, **kwargs)
-        if method == "attention":
-            # Attention lives on the transformer wrapper itself, not on an
-            # sklearn feature pipeline.
-            estimator = (
-                self.pipeline_.steps[-1][1]
-                if isinstance(self.pipeline_, Pipeline)
-                else self.pipeline_
+        if self._prediction_explainer is None:
+            self._prediction_explainer = PredictionExplainer(
+                pipeline=self.pipeline_,
+                task=self.task,
+                train_samples=self._train_samples,
             )
-            return get_explainer(method).explain(estimator, raw, **kwargs)
-        return get_explainer(method).explain(self.pipeline_, raw, **kwargs)
-
-    def _nearest_examples_explainer(self, get_explainer: Any) -> Any:
-        """Build (once) the neighbour index over the training samples."""
-        if self._neighbor_explainer is not None:
-            return self._neighbor_explainer
-        if not self._train_samples:
-            raise ConfigurationError(
-                "nearest_examples needs the in-memory training samples; a classifier "
-                "restored with DialectClassifier.load() must be refitted (or use another "
-                "explainer)"
-            )
-        explainer = get_explainer("nearest_examples")
-        explainer.index(self._train_samples, self._retrieval_transformer())
-        self._neighbor_explainer = explainer
-        return explainer
-
-    def _retrieval_transformer(self) -> Any:
-        """A fitted text transformer for similarity retrieval.
-
-        Uses the pipeline's own feature union when present; raw-input models
-        get a dedicated character TF-IDF fitted on the training texts, so
-        nearest-example retrieval works for transformer models too.
-        """
-        if isinstance(self.pipeline_, Pipeline):
-            return self.pipeline_[:-1]
-        if self.task is not TaskType.TEXT:
-            raise ConfigurationError(
-                "nearest_examples retrieval is text-based; audio pipelines without a "
-                "feature union are not supported"
-            )
-        if self._retrieval_vectorizer is None:
-            from sklearn.feature_extraction.text import TfidfVectorizer
-
-            texts = [s.text or "" for s in self._train_samples]
-            self._retrieval_vectorizer = TfidfVectorizer(
-                analyzer="char_wb", ngram_range=(2, 4), sublinear_tf=True
-            ).fit(texts)
-        return self._retrieval_vectorizer
+        return self._prediction_explainer.explain(raw, method=method, **kwargs)
 
     # -------------------------------------------------------------- persist
 
@@ -339,4 +326,4 @@ class DialectClassifier:
         )
 
 
-__all__ = ["DialectClassifier"]
+__all__ = ["DialectClassifier", "LabelledBatch"]

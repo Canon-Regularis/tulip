@@ -11,6 +11,10 @@ component names, shared conventions, and public API expectations.
    explainers register themselves under canonical string names in a
    `tulip.core.registry.Registry`. Experiment configs reference components by
    name + params. Adding a component never requires touching core code.
+   Components declare capabilities as registration `metadata` (e.g. models
+   whose constructors accept the shared TrainingConfig knobs register with
+   `metadata={"training_aware": True}`); consumers query `Registry.metadata`
+   instead of hardcoding per-component knowledge.
 2. **scikit-learn conventions as the lingua franca.** Feature extractors
    implement `fit`/`transform`; classifiers implement `fit`/`predict`/
    `predict_proba` and expose `classes_`. Neural models wrap themselves in this

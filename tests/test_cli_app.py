@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from conftest import make_samples
+from conftest import make_manifest_experiment_config, make_samples, write_manifest_corpus
 from tulip.cli.app import app
+from tulip.config import save_experiment_config
 from tulip.pipeline import DialectClassifier
 
 runner = CliRunner()
@@ -27,45 +28,15 @@ def model_artifact(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture
 def mini_config(tmp_path: Path) -> Path:
-    """A complete experiment config over a temp manifest corpus."""
-    rows = ["id,text,speaker_id,dialect"]
-    texts = {
-        "podhale": "Hej baca się pyto kaj się owce pasą na holi wariant {i}.",
-        "silesia": "Jo żech je z Katowic i godom po naszymu cołki czos wariant {i}.",
-        "kurpie": "U nos w boru psiwo warzą jesce po staremu wariant {i}.",
-    }
-    for dialect, template in texts.items():
-        for speaker in range(5):
-            for i in range(2):
-                text = template.format(i=f"{speaker}-{i}")
-                rows.append(f"{dialect}-{speaker}-{i},{text},{dialect}-spk{speaker},{dialect}")
-    corpus = tmp_path / "corpus"
-    corpus.mkdir()
-    (corpus / "manifest.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    """A complete experiment config YAML over a temp manifest corpus.
 
-    config = f"""
-name: cli-mini
-seed: 42
-task: text
-target: dialect
-data:
-  root: {json.dumps(str(tmp_path))}
-  datasets:
-    - name: manifest
-      params:
-        root: {json.dumps(str(corpus))}
-  deduplicate: false
-  min_text_chars: 10
-features:
-  - name: char_tfidf
-model:
-  name: logistic_regression
-split:
-  seed: 42
-output_dir: {json.dumps(str(tmp_path / "artifacts"))}
-"""
+    Written through save_experiment_config, so the CLI tests also exercise
+    the config save -> load round trip end to end.
+    """
+    corpus = write_manifest_corpus(tmp_path / "corpus", speakers=5, variants=2)
+    config = make_manifest_experiment_config(corpus, tmp_path / "artifacts", name="cli-mini")
     config_path = tmp_path / "experiment.yaml"
-    config_path.write_text(config, encoding="utf-8")
+    save_experiment_config(config, config_path)
     return config_path
 
 

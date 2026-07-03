@@ -34,11 +34,6 @@ from tulip.utils.seed import set_global_seed
 
 _logger = get_logger(__name__)
 
-#: Raw-input models whose constructors accept the shared TrainingConfig knobs.
-_TRAINING_AWARE_MODELS = frozenset(
-    {"herbert", "polish_roberta", "mbert", "xlm_roberta", "wav2vec2", "hubert", "whisper"}
-)
-
 
 class ExperimentResult(BaseModel):
     """Everything a finished experiment produced (paths, sizes, reports)."""
@@ -160,13 +155,13 @@ def run_benchmark(
 
     results: list[BenchmarkResult] = []
     for entry in entries:
-        model_config = config.model_copy(update={"model": entry})
+        candidate_config = config.model_copy(update={"model": entry})
         _logger.info("benchmark %r: training %s", config.name, entry.name)
         started = time.perf_counter()
-        classifier = _build_classifier(model_config)
+        classifier = _build_classifier(candidate_config)
         classifier.fit(splits.train)
         reports = {
-            split_name: _evaluate(classifier, samples, split_name, model_config)
+            split_name: _evaluate(classifier, samples, split_name, candidate_config)
             for split_name, samples in splits.as_dict().items()
             if split_name != "train" and samples
         }
@@ -192,12 +187,17 @@ def run_benchmark(
 def _build_classifier(config: ExperimentConfig) -> DialectClassifier:
     """Instantiate the classifier declared by an experiment config.
 
-    For raw-input neural models (empty ``features``) whose wrappers accept the
-    shared training knobs, ``config.training`` values are merged into the
-    model params -- explicit per-model params always win.
+    For raw-input models (empty ``features``) registered as ``training_aware``
+    -- i.e. whose constructors accept the shared TrainingConfig knobs --
+    ``config.training`` values are merged into the model params; explicit
+    per-model params always win. The capability is declared at each model's
+    registration site (see :meth:`tulip.core.registry.Registry.add`), so new
+    models opt in without changes here.
     """
+    from tulip.models import MODELS
+
     model = config.model
-    if not config.features and model.name.strip().lower() in _TRAINING_AWARE_MODELS:
+    if not config.features and MODELS.metadata(model.name).get("training_aware", False):
         merged = {
             "batch_size": config.training.batch_size,
             "epochs": config.training.epochs,
@@ -234,19 +234,19 @@ def evaluate_samples(
         DataError: if no sample carries both the input modality and a label
             at the classifier's target level.
     """
-    raws, y_true, skipped = classifier._trainable(samples)
-    if not raws:
+    batch = classifier.labelled_batch(samples)
+    if not batch.raws:
         raise DataError(
             f"split {name!r} has no evaluable samples for target "
-            f"{classifier.target.value!r} (skipped {skipped})"
+            f"{classifier.target.value!r} (skipped {batch.n_skipped})"
         )
-    if skipped:
-        _logger.info("split %r: skipped %d unlabelled/modality-less samples", name, skipped)
-    probabilities = classifier._predict_proba(raws)
+    if batch.n_skipped:
+        _logger.info("split %r: skipped %d unlabelled/modality-less samples", name, batch.n_skipped)
+    probabilities = classifier.predict_proba(batch.raws)
     y_pred = [classifier.classes_[int(i)] for i in np.argmax(probabilities, axis=1)]
-    labels = sorted(set(classifier.classes_) | set(y_true))
+    labels = sorted(set(classifier.classes_) | set(batch.labels))
     return compute_metrics(
-        y_true,
+        batch.labels,
         y_pred,
         y_proba=probabilities,
         labels=labels,

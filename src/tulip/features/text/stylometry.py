@@ -132,7 +132,7 @@ def _stylometry_vector(text: str) -> np.ndarray:
 
 
 @TEXT_FEATURES.register("stylometry")
-class StylometryExtractor(BaseEstimator, TransformerMixin):
+class StylometryExtractor(TransformerMixin, BaseEstimator):
     """Stateless dense stylometric features with named columns.
 
     Emits one row of 17 features per input document: sentence count,

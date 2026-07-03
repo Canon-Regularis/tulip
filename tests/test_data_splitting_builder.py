@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_samples
+from conftest import DIALECT_TEMPLATES, make_samples, write_manifest_corpus
 from tulip.config.schemas import ComponentConfig, DataConfig, SplitConfig
 from tulip.core.exceptions import DataError
 from tulip.core.types import DialectLabels, Sample
@@ -70,25 +70,20 @@ class TestSpeakerDisjointSplit:
 
 @pytest.fixture
 def manifest_corpus(tmp_path: Path) -> Path:
-    """A small on-disk manifest corpus: 3 dialects x 4 speakers x 3 texts."""
-    rows = ["id,text,speaker_id,dialect"]
-    texts = {  # deliberately comma-free: the fixture writes naive CSV rows
-        "podhale": "Hej baca się pyto kaj się owce pasą na holi wariant {i}.",
-        "silesia": "Jo żech je z Katowic i godom po naszymu cołki czos wariant {i}.",
-        "kurpie": "U nos w boru psiwo warzą jesce po staremu wariant {i}.",
-    }
-    for dialect, template in texts.items():
-        for speaker in range(4):
-            for i in range(3):
-                text = template.format(i=f"{speaker}-{i}")
-                rows.append(f"{dialect}-{speaker}-{i},{text},{dialect}-spk{speaker},{dialect}")
-    # A short degenerate row and an exact duplicate, both of which must be dropped.
-    rows.append("short,za krótkie,podhale-spk0,podhale")
-    rows.append(f"dup,{texts['podhale'].format(i='0-0')},podhale-spk0,podhale")
-    root = tmp_path / "corpus"
-    root.mkdir()
-    (root / "manifest.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
-    return root
+    """A manifest corpus (3 dialects x 4 speakers x 3 texts) plus two bad rows.
+
+    The extras -- a too-short row and an exact duplicate -- must both be
+    dropped by the builder's filter and dedup passes.
+    """
+    return write_manifest_corpus(
+        tmp_path / "corpus",
+        speakers=4,
+        variants=3,
+        extra_rows=(
+            "short,za krótkie,podhale-spk0,podhale",
+            f"dup,{DIALECT_TEMPLATES['podhale'].format(i='0-0')},podhale-spk0,podhale",
+        ),
+    )
 
 
 class TestDatasetBuilder:

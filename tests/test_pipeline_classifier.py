@@ -82,6 +82,29 @@ class TestFitAndPredict:
             DialectClassifier(model="naive_bayes", abstain_threshold=1.5)
 
 
+class TestPublicBatchApi:
+    def test_predict_proba_rows_align_with_classes(self, fitted: DialectClassifier) -> None:
+        queries = [PODHALE_QUERY, "Jo żech je z Katowic i godom po naszymu."]
+        matrix = fitted.predict_proba(queries)
+        assert matrix.shape == (2, len(fitted.classes_))
+        assert np.allclose(matrix.sum(axis=1), 1.0)
+        assert fitted.classes_[int(np.argmax(matrix[0]))] == "podhale"
+
+    def test_predict_proba_unfitted_raises(self) -> None:
+        classifier = DialectClassifier(model="naive_bayes", features=["char_tfidf"])
+        with pytest.raises(ConfigurationError, match="not fitted"):
+            classifier.predict_proba(["cokolwiek"])
+
+    def test_labelled_batch_pairs_and_counts_skips(self, fitted: DialectClassifier) -> None:
+        samples = make_samples(repeats=1)
+        batch = fitted.labelled_batch(samples)
+        assert len(batch) == len(batch.raws) == len(batch.labels)
+        # Standard-Polish samples carry no dialect-level label -> skipped.
+        assert batch.n_skipped > 0
+        assert len(batch) + batch.n_skipped == len(samples)
+        assert set(batch.labels) == {"podhale", "silesia", "kurpie"}
+
+
 class TestAbstention:
     def test_high_threshold_abstains_on_ambiguous_input(self) -> None:
         classifier = DialectClassifier(

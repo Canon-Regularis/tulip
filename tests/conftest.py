@@ -1,10 +1,13 @@
-"""Shared fixtures for the tulip test suite."""
+"""Shared fixtures and corpus builders for the tulip test suite."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import numpy as np
 import pytest
 
+from tulip.config.schemas import ComponentConfig, DataConfig, ExperimentConfig, SplitConfig
 from tulip.core.types import DialectLabels, Sample
 
 # Tiny synthetic corpus: crude dialect-flavoured Polish, multiple speakers per
@@ -78,3 +81,69 @@ def synthetic_texts_and_labels(synthetic_samples: list[Sample]) -> tuple[list[st
 def rng() -> np.random.Generator:
     """A seeded numpy random generator for deterministic tests."""
     return np.random.default_rng(42)
+
+
+# Deliberately comma-free sentence templates: corpus builders below write
+# naive (unquoted) CSV rows.
+DIALECT_TEMPLATES: dict[str, str] = {
+    "podhale": "Hej baca się pyto kaj się owce pasą na holi wariant {i}.",
+    "silesia": "Jo żech je z Katowic i godom po naszymu cołki czos wariant {i}.",
+    "kurpie": "U nos w boru psiwo warzą jesce po staremu wariant {i}.",
+}
+
+
+def write_manifest_corpus(
+    directory: Path,
+    *,
+    speakers: int = 5,
+    variants: int = 3,
+    extra_rows: tuple[str, ...] = (),
+) -> Path:
+    """Write a small on-disk CSV manifest corpus and return its directory.
+
+    Produces ``len(DIALECT_TEMPLATES) * speakers * variants`` labelled rows
+    with several speakers per dialect, so speaker-disjoint splitting is
+    exercisable. ``extra_rows`` appends raw CSV lines (e.g. duplicates or
+    degenerate rows) for tests that need them.
+    """
+    rows = ["id,text,speaker_id,dialect"]
+    for dialect, template in DIALECT_TEMPLATES.items():
+        for speaker in range(speakers):
+            for i in range(variants):
+                text = template.format(i=f"{speaker}-{i}")
+                rows.append(f"{dialect}-{speaker}-{i},{text},{dialect}-spk{speaker},{dialect}")
+    rows.extend(extra_rows)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "manifest.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return directory
+
+
+def make_manifest_experiment_config(
+    corpus: Path,
+    output_dir: Path,
+    *,
+    name: str = "mini-text",
+    **overrides: object,
+) -> ExperimentConfig:
+    """Build a complete, runnable text-experiment config over a manifest corpus.
+
+    Deduplication is off because the corpus's "wariant N" texts are
+    intentionally near-identical; keyword ``overrides`` replace any
+    ExperimentConfig field.
+    """
+    fields: dict[str, object] = {
+        "name": name,
+        "seed": 42,
+        "data": DataConfig(
+            datasets=[ComponentConfig(name="manifest", params={"root": str(corpus)})],
+            root=corpus.parent,
+            deduplicate=False,
+            min_text_chars=10,
+        ),
+        "features": [ComponentConfig(name="char_tfidf")],
+        "model": ComponentConfig(name="logistic_regression"),
+        "split": SplitConfig(seed=42),
+        "output_dir": output_dir,
+    }
+    fields.update(overrides)
+    return ExperimentConfig(**fields)  # type: ignore[arg-type]

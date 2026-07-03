@@ -9,7 +9,7 @@ matter of writing one module and registering it -- no core code changes.
 from __future__ import annotations
 
 import difflib
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, Generic, TypeVar
 
 from tulip.core.exceptions import DuplicateComponentError, UnknownComponentError
@@ -22,33 +22,61 @@ class Registry(Generic[T]):
 
     Components are typically classes or zero-argument-friendly factories;
     :meth:`create` instantiates them with keyword arguments taken from config.
+
+    Components may declare capability ``metadata`` at registration time
+    (e.g. ``{"training_aware": True}``); consumers query it with
+    :meth:`metadata` instead of hardcoding per-component knowledge, so new
+    components extend behaviour without modifying their consumers.
     """
 
     def __init__(self, kind: str) -> None:
         self._kind = kind
         self._items: dict[str, T] = {}
         self._aliases: dict[str, str] = {}
+        self._component_metadata: dict[str, dict[str, Any]] = {}
 
     @property
     def kind(self) -> str:
         """Human-readable description of what this registry holds (e.g. ``"model"``)."""
         return self._kind
 
-    def register(self, name: str, *, aliases: Sequence[str] = ()) -> Callable[[T], T]:
+    def register(
+        self,
+        name: str,
+        *,
+        aliases: Sequence[str] = (),
+        metadata: Mapping[str, Any] | None = None,
+    ) -> Callable[[T], T]:
         """Return a decorator that registers the decorated object under ``name``."""
 
         def decorator(obj: T) -> T:
-            self.add(name, obj, aliases=aliases)
+            self.add(name, obj, aliases=aliases, metadata=metadata)
             return obj
 
         return decorator
 
-    def add(self, name: str, obj: T, *, aliases: Sequence[str] = ()) -> None:
-        """Register ``obj`` under ``name`` (and any ``aliases``)."""
+    def add(
+        self,
+        name: str,
+        obj: T,
+        *,
+        aliases: Sequence[str] = (),
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Register ``obj`` under ``name`` (and any ``aliases``).
+
+        Args:
+            name: Canonical component name.
+            obj: The component (class or factory).
+            aliases: Alternative lookup names.
+            metadata: Optional capability flags describing the component,
+                retrievable via :meth:`metadata`.
+        """
         canonical = self._normalise(name)
         if canonical in self._items or canonical in self._aliases:
             raise DuplicateComponentError(f"{self._kind} {canonical!r} is already registered")
         self._items[canonical] = obj
+        self._component_metadata[canonical] = dict(metadata or {})
         for alias in aliases:
             alias_key = self._normalise(alias)
             if alias_key in self._items or alias_key in self._aliases:
@@ -73,6 +101,17 @@ class Registry(Generic[T]):
         if not callable(component):
             raise TypeError(f"{self._kind} {name!r} is not callable and cannot be instantiated")
         return component(**kwargs)
+
+    def metadata(self, name: str) -> dict[str, Any]:
+        """Return a copy of the capability metadata registered for ``name``.
+
+        Raises:
+            UnknownComponentError: if ``name`` is not registered.
+        """
+        self.get(name)  # raises with suggestions for unknown names
+        key = self._normalise(name)
+        key = self._aliases.get(key, key)
+        return dict(self._component_metadata.get(key, {}))
 
     def names(self) -> list[str]:
         """Return all canonical component names, sorted."""

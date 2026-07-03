@@ -110,7 +110,7 @@ def load_lexicon(path: str | Path | None = None) -> dict[str, tuple[str, ...]]:
 
 
 @TEXT_FEATURES.register("dialect_keywords")
-class DialectKeywordExtractor(BaseEstimator, TransformerMixin):
+class DialectKeywordExtractor(TransformerMixin, BaseEstimator):
     """Per-dialect counts of known dialect-marker lexemes, per 1000 tokens.
 
     Emits one column per lexicon dialect (``keywords:<dialect>``, dialects in

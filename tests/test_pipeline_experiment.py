@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import make_manifest_experiment_config, write_manifest_corpus
 from tulip.config import ExperimentConfig, load_experiment_config
-from tulip.config.schemas import ComponentConfig, DataConfig, SplitConfig
 from tulip.evaluation.benchmark import load_benchmark
 from tulip.pipeline import run_benchmark, run_experiment
 
@@ -18,35 +18,8 @@ CONFIGS_DIR = Path(__file__).resolve().parents[1] / "configs"
 @pytest.fixture
 def experiment_config(tmp_path: Path) -> ExperimentConfig:
     """A tiny but complete text experiment over an on-disk manifest corpus."""
-    rows = ["id,text,speaker_id,dialect"]
-    texts = {
-        "podhale": "Hej baca się pyto kaj się owce pasą na holi wariant {i}.",
-        "silesia": "Jo żech je z Katowic i godom po naszymu cołki czos wariant {i}.",
-        "kurpie": "U nos w boru psiwo warzą jesce po staremu wariant {i}.",
-    }
-    for dialect, template in texts.items():
-        for speaker in range(5):
-            for i in range(3):
-                text = template.format(i=f"{speaker}-{i}")
-                rows.append(f"{dialect}-{speaker}-{i},{text},{dialect}-spk{speaker},{dialect}")
-    corpus = tmp_path / "corpus"
-    corpus.mkdir()
-    (corpus / "manifest.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
-
-    return ExperimentConfig(
-        name="mini-text",
-        seed=42,
-        data=DataConfig(
-            datasets=[ComponentConfig(name="manifest", params={"root": str(corpus)})],
-            root=tmp_path,
-            deduplicate=False,  # "wariant N" texts are intentionally similar
-            min_text_chars=10,
-        ),
-        features=[ComponentConfig(name="char_tfidf")],
-        model=ComponentConfig(name="logistic_regression"),
-        split=SplitConfig(seed=42),
-        output_dir=tmp_path / "artifacts",
-    )
+    corpus = write_manifest_corpus(tmp_path / "corpus", speakers=5, variants=3)
+    return make_manifest_experiment_config(corpus, tmp_path / "artifacts")
 
 
 class TestRunExperiment:
