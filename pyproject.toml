@@ -89,7 +89,7 @@ dev = [
 tulip = "tulip.cli.app:main"
 
 [project.urls]
-Homepage = "https://github.com/matthewmiezaniec/tulip"
+Homepage = "https://github.com/Canon-Regularis/tulip"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tulip"]
@@ -125,6 +125,9 @@ ignore-names = ["X"] # scikit-learn fit/transform API convention
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["RUF001", "RUF002", "RUF003"] # allow Polish diacritics lookalikes in fixtures
 "src/tulip/cli/*" = ["B008"] # typer.Option/Argument defaults are the typer idiom
+# The cleaner's quote/dash tables enumerate the exact typographic characters
+# being normalised; the "ambiguous unicode" they contain is the point.
+"src/tulip/data/cleaning.py" = ["RUF001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -134,7 +137,10 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+# Type-checked under 3.12 semantics: numpy's bundled stubs use PEP 695 "type"
+# statements, which mypy rejects under an older python_version pin. The 3.10
+# runtime floor is still enforced by ruff (target-version) and the CI matrix.
+python_version = "3.12"
 mypy_path = "src"
 packages = ["tulip"]
 ignore_missing_imports = true

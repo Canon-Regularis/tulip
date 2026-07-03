@@ -25,9 +25,12 @@ runs/
 *.joblib
 *.ckpt
 
-# Raw and processed corpora (acquire locally; see docs/datasets.md)
-data/
-!data/README.md
+# Raw and processed corpora (acquire locally; see docs/datasets.md).
+# Anchored to the repo root: an unanchored "data/" would also swallow the
+# src/tulip/data package. "/data/*" (not "/data/") so the README negation
+# works -- git never descends into a fully excluded directory.
+/data/*
+!/data/README.md
 
 # Secrets — never commit environment or key material
 .env
