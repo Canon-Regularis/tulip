@@ -28,7 +28,7 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.models.neural_text import require_fitted
+from tulip.models.neural_text import reconcile_seed_param, require_fitted
 from tulip.models.registry import MODELS
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
@@ -185,23 +185,11 @@ class FastTextClassifier(ClassifierMixin, BaseEstimator):
                 supports it; otherwise determinism relies on ``thread=1``.
             verbose: fastText's native verbosity (0 silences its C++ output).
 
-        Raises:
-            ConfigurationError: if a hyperparameter is out of range.
+        Note:
+            Per the scikit-learn estimator contract, ``__init__`` only stores
+            parameters; validation happens in :meth:`fit` so values injected
+            via ``set_params`` (e.g. by ``GridSearchCV``) are validated too.
         """
-        if dim < 1:
-            raise ConfigurationError(f"dim must be >= 1, got {dim}")
-        if epoch < 1:
-            raise ConfigurationError(f"epoch must be >= 1, got {epoch}")
-        if lr <= 0:
-            raise ConfigurationError(f"lr must be > 0, got {lr}")
-        if word_ngrams < 1:
-            raise ConfigurationError(f"word_ngrams must be >= 1, got {word_ngrams}")
-        if min_count < 1:
-            raise ConfigurationError(f"min_count must be >= 1, got {min_count}")
-        if minn < 0 or maxn < 0 or (minn > maxn and maxn != 0):
-            raise ConfigurationError(f"invalid subword range: minn={minn}, maxn={maxn}")
-        if thread < 1:
-            raise ConfigurationError(f"thread must be >= 1, got {thread}")
         self.dim = dim
         self.epoch = epoch
         self.lr = lr
@@ -214,6 +202,23 @@ class FastTextClassifier(ClassifierMixin, BaseEstimator):
         self.seed = seed
         self.verbose = verbose
 
+    def _validate_hyperparameters(self) -> None:
+        """Validate constructor/set_params values (called from :meth:`fit`)."""
+        if self.dim < 1:
+            raise ConfigurationError(f"dim must be >= 1, got {self.dim}")
+        if self.epoch < 1:
+            raise ConfigurationError(f"epoch must be >= 1, got {self.epoch}")
+        if self.lr <= 0:
+            raise ConfigurationError(f"lr must be > 0, got {self.lr}")
+        if self.word_ngrams < 1:
+            raise ConfigurationError(f"word_ngrams must be >= 1, got {self.word_ngrams}")
+        if self.min_count < 1:
+            raise ConfigurationError(f"min_count must be >= 1, got {self.min_count}")
+        if self.minn < 0 or self.maxn < 0 or (self.minn > self.maxn and self.maxn != 0):
+            raise ConfigurationError(f"invalid subword range: minn={self.minn}, maxn={self.maxn}")
+        if self.thread < 1:
+            raise ConfigurationError(f"thread must be >= 1, got {self.thread}")
+
     def fit(self, X: Sequence[str], y: Sequence[Any]) -> FastTextClassifier:
         """Train a supervised fastText model on raw texts.
 
@@ -225,9 +230,11 @@ class FastTextClassifier(ClassifierMixin, BaseEstimator):
             ``self``, fitted.
 
         Raises:
+            ConfigurationError: if a hyperparameter is out of range.
             MissingDependencyError: if fasttext is not installed.
             DataError: if inputs are empty, mismatched, or single-class.
         """
+        self._validate_hyperparameters()  # before imports: valid config first
         fasttext = optional_import(
             "fasttext", extra="fasttext", purpose="fastText supervised classification"
         )
@@ -303,5 +310,40 @@ class FastTextClassifier(ClassifierMixin, BaseEstimator):
         probabilities = self.predict_proba(X)
         return self.classes_[np.argmax(probabilities, axis=1)]
 
+    # The fitted fastText handle is a pybind11 C++ object with no pickle
+    # support, which would make joblib-based persistence (save_model) fail
+    # with an opaque error. Round-trip it through fastText's own native
+    # serialisation instead, so fitted classifiers pickle transparently.
 
-MODELS.add("fasttext", FastTextClassifier)
+    def __getstate__(self) -> dict[str, Any]:
+        state = dict(self.__dict__)
+        model = state.pop("model_", None)
+        if model is not None:
+            with tempfile.TemporaryDirectory(prefix="tulip-fasttext-") as tmp:
+                path = Path(tmp) / "model.bin"
+                model.save_model(str(path))
+                state["_model_bytes_"] = path.read_bytes()
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        blob = state.pop("_model_bytes_", None)
+        self.__dict__.update(state)
+        if blob is not None:
+            fasttext = optional_import(
+                "fasttext", extra="fasttext", purpose="loading a persisted fastText model"
+            )
+            with tempfile.TemporaryDirectory(prefix="tulip-fasttext-") as tmp:
+                path = Path(tmp) / "model.bin"
+                path.write_bytes(blob)
+                self.model_ = fasttext.load_model(str(path))
+
+
+@MODELS.register("fasttext")
+def make_fasttext(**params: Any) -> FastTextClassifier:
+    """Create a :class:`FastTextClassifier`.
+
+    Accepts ``random_state`` as an alias for ``seed`` (scikit-learn
+    spelling), matching every other model factory.
+    """
+    reconcile_seed_param(params)
+    return FastTextClassifier(**params)

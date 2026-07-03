@@ -11,7 +11,14 @@ from tulip.utils.optional import is_available
 
 
 def set_global_seed(seed: int) -> None:
-    """Seed every random source tulip may touch (stdlib, numpy, torch if present)."""
+    """Seed every random source tulip may touch (stdlib, numpy, torch if present).
+
+    Note:
+        ``PYTHONHASHSEED`` is exported for *child processes* only -- hash
+        randomisation of the current interpreter is fixed at startup and
+        cannot be changed here. tulip's own determinism never relies on
+        builtin ``hash()`` ordering (stable hashes use blake2b).
+    """
     random.seed(seed)
     np.random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)

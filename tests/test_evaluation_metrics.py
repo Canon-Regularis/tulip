@@ -126,6 +126,21 @@ def test_duplicate_labels_raise() -> None:
         compute_metrics(Y_TRUE, Y_PRED, labels=["a", "b", "a"])
 
 
+def test_superset_labels_do_not_deflate_macro_metrics() -> None:
+    # Regression: the experiment runner passes labels = classes_ | observed;
+    # a trained class absent from the split must not drag macro averages down
+    # as a zero-support entry, but must still appear in the per-class table
+    # and the confusion matrix.
+    perfect = ["a", "b", "a", "b"]
+    report = compute_metrics(perfect, perfect, labels=["a", "b", "c"])
+    assert report.precision_macro == pytest.approx(1.0)
+    assert report.recall_macro == pytest.approx(1.0)
+    assert report.f1_macro == pytest.approx(1.0)
+    assert report.recall_macro == pytest.approx(report.balanced_accuracy)
+    assert report.per_class["c"].support == 0
+    assert len(report.confusion) == 3
+
+
 def test_metadata_is_stored_and_numpy_inputs_accepted() -> None:
     report = compute_metrics(
         np.array(Y_TRUE),

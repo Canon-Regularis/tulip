@@ -102,7 +102,9 @@ def save_model(model: Any, path: Path | str, metadata: Mapping[str, Any] | None 
         The artifact directory as a ``Path``.
 
     Raises:
-        ConfigurationError: If ``metadata`` is not JSON-serialisable.
+        ConfigurationError: If ``metadata`` is not JSON-serialisable, or the
+            model itself cannot be pickled (native handles without
+            ``__getstate__``/``__setstate__`` support).
         DataError: If ``path`` exists and is not a directory.
     """
     target = Path(path)
@@ -124,7 +126,18 @@ def save_model(model: Any, path: Path | str, metadata: Mapping[str, Any] | None 
     if target.exists() and not target.is_dir():
         raise DataError(f"cannot save model: {target} exists and is not a directory")
     target.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, target / MODEL_FILENAME)
+    model_file = target / MODEL_FILENAME
+    try:
+        joblib.dump(model, model_file)
+    except MemoryError:
+        raise
+    except Exception as exc:  # pickling failures surface as many exception types
+        model_file.unlink(missing_ok=True)  # never leave a partial artifact behind
+        raise ConfigurationError(
+            f"{type(model).__name__} cannot be serialised with joblib ({exc}); models "
+            "holding native library handles must round-trip them in __getstate__/"
+            "__setstate__ (see FastTextClassifier for the pattern)"
+        ) from exc
     (target / METADATA_FILENAME).write_text(payload + "\n", encoding="utf-8", newline="\n")
     logger.info("saved %s to %s", sidecar["model_class"], target)
     return target

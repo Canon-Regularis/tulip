@@ -77,7 +77,7 @@ def create_app(model_path: Path | str) -> Any:
         description="Polish dialect detection service",
         version=__version__,
     )
-    app.state.classifier = classifier
+    # Endpoints close over `classifier` directly; only the path is state.
     app.state.model_path = str(model_path)
 
     @app.get("/health")

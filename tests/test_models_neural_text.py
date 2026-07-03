@@ -105,9 +105,28 @@ def test_checkpoint_factory_binds_and_forwards() -> None:
         {"class_weight": "boosted"},
     ],
 )
-def test_constructor_rejects_bad_hyperparameters(kwargs: dict) -> None:
+def test_fit_rejects_bad_hyperparameters(kwargs: dict) -> None:
+    # Validation happens in fit, not __init__ (sklearn estimator contract:
+    # set_params-injected values must be validated too), and BEFORE the
+    # optional torch import, so this runs on torch-less machines.
+    model = TransformerTextClassifier(**kwargs)
     with pytest.raises(ConfigurationError):
-        TransformerTextClassifier(**kwargs)
+        model.fit(["ala ma kota", "kaj ta idziesz"], ["standard", "silesia"])
+
+
+def test_set_params_injected_values_are_validated_at_fit() -> None:
+    model = TransformerTextClassifier()
+    model.set_params(epochs=0)  # sklearn contract: no validation here
+    with pytest.raises(ConfigurationError, match="epochs"):
+        model.fit(["ala ma kota", "kaj ta idziesz"], ["standard", "silesia"])
+
+
+def test_factory_accepts_random_state_alias() -> None:
+    factory = checkpoint_factory(TransformerTextClassifier, "some/checkpoint")
+    assert factory(random_state=7).seed == 7
+    assert factory(seed=3, random_state=3).seed == 3
+    with pytest.raises(ConfigurationError, match="conflicting"):
+        factory(seed=1, random_state=2)
 
 
 # --- missing-dependency behaviour ---------------------------------------------

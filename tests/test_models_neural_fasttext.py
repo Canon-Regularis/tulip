@@ -98,9 +98,47 @@ def test_defaults_are_deterministic_and_subword_aware() -> None:
         {"thread": 0},
     ],
 )
-def test_constructor_rejects_bad_hyperparameters(kwargs: dict) -> None:
+def test_fit_rejects_bad_hyperparameters(kwargs: dict) -> None:
+    # Validated in fit (sklearn contract), before the optional fasttext
+    # import, so this runs without fasttext installed.
+    model = FastTextClassifier(**kwargs)
     with pytest.raises(ConfigurationError):
-        FastTextClassifier(**kwargs)
+        model.fit(["ala ma kota", "kaj ta idziesz"], ["standard", "silesia"])
+
+
+def test_registry_factory_accepts_random_state_alias() -> None:
+    from tulip.models import MODELS
+
+    assert MODELS.create("fasttext", random_state=7).seed == 7
+    with pytest.raises(ConfigurationError, match="conflicting"):
+        MODELS.create("fasttext", seed=1, random_state=2)
+
+
+def test_unfitted_classifier_pickles_without_fasttext() -> None:
+    # __getstate__/__setstate__ must be no-ops for unfitted instances: no
+    # native handle, no optional import needed.
+    import pickle
+
+    clone = pickle.loads(pickle.dumps(FastTextClassifier(dim=32, seed=7)))
+    assert clone.dim == 32
+    assert clone.seed == 7
+    assert not hasattr(clone, "model_")
+
+
+def test_fitted_classifier_pickles_via_native_serialisation() -> None:
+    pytest.importorskip("fasttext")
+    import pickle
+
+    import numpy as np
+
+    texts = ["hej baca na holi", "godom po naszymu", "kaj ta idziesz", "owce na grani"] * 5
+    labels = ["podhale", "silesia", "silesia", "podhale"] * 5
+    model = FastTextClassifier(dim=16, epoch=5, seed=0).fit(texts, labels)
+    clone = pickle.loads(pickle.dumps(model))
+    assert list(clone.classes_) == list(model.classes_)
+    np.testing.assert_allclose(
+        clone.predict_proba(["kaj ta"]), model.predict_proba(["kaj ta"]), atol=1e-6
+    )
 
 
 # --- pure label / line helpers ---------------------------------------------------

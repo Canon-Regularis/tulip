@@ -69,8 +69,24 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
         self.max_seconds = max_seconds
 
     def fit(self, X: Sequence[str | Path], y: Any = None) -> Wav2Vec2EmbeddingExtractor:
-        """No-op fit (the encoder is frozen, not fine-tuned); returns ``self``."""
+        """Resolve the embedding dimensionality; the encoder stays frozen.
+
+        Only the checkpoint *config* is fetched here (kilobytes, cached), so
+        ``get_feature_names_out`` works right after ``fit`` -- the sklearn
+        fitted-state contract every sibling extractor honours -- while the
+        multi-hundred-MB model weights still load lazily on first
+        ``transform``.
+
+        Raises:
+            MissingDependencyError: If transformers is not installed
+                (install the ``speech`` extra).
+        """
         del X, y
+        transformers = optional.optional_import(
+            "transformers", extra="speech", purpose="wav2vec2 speech embeddings"
+        )
+        config = transformers.AutoConfig.from_pretrained(self.checkpoint)
+        self.hidden_size_ = int(config.hidden_size)
         return self
 
     def transform(self, X: Sequence[str | Path]) -> np.ndarray:
@@ -112,8 +128,8 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
         hidden_size = getattr(self, "hidden_size_", None)
         if hidden_size is None:
             raise TulipError(
-                "embedding dimensionality is unknown until the checkpoint is loaded; "
-                "call transform() first"
+                "embedding dimensionality is unknown until the checkpoint config is "
+                "loaded; call fit() first"
             )
         return np.asarray([f"wav2vec2_{i}" for i in range(hidden_size)], dtype=object)
 

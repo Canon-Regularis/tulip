@@ -313,29 +313,11 @@ class FinetunedSpeechClassifier(ClassifierMixin, BaseEstimator):
             device: Explicit device, or ``None`` to use CUDA when available.
             seed: Seed controlling shuffling and torch initialisation.
 
-        Raises:
-            ConfigurationError: if a hyperparameter is out of range.
+        Note:
+            Per the scikit-learn estimator contract, ``__init__`` only stores
+            parameters; validation happens in :meth:`fit` so values injected
+            via ``set_params`` (e.g. by ``GridSearchCV``) are validated too.
         """
-        if max_seconds <= 0:
-            raise ConfigurationError(f"max_seconds must be > 0, got {max_seconds}")
-        if sample_rate < 1:
-            raise ConfigurationError(f"sample_rate must be >= 1, got {sample_rate}")
-        if epochs < 1:
-            raise ConfigurationError(f"epochs must be >= 1, got {epochs}")
-        if batch_size < 1:
-            raise ConfigurationError(f"batch_size must be >= 1, got {batch_size}")
-        if learning_rate <= 0:
-            raise ConfigurationError(f"learning_rate must be > 0, got {learning_rate}")
-        if not 0.0 <= warmup_ratio <= 1.0:
-            raise ConfigurationError(f"warmup_ratio must be in [0, 1], got {warmup_ratio}")
-        if gradient_accumulation_steps < 1:
-            raise ConfigurationError(
-                f"gradient_accumulation_steps must be >= 1, got {gradient_accumulation_steps}"
-            )
-        if class_weight not in (None, "balanced"):
-            raise ConfigurationError(
-                f'class_weight must be None or "balanced", got {class_weight!r}'
-            )
         self.checkpoint = checkpoint
         self.max_seconds = max_seconds
         self.sample_rate = sample_rate
@@ -350,6 +332,29 @@ class FinetunedSpeechClassifier(ClassifierMixin, BaseEstimator):
         self.freeze_feature_encoder = freeze_feature_encoder
         self.device = device
         self.seed = seed
+
+    def _validate_hyperparameters(self) -> None:
+        """Validate constructor/set_params values (called from :meth:`fit`)."""
+        if self.max_seconds <= 0:
+            raise ConfigurationError(f"max_seconds must be > 0, got {self.max_seconds}")
+        if self.sample_rate < 1:
+            raise ConfigurationError(f"sample_rate must be >= 1, got {self.sample_rate}")
+        if self.epochs < 1:
+            raise ConfigurationError(f"epochs must be >= 1, got {self.epochs}")
+        if self.batch_size < 1:
+            raise ConfigurationError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.learning_rate <= 0:
+            raise ConfigurationError(f"learning_rate must be > 0, got {self.learning_rate}")
+        if not 0.0 <= self.warmup_ratio <= 1.0:
+            raise ConfigurationError(f"warmup_ratio must be in [0, 1], got {self.warmup_ratio}")
+        if self.gradient_accumulation_steps < 1:
+            raise ConfigurationError(
+                f"gradient_accumulation_steps must be >= 1, got {self.gradient_accumulation_steps}"
+            )
+        if self.class_weight not in (None, "balanced"):
+            raise ConfigurationError(
+                f'class_weight must be None or "balanced", got {self.class_weight!r}'
+            )
 
     def _encode_features(self, feature_extractor: Any, waveforms: list[np.ndarray]) -> Any:
         """Run the feature extractor with padding appropriate to its family."""
@@ -371,10 +376,12 @@ class FinetunedSpeechClassifier(ClassifierMixin, BaseEstimator):
             ``self``, fitted.
 
         Raises:
+            ConfigurationError: if a hyperparameter is out of range.
             MissingDependencyError: if torch/transformers are not installed.
             DataError: if inputs are empty, mismatched, single-class, or
                 undecodable.
         """
+        self._validate_hyperparameters()  # before imports: valid config first
         torch = optional_import("torch", extra="speech", purpose="fine-tuning speech models")
         transformers = optional_import(
             "transformers", extra="speech", purpose="speech classification models"
@@ -389,6 +396,10 @@ class FinetunedSpeechClassifier(ClassifierMixin, BaseEstimator):
             raise DataError(f"need at least 2 classes to fit, got {len(classes)}")
 
         device = resolve_device(self.device, torch)
+        # Seed BEFORE model construction: from_pretrained randomly initialises
+        # the new classification head from the ambient RNG, so seeding only
+        # inside the training loop would leave fit() non-reproducible.
+        torch.manual_seed(self.seed)
         feature_extractor = transformers.AutoFeatureExtractor.from_pretrained(self.checkpoint)
         id2label = {index: str(label) for index, label in enumerate(classes)}
         model_cls = (
@@ -537,23 +548,11 @@ class EmbeddingSpeechClassifier(ClassifierMixin, BaseEstimator):
             device: Explicit device, or ``None`` to use CUDA when available.
             seed: Seed for the logistic-regression solver.
 
-        Raises:
-            ConfigurationError: if a hyperparameter is out of range.
+        Note:
+            Per the scikit-learn estimator contract, ``__init__`` only stores
+            parameters; validation happens in :meth:`fit` so values injected
+            via ``set_params`` (e.g. by ``GridSearchCV``) are validated too.
         """
-        if sample_rate < 1:
-            raise ConfigurationError(f"sample_rate must be >= 1, got {sample_rate}")
-        if max_seconds <= 0:
-            raise ConfigurationError(f"max_seconds must be > 0, got {max_seconds}")
-        if batch_size < 1:
-            raise ConfigurationError(f"batch_size must be >= 1, got {batch_size}")
-        if head_c <= 0:
-            raise ConfigurationError(f"head_c must be > 0, got {head_c}")
-        if head_max_iter < 1:
-            raise ConfigurationError(f"head_max_iter must be >= 1, got {head_max_iter}")
-        if class_weight not in (None, "balanced"):
-            raise ConfigurationError(
-                f'class_weight must be None or "balanced", got {class_weight!r}'
-            )
         self.checkpoint = checkpoint
         self.sample_rate = sample_rate
         self.max_seconds = max_seconds
@@ -564,6 +563,23 @@ class EmbeddingSpeechClassifier(ClassifierMixin, BaseEstimator):
         self.savedir = savedir
         self.device = device
         self.seed = seed
+
+    def _validate_hyperparameters(self) -> None:
+        """Validate constructor/set_params values (called from :meth:`fit`)."""
+        if self.sample_rate < 1:
+            raise ConfigurationError(f"sample_rate must be >= 1, got {self.sample_rate}")
+        if self.max_seconds <= 0:
+            raise ConfigurationError(f"max_seconds must be > 0, got {self.max_seconds}")
+        if self.batch_size < 1:
+            raise ConfigurationError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.head_c <= 0:
+            raise ConfigurationError(f"head_c must be > 0, got {self.head_c}")
+        if self.head_max_iter < 1:
+            raise ConfigurationError(f"head_max_iter must be >= 1, got {self.head_max_iter}")
+        if self.class_weight not in (None, "balanced"):
+            raise ConfigurationError(
+                f'class_weight must be None or "balanced", got {self.class_weight!r}'
+            )
 
     def _load_encoder(self, torch: Any) -> tuple[Any, str]:
         """Download/load the pretrained speechbrain encoder onto the device."""
@@ -620,10 +636,12 @@ class EmbeddingSpeechClassifier(ClassifierMixin, BaseEstimator):
             ``self``, fitted.
 
         Raises:
+            ConfigurationError: if a hyperparameter is out of range.
             MissingDependencyError: if torch/speechbrain are not installed.
             DataError: if inputs are empty, mismatched, single-class, or
                 undecodable.
         """
+        self._validate_hyperparameters()  # before imports: valid config first
         torch = optional_import(
             "torch", extra="speech", purpose="pretrained speaker embedding encoders"
         )

@@ -122,9 +122,13 @@ def test_speech_classifier_alias() -> None:
         {"class_weight": "focal"},
     ],
 )
-def test_finetuned_constructor_rejects_bad_hyperparameters(kwargs: dict) -> None:
+def test_finetuned_fit_rejects_bad_hyperparameters(kwargs: dict) -> None:
+    # Validated in fit (sklearn estimator contract: set_params-injected values
+    # must be validated too), before the optional torch import, so this runs
+    # on torch-less machines.
+    model = FinetunedSpeechClassifier(**kwargs)
     with pytest.raises(ConfigurationError):
-        FinetunedSpeechClassifier(**kwargs)
+        model.fit(["a.wav", "b.wav"], ["podhale", "silesia"])
 
 
 @pytest.mark.parametrize(
@@ -138,9 +142,10 @@ def test_finetuned_constructor_rejects_bad_hyperparameters(kwargs: dict) -> None
         {"class_weight": "focal"},
     ],
 )
-def test_embedding_constructor_rejects_bad_hyperparameters(kwargs: dict) -> None:
+def test_embedding_fit_rejects_bad_hyperparameters(kwargs: dict) -> None:
+    model = EmbeddingSpeechClassifier(**kwargs)
     with pytest.raises(ConfigurationError):
-        EmbeddingSpeechClassifier(**kwargs)
+        model.fit(["a.wav", "b.wav"], ["podhale", "silesia"])
 
 
 # --- missing-dependency behaviour ---------------------------------------------

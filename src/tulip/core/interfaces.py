@@ -41,6 +41,11 @@ class Classifier(Protocol):
     Implementations must expose ``classes_`` after fitting. Models without
     native probabilities (e.g. hinge-loss SVMs) must wrap themselves in a
     calibration layer so ``predict_proba`` is always available.
+
+    Label contract: the pipeline layer always passes labels as strings
+    (:meth:`DialectClassifier.labelled_batch` stringifies them), so wrappers
+    may coerce ``y`` to ``str`` and expose string ``classes_``; code comparing
+    predictions against gold labels should compare as strings.
     """
 
     classes_: np.ndarray

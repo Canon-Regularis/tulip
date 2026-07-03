@@ -52,6 +52,7 @@ __all__ = [
     "encode_labels",
     "linear_warmup_factor",
     "optimizer_param_groups",
+    "reconcile_seed_param",
     "require_fitted",
     "resolve_device",
     "train_torch_classifier",
@@ -171,12 +172,33 @@ def require_fitted(estimator: Any, *attributes: str) -> None:
             )
 
 
+def reconcile_seed_param(params: dict[str, Any]) -> None:
+    """Map scikit-learn's ``random_state`` spelling onto the wrappers' ``seed``.
+
+    The classical factories accept both spellings (see
+    ``tulip.models.classical``); this keeps the neural/fastText factories
+    interchangeable with them in experiment configs. Mutates ``params``.
+
+    Raises:
+        ConfigurationError: if ``random_state`` and ``seed`` disagree.
+    """
+    if "random_state" not in params:
+        return
+    random_state = params.pop("random_state")
+    if "seed" in params and params["seed"] != random_state:
+        raise ConfigurationError(
+            f"conflicting seeds: random_state={random_state!r} vs seed={params['seed']!r}"
+        )
+    params.setdefault("seed", random_state)
+
+
 def checkpoint_factory(cls: type, checkpoint: str) -> Callable[..., Any]:
     """Build a registry factory that pre-binds a default checkpoint.
 
     The bound checkpoint (and every other constructor parameter) remains
     overridable through the factory's keyword arguments, so experiment configs
-    can swap checkpoints without registering new names.
+    can swap checkpoints without registering new names. ``random_state`` is
+    accepted as an alias for ``seed`` (scikit-learn spelling).
 
     Args:
         cls: The wrapper class to instantiate.
@@ -188,6 +210,7 @@ def checkpoint_factory(cls: type, checkpoint: str) -> Callable[..., Any]:
 
     def factory(**params: Any) -> Any:
         params.setdefault("checkpoint", checkpoint)
+        reconcile_seed_param(params)
         return cls(**params)
 
     safe = checkpoint.replace("/", "_").replace("-", "_").replace(".", "_")
@@ -334,27 +357,11 @@ class TransformerTextClassifier(ClassifierMixin, BaseEstimator):
             device: Explicit device, or ``None`` to use CUDA when available.
             seed: Seed controlling shuffling and torch initialisation.
 
-        Raises:
-            ConfigurationError: if a hyperparameter is out of range.
+        Note:
+            Per the scikit-learn estimator contract, ``__init__`` only stores
+            parameters; validation happens in :meth:`fit` so values injected
+            via ``set_params`` (e.g. by ``GridSearchCV``) are validated too.
         """
-        if max_length < 1:
-            raise ConfigurationError(f"max_length must be >= 1, got {max_length}")
-        if epochs < 1:
-            raise ConfigurationError(f"epochs must be >= 1, got {epochs}")
-        if batch_size < 1:
-            raise ConfigurationError(f"batch_size must be >= 1, got {batch_size}")
-        if learning_rate <= 0:
-            raise ConfigurationError(f"learning_rate must be > 0, got {learning_rate}")
-        if not 0.0 <= warmup_ratio <= 1.0:
-            raise ConfigurationError(f"warmup_ratio must be in [0, 1], got {warmup_ratio}")
-        if gradient_accumulation_steps < 1:
-            raise ConfigurationError(
-                f"gradient_accumulation_steps must be >= 1, got {gradient_accumulation_steps}"
-            )
-        if class_weight not in (None, "balanced"):
-            raise ConfigurationError(
-                f'class_weight must be None or "balanced", got {class_weight!r}'
-            )
         self.checkpoint = checkpoint
         self.max_length = max_length
         self.epochs = epochs
@@ -368,6 +375,27 @@ class TransformerTextClassifier(ClassifierMixin, BaseEstimator):
         self.device = device
         self.seed = seed
 
+    def _validate_hyperparameters(self) -> None:
+        """Validate constructor/set_params values (called from :meth:`fit`)."""
+        if self.max_length < 1:
+            raise ConfigurationError(f"max_length must be >= 1, got {self.max_length}")
+        if self.epochs < 1:
+            raise ConfigurationError(f"epochs must be >= 1, got {self.epochs}")
+        if self.batch_size < 1:
+            raise ConfigurationError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.learning_rate <= 0:
+            raise ConfigurationError(f"learning_rate must be > 0, got {self.learning_rate}")
+        if not 0.0 <= self.warmup_ratio <= 1.0:
+            raise ConfigurationError(f"warmup_ratio must be in [0, 1], got {self.warmup_ratio}")
+        if self.gradient_accumulation_steps < 1:
+            raise ConfigurationError(
+                f"gradient_accumulation_steps must be >= 1, got {self.gradient_accumulation_steps}"
+            )
+        if self.class_weight not in (None, "balanced"):
+            raise ConfigurationError(
+                f'class_weight must be None or "balanced", got {self.class_weight!r}'
+            )
+
     def fit(self, X: Sequence[str], y: Sequence[Any]) -> TransformerTextClassifier:
         """Fine-tune the checkpoint on raw texts.
 
@@ -379,9 +407,11 @@ class TransformerTextClassifier(ClassifierMixin, BaseEstimator):
             ``self``, fitted.
 
         Raises:
+            ConfigurationError: if a hyperparameter is out of range.
             MissingDependencyError: if torch/transformers are not installed.
             DataError: if inputs are empty, mismatched, or single-class.
         """
+        self._validate_hyperparameters()  # before imports: valid config first
         torch = optional_import(
             "torch", extra="transformers", purpose="fine-tuning transformer text models"
         )
@@ -398,6 +428,10 @@ class TransformerTextClassifier(ClassifierMixin, BaseEstimator):
             raise DataError(f"need at least 2 classes to fit, got {len(classes)}")
 
         device = resolve_device(self.device, torch)
+        # Seed BEFORE model construction: from_pretrained randomly initialises
+        # the new classification head from the ambient RNG, so seeding only
+        # inside the training loop would leave fit() non-reproducible.
+        torch.manual_seed(self.seed)
         id2label = {index: str(label) for index, label in enumerate(classes)}
         tokenizer = transformers.AutoTokenizer.from_pretrained(self.checkpoint)
         model = transformers.AutoModelForSequenceClassification.from_pretrained(

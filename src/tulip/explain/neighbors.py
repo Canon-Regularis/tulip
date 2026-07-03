@@ -151,7 +151,8 @@ class NearestExamplesExplainer:
                 ``predicted_label``; retrieval itself relies solely on the
                 index. May be ``None``.
             raw_input: The raw query document.
-            **kwargs: ``k`` overrides the constructor value.
+            **kwargs: ``k`` and ``snippet_chars`` override the constructor
+                values.
 
         Returns:
             An :class:`Explanation` whose ``neighbors`` are sorted by
@@ -167,6 +168,7 @@ class NearestExamplesExplainer:
         k = int(kwargs.get("k", self.k))
         if k < 1:
             raise ConfigurationError(f"k must be >= 1, got {k}")
+        snippet_chars = int(kwargs.get("snippet_chars", self.snippet_chars))
         text = as_text(raw_input)
 
         query = _l2_normalize(self._transformer.transform([text]))
@@ -181,7 +183,7 @@ class NearestExamplesExplainer:
             NeighborExample(
                 sample_id=self._ids[i],
                 label=self._labels[i],
-                text=self._snippet(self._texts[i]),
+                text=self._snippet(self._texts[i], snippet_chars),
                 similarity=float(np.clip(similarities[i], -1.0, 1.0)),
             )
             for i in top
@@ -196,8 +198,8 @@ class NearestExamplesExplainer:
             details={"index_size": len(self._ids), "k": k},
         )
 
-    def _snippet(self, text: str) -> str:
+    def _snippet(self, text: str, limit: int) -> str:
         """Truncate neighbour text for display."""
-        if len(text) <= self.snippet_chars:
+        if len(text) <= limit:
             return text
-        return text[: self.snippet_chars].rstrip() + "..."
+        return text[:limit].rstrip() + "..."

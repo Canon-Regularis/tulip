@@ -78,6 +78,18 @@ class TestReadManifest:
         assert sample.labels.dialect == "podhale"
         assert sample.id  # synthesised
 
+    def test_jsonl_required_columns_enforced_per_record(self, tmp_path: Path) -> None:
+        # JSONL records may be heterogeneous, so an explicitly-required column
+        # must be checked on every line, not just the first.
+        manifest = tmp_path / "manifest.jsonl"
+        manifest.write_text(
+            '{"text": "Pierwszy wiersz.", "gwara": "podhale"}\n'
+            '{"text": "Drugi wiersz bez etykiety."}\n',
+            encoding="utf-8",
+        )
+        with pytest.raises(DataError, match=r"manifest\.jsonl:2.*gwara"):
+            list(read_manifest(manifest, columns=ManifestColumns(dialect="gwara")))
+
     def test_missing_required_column_raises(self, tmp_path: Path) -> None:
         manifest = self._write_csv(tmp_path / "manifest.csv", ["text,speaker_id", "abc,spk-1"])
         with pytest.raises(DataError, match="missing required column"):

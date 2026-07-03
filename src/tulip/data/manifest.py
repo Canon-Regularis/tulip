@@ -143,16 +143,27 @@ def read_manifest(
     defaults = dict(label_defaults or {})
     base = audio_root if audio_root is not None else path.parent
 
-    if delimiter is None and path.suffix.lower() in _JSONL_SUFFIXES:
+    jsonl = delimiter is None and path.suffix.lower() in _JSONL_SUFFIXES
+    if jsonl:
         rows: Iterator[tuple[int, dict[str, Any]]] = _iter_jsonl_rows(path)
     else:
         rows = _iter_csv_rows(path, delimiter)
+    required = cols.required_columns()
 
     checked_header = False
     for line_number, row in rows:
         if not checked_header:
             _check_columns(cols, row.keys(), path)
             checked_header = True
+        elif jsonl and required:
+            # CSV rows share one header, but JSONL records may be
+            # heterogeneous: enforce explicitly-required columns per record,
+            # not just on the first line.
+            absent = [column for column in required if column not in row]
+            if absent:
+                raise DataError(
+                    f"{path}:{line_number}: missing required column(s): {', '.join(absent)}"
+                )
         sample = _row_to_sample(
             row,
             cols,

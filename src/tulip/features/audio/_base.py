@@ -47,8 +47,17 @@ class PooledFrameExtractor(TransformerMixin, BaseEstimator, abc.ABC):
         self.stats = stats
 
     def fit(self, X: Sequence[str | Path], y: Any = None) -> PooledFrameExtractor:
-        """No-op fit (extractors are stateless); returns ``self``."""
+        """Validate parameters and return ``self`` (extractors are stateless).
+
+        Validating ``stats`` here rather than only in ``transform`` surfaces a
+        misconfiguration when the pipeline is *fitted*, not after the whole
+        pipeline has already been trained.
+
+        Raises:
+            ConfigurationError: If ``stats`` contains an unknown statistic.
+        """
         del X, y
+        validate_stats(self.stats)
         return self
 
     def transform(self, X: Sequence[str | Path]) -> np.ndarray:

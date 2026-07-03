@@ -72,8 +72,8 @@ class ShapExplainer:
             pipeline: A fitted classifier exposing ``predict_proba`` over raw
                 texts and ``classes_``.
             raw_input: The raw document to explain.
-            **kwargs: ``max_evals`` and ``top_k`` override the constructor
-                values.
+            **kwargs: ``max_evals``, ``top_k``, and ``algorithm`` override the
+                constructor values.
 
         Returns:
             An :class:`Explanation` with per-token SHAP values towards the
@@ -87,6 +87,7 @@ class ShapExplainer:
         shap = optional_import("shap", extra="explain", purpose="SHAP text explanations")
         max_evals = int(kwargs.get("max_evals", self.max_evals))
         top_k = int(kwargs.get("top_k", self.top_k))
+        algorithm = str(kwargs.get("algorithm", self.algorithm))
         text = as_text(raw_input)
         class_index, predicted_label, _ = predicted_class(pipeline, text)
         class_names = [str(label) for label in np.asarray(pipeline.classes_)]
@@ -96,7 +97,7 @@ class ShapExplainer:
 
         masker = shap.maskers.Text(r"\W+")
         explainer = shap.Explainer(
-            probability_fn, masker, output_names=class_names, algorithm=self.algorithm
+            probability_fn, masker, output_names=class_names, algorithm=algorithm
         )
         logger.debug("running SHAP (max_evals=%d) on %d-class model", max_evals, len(class_names))
         shap_result = explainer([text], max_evals=max_evals, silent=True)

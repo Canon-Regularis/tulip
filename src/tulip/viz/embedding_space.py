@@ -88,7 +88,10 @@ def _tsne_projection(matrix: np.ndarray, seed: int) -> np.ndarray:
 
 def _umap_projection(matrix: np.ndarray, seed: int) -> np.ndarray:
     umap_mod = optional_import("umap", extra="umap", purpose="UMAP embedding projection")
-    n_neighbors = max(2, min(15, matrix.shape[0] - 1))
+    # UMAP requires n_neighbors < n_samples; no floor of 2 here, or the
+    # smallest accepted input (n=2) would violate that and trigger UMAP's
+    # silent self-truncation warning.
+    n_neighbors = min(15, matrix.shape[0] - 1)
     reducer = umap_mod.UMAP(n_components=2, n_neighbors=n_neighbors, random_state=seed)
     return np.asarray(reducer.fit_transform(matrix), dtype=np.float64)
 

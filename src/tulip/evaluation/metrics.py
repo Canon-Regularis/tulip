@@ -7,9 +7,12 @@ Design choices worth knowing:
 - Macro one-vs-rest ROC AUC is *guarded*: it is reported only when honest to
   do so (probabilities supplied, columns aligned to ``labels``, every label
   present in ``y_true``); otherwise it is ``None`` with a debug log line.
-- Balanced accuracy is derived from the per-class recalls of classes actually
-  present in ``y_true`` (identical to scikit-learn's definition) so that a
-  ``labels`` superset never distorts it.
+- A ``labels`` superset (classes the model knows but the split lacks) shapes
+  only the per-class table and the confusion matrix. The macro averages are
+  computed over the classes actually observed in ``y_true``/``y_pred`` --
+  averaging in zero-support padding classes would silently deflate macro
+  precision/recall/F1 -- and balanced accuracy likewise uses only classes
+  present in ``y_true`` (identical to scikit-learn's definition).
 """
 
 from __future__ import annotations
@@ -78,8 +81,11 @@ def compute_metrics(
     precision, recall, f1, support = precision_recall_fscore_support(
         true_list, pred_list, labels=label_list, average=None, zero_division=0
     )
+    # No explicit labels here: macro averages must run over the observed
+    # classes only, or zero-support entries from a `labels` superset would
+    # deflate them (see module docstring).
     precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
-        true_list, pred_list, labels=label_list, average="macro", zero_division=0
+        true_list, pred_list, average="macro", zero_division=0
     )
     precision_weighted, recall_weighted, f1_weighted, _ = precision_recall_fscore_support(
         true_list, pred_list, labels=label_list, average="weighted", zero_division=0
