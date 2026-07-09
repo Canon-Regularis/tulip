@@ -194,10 +194,19 @@ def _build_classifier(config: ExperimentConfig) -> DialectClassifier:
     registration site (see :meth:`tulip.core.registry.Registry.add`), so new
     models opt in without changes here.
     """
+    from tulip.config.schemas import TrainingConfig
     from tulip.models import MODELS
 
     model = config.model
-    if not config.features and MODELS.metadata(model.name).get("training_aware", False):
+    training_aware = MODELS.metadata(model.name).get("training_aware", False)
+    if not training_aware and config.training != TrainingConfig():
+        _logger.warning(
+            "experiment %r sets a training block, but model %r is not training-aware; "
+            "the block is ignored — pass hyperparameters via model.params instead",
+            config.name,
+            model.name,
+        )
+    if not config.features and training_aware:
         merged = {
             "batch_size": config.training.batch_size,
             "epochs": config.training.epochs,

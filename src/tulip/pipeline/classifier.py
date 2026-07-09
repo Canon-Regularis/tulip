@@ -191,7 +191,14 @@ class DialectClassifier:
         return self.predict_batch([raw])[0]
 
     def predict_batch(self, raws: Sequence[Any]) -> list[Prediction]:
-        """Classify a batch of raw inputs, one :class:`Prediction` each."""
+        """Classify a batch of raw inputs, one :class:`Prediction` each.
+
+        Building rich, validated :class:`Prediction` objects costs ~40% of
+        batch wall time on top of ``predict_proba`` (measured; pydantic's
+        ``model_construct`` fast path bought nothing, so the validated
+        constructor stays). Bulk consumers that only need the probability
+        matrix — evaluation does — should call :meth:`predict_proba`.
+        """
         probabilities = self.predict_proba(raws)
         predictions: list[Prediction] = []
         for row in probabilities:

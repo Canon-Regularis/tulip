@@ -14,9 +14,12 @@ Two complementary strategies are provided:
 
 Both wrappers follow scikit-learn conventions (``fit(paths, y)`` /
 ``predict`` / ``predict_proba`` / ``classes_``) over sequences of audio file
-paths. Decoding prefers the shared loader in ``tulip.features.audio.loading``
-when importable and falls back to soundfile + scipy polyphase resampling;
-either way model input is mono float32 at 16 kHz.
+paths. Decoding goes through the canonical shared loader
+(:func:`tulip.features.audio.loading.load_audio`), so speech models and audio
+feature extractors treat files identically — mono float32 at the configured
+sample rate. (An earlier local decode path here drifted from the shared one
+and silently ignored ``sample_rate``; a single decoder prevents that class of
+bug.)
 
 Fine-tuning reuses the plain torch loop from :mod:`tulip.models.neural_text`
 (AdamW + linear warmup, optional balanced class weights) — see that module
@@ -29,16 +32,15 @@ module never requires an optional dependency.
 from __future__ import annotations
 
 import importlib
-import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.signal import resample_poly
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 from tulip.core.exceptions import ConfigurationError, DataError, TulipError
+from tulip.features.audio.loading import DEFAULT_SAMPLE_RATE, load_audio
 from tulip.models._common import (
     ArgmaxPredictMixin,
     balanced_class_weights,
@@ -56,8 +58,9 @@ from tulip.utils.optional import optional_import
 
 logger = get_logger(__name__)
 
-#: Sample rate every model input is resampled to (Hz).
-TARGET_SAMPLE_RATE = 16_000
+#: Sample rate every model input is resampled to (Hz); one constant shared
+#: with the audio feature extractors so the two subsystems cannot drift.
+TARGET_SAMPLE_RATE = DEFAULT_SAMPLE_RATE
 
 #: Registry name -> Hugging Face checkpoint for the fine-tuned speech models.
 FINETUNE_CHECKPOINTS: dict[str, str] = {
@@ -72,9 +75,6 @@ EMBEDDING_CHECKPOINTS: dict[str, str] = {
     "xvector": "speechbrain/spkrec-xvect-voxceleb",
 }
 
-#: Function names probed on ``tulip.features.audio.loading`` for the shared decoder.
-_SHARED_LOADER_CANDIDATES = ("load_audio", "load_waveform", "load")
-
 __all__ = [
     "EMBEDDING_CHECKPOINTS",
     "FINETUNE_CHECKPOINTS",
@@ -82,126 +82,8 @@ __all__ = [
     "EmbeddingSpeechClassifier",
     "FinetunedSpeechClassifier",
     "SpeechClassifier",
-    "ensure_mono",
     "is_whisper_extractor",
-    "load_waveform",
-    "normalise_loader_output",
-    "resample_waveform",
 ]
-
-
-def ensure_mono(waveform: Any) -> np.ndarray:
-    """Coerce a decoded waveform to a 1-D mono float32 array.
-
-    Multi-channel input is averaged over the channel axis. Decoders disagree
-    on layout (soundfile emits ``(frames, channels)``, torchaudio emits
-    ``(channels, frames)``), so the shorter axis is treated as channels —
-    audio frames always vastly outnumber channels in practice.
-
-    Args:
-        waveform: A 1-D or 2-D array-like of PCM samples.
-
-    Returns:
-        A contiguous 1-D ``float32`` array.
-
-    Raises:
-        DataError: if the input has more than two dimensions.
-    """
-    array = np.asarray(waveform, dtype=np.float32)
-    if array.ndim == 1:
-        return np.ascontiguousarray(array)
-    if array.ndim == 2:
-        channel_axis = int(np.argmin(array.shape))
-        return np.ascontiguousarray(array.mean(axis=channel_axis).astype(np.float32))
-    raise DataError(f"expected a 1-D or 2-D waveform, got shape {array.shape}")
-
-
-def resample_waveform(waveform: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
-    """Resample a mono waveform with a polyphase filter (scipy, no librosa needed).
-
-    Args:
-        waveform: 1-D mono waveform.
-        orig_sr: Original sample rate in Hz.
-        target_sr: Desired sample rate in Hz.
-
-    Returns:
-        The waveform at ``target_sr`` as ``float32``.
-
-    Raises:
-        DataError: if either rate is not a positive integer.
-    """
-    if orig_sr <= 0 or target_sr <= 0:
-        raise DataError(f"sample rates must be positive, got {orig_sr} -> {target_sr}")
-    array = np.asarray(waveform, dtype=np.float32)
-    if orig_sr == target_sr:
-        return array
-    divisor = math.gcd(int(orig_sr), int(target_sr))
-    resampled = resample_poly(array, int(target_sr) // divisor, int(orig_sr) // divisor)
-    return np.asarray(resampled, dtype=np.float32)
-
-
-def normalise_loader_output(result: Any, *, target_sr: int = TARGET_SAMPLE_RATE) -> np.ndarray:
-    """Normalise a shared-loader return value to mono float32 at ``target_sr``.
-
-    The shared loader contract ("decode + resample to 16 kHz mono") leaves the
-    return shape open, so both a bare waveform (assumed already at
-    ``target_sr``) and a ``(waveform, sample_rate)`` pair are accepted.
-
-    Args:
-        result: Whatever the shared loader returned.
-        target_sr: Sample rate the caller requires.
-
-    Returns:
-        A 1-D ``float32`` waveform at ``target_sr``.
-    """
-    if isinstance(result, tuple) and len(result) == 2:
-        waveform, rate = result
-        return resample_waveform(ensure_mono(waveform), int(rate), target_sr)
-    return ensure_mono(result)
-
-
-def _shared_loader() -> Any | None:
-    """Return the decode function from ``tulip.features.audio.loading``, if present."""
-    try:
-        module = importlib.import_module("tulip.features.audio.loading")
-    except Exception:  # module absent or broken: fall back to soundfile
-        logger.debug("shared audio loader unavailable; falling back to soundfile")
-        return None
-    for name in _SHARED_LOADER_CANDIDATES:
-        function = getattr(module, name, None)
-        if callable(function):
-            return function
-    logger.debug("tulip.features.audio.loading exposes no known loader function")
-    return None
-
-
-def load_waveform(path: str | Path, *, sample_rate: int = TARGET_SAMPLE_RATE) -> np.ndarray:
-    """Decode one audio file to a mono float32 waveform at ``sample_rate``.
-
-    Prefers the shared decoder in ``tulip.features.audio.loading`` so speech
-    models and audio feature extractors treat files identically; falls back to
-    soundfile + scipy polyphase resampling when the shared loader is absent.
-
-    Args:
-        path: Audio file to decode.
-        sample_rate: Target sample rate in Hz.
-
-    Returns:
-        A 1-D ``float32`` waveform.
-
-    Raises:
-        MissingDependencyError: if no decoder is available (install ``audio``).
-    """
-    loader = _shared_loader()
-    if loader is not None:
-        try:
-            result = loader(Path(path), sample_rate=sample_rate)
-        except TypeError:  # loader does not take a sample_rate keyword
-            result = loader(Path(path))
-        return normalise_loader_output(result, target_sr=sample_rate)
-    soundfile = optional_import("soundfile", extra="audio", purpose="decoding audio files")
-    data, orig_sr = soundfile.read(str(path), dtype="float32", always_2d=False)
-    return resample_waveform(ensure_mono(data), int(orig_sr), sample_rate)
 
 
 def is_whisper_extractor(feature_extractor: Any) -> bool:
@@ -240,7 +122,7 @@ def _load_clipped_waveforms(
     waveforms: list[np.ndarray] = []
     for path in paths:
         try:
-            waveform = load_waveform(path, sample_rate=sample_rate)
+            waveform = load_audio(path, sample_rate=sample_rate)
         except TulipError:
             raise
         except Exception as exc:

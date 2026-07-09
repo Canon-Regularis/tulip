@@ -37,13 +37,15 @@ class PooledFrameExtractor(TransformerMixin, BaseEstimator, abc.ABC):
     inside :class:`sklearn.pipeline.FeatureUnion`.
 
     Args:
-        sr: Sample rate every file is resampled to before extraction.
+        sample_rate: Sample rate every file is resampled to before extraction.
         stats: Pooling statistics (see
             :data:`tulip.features.audio.pooling.VALID_STATS`).
     """
 
-    def __init__(self, sr: int = DEFAULT_SAMPLE_RATE, stats: Sequence[str] = DEFAULT_STATS) -> None:
-        self.sr = sr
+    def __init__(
+        self, sample_rate: int = DEFAULT_SAMPLE_RATE, stats: Sequence[str] = DEFAULT_STATS
+    ) -> None:
+        self.sample_rate = sample_rate
         self.stats = stats
 
     def fit(self, X: Sequence[str | Path], y: Any = None) -> PooledFrameExtractor:
@@ -78,11 +80,11 @@ class PooledFrameExtractor(TransformerMixin, BaseEstimator, abc.ABC):
         n_base = len(self._base_feature_names())
         rows: list[np.ndarray] = []
         for path in X:
-            signal = load_audio(path, sr=self.sr)
+            signal = load_audio(path, sample_rate=self.sample_rate)
             if signal.size == 0:
                 frames = np.zeros((0, n_base), dtype=np.float64)
             else:
-                frames = self._frame_features(signal, self.sr)
+                frames = self._frame_features(signal, self.sample_rate)
             rows.append(pool_features(frames, stats=stats))
         if not rows:
             return np.zeros((0, len(stats) * n_base), dtype=np.float32)
@@ -95,7 +97,7 @@ class PooledFrameExtractor(TransformerMixin, BaseEstimator, abc.ABC):
         return np.asarray(names, dtype=object)
 
     @abc.abstractmethod
-    def _frame_features(self, signal: np.ndarray, sr: int) -> np.ndarray:
+    def _frame_features(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
         """Compute the ``(n_frames, n_dims)`` frame-level feature matrix.
 
         Implementations may return NaN entries for undefined frames (e.g.

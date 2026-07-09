@@ -332,12 +332,31 @@ class FastTextClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
                 self.model_ = fasttext.load_model(str(path))
 
 
+#: fastText's native spellings for the training knobs every other trainable
+#: model (and TrainingConfig) spells epochs/learning_rate.
+_KNOB_ALIASES = {"epochs": "epoch", "learning_rate": "lr"}
+
+
 @MODELS.register("fasttext")
 def make_fasttext(**params: Any) -> FastTextClassifier:
     """Create a :class:`FastTextClassifier`.
 
-    Accepts ``random_state`` as an alias for ``seed`` (scikit-learn
-    spelling), matching every other model factory.
+    Accepts the toolkit-standard spellings as aliases for fastText's native
+    ones — ``epochs`` -> ``epoch``, ``learning_rate`` -> ``lr``, and
+    ``random_state`` -> ``seed`` — so a config can swap ``model.name``
+    between fasttext and any other trainable model without renaming params.
+
+    Raises:
+        ConfigurationError: if an alias and its native spelling conflict.
     """
     reconcile_seed_param(params)
+    for alias, native in _KNOB_ALIASES.items():
+        if alias not in params:
+            continue
+        value = params.pop(alias)
+        if native in params and params[native] != value:
+            raise ConfigurationError(
+                f"conflicting values: {alias}={value!r} vs {native}={params[native]!r}"
+            )
+        params.setdefault(native, value)
     return FastTextClassifier(**params)

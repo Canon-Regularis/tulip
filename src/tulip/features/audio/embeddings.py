@@ -46,7 +46,7 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
     Args:
         checkpoint: Hugging Face model id or local path of a
             wav2vec2-family encoder.
-        sr: Sample rate expected by the checkpoint.
+        sample_rate: Sample rate expected by the checkpoint.
         batch_size: Number of files embedded per forward pass.
         device: torch device string (``"cpu"``, ``"cuda"``, ...); ``None``
             selects CUDA when available.
@@ -57,13 +57,13 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
     def __init__(
         self,
         checkpoint: str = DEFAULT_CHECKPOINT,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         batch_size: int = 4,
         device: str | None = None,
         max_seconds: float | None = None,
     ) -> None:
         self.checkpoint = checkpoint
-        self.sr = sr
+        self.sample_rate = sample_rate
         self.batch_size = batch_size
         self.device = device
         self.max_seconds = max_seconds
@@ -114,7 +114,9 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
         for start in range(0, len(paths), max(1, int(self.batch_size))):
             batch = paths[start : start + max(1, int(self.batch_size))]
             signals = [self._load_signal(path) for path in batch]
-            inputs = processor(signals, sampling_rate=self.sr, return_tensors="pt", padding=True)
+            inputs = processor(
+                signals, sampling_rate=self.sample_rate, return_tensors="pt", padding=True
+            )
             inputs = {key: value.to(device) for key, value in inputs.items()}
             with torch.no_grad():
                 hidden = model(**inputs).last_hidden_state
@@ -134,9 +136,9 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
         return np.asarray([f"wav2vec2_{i}" for i in range(hidden_size)], dtype=object)
 
     def _load_signal(self, path: str | Path) -> np.ndarray:
-        signal = load_audio(path, sr=self.sr)
+        signal = load_audio(path, sample_rate=self.sample_rate)
         if self.max_seconds is not None:
-            signal = signal[: max(1, int(self.max_seconds * self.sr))]
+            signal = signal[: max(1, int(self.max_seconds * self.sample_rate))]
         if signal.size < _MIN_SAMPLES:
             signal = np.pad(signal, (0, _MIN_SAMPLES - signal.size))
         return signal

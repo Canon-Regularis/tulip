@@ -76,6 +76,13 @@ def _shingle_hashes(normalised: str, shingle_size: int) -> frozenset[int]:
     ``zlib.crc32`` is used because it is stable across processes/platforms
     (unlike ``hash``) and fast; 32-bit collisions are negligible for a
     similarity estimate.
+
+    Note:
+        A numpy-vectorised rolling-hash replacement was tried and *measured
+        slower* for typical short dialect texts (ufunc/`np.unique` per-call
+        overhead exceeds ~80 crc32 calls), as was array-based Jaccard
+        verification (`np.intersect1d` loses badly to C-level set ops for
+        many small comparisons). Don't re-attempt without profiling first.
     """
     if len(normalised) <= shingle_size:
         shingles = {normalised} if normalised else set()

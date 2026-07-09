@@ -14,4 +14,24 @@ def _register_builtins() -> None:
 
 _register_builtins()
 
-__all__ = ["MODELS"]
+# The documented public surface, importable from the subsystem root like
+# every sibling package (the registration imports above make these free).
+from tulip.models.fasttext_model import FastTextClassifier  # noqa: E402
+from tulip.models.neural_audio import (  # noqa: E402
+    EmbeddingSpeechClassifier,
+    FinetunedSpeechClassifier,
+    SpeechClassifier,
+)
+from tulip.models.neural_text import TransformerTextClassifier  # noqa: E402
+from tulip.models.persistence import load_model, save_model  # noqa: E402
+
+__all__ = [
+    "MODELS",
+    "EmbeddingSpeechClassifier",
+    "FastTextClassifier",
+    "FinetunedSpeechClassifier",
+    "SpeechClassifier",
+    "TransformerTextClassifier",
+    "load_model",
+    "save_model",
+]

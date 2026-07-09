@@ -208,13 +208,14 @@ def _greedy_assign(
     return assignment
 
 
-def save_splits(splits: DatasetSplits, directory: Path) -> dict[str, Path]:
+def save_splits(splits: DatasetSplits, directory: Path | str) -> dict[str, Path]:
     """Persist splits as one JSONL file per split under ``directory``.
 
     Returns:
         ``{split_name: written_path}`` (all three files are always written,
         even when empty, so a directory is unambiguously a complete split).
     """
+    directory = Path(directory)
     paths: dict[str, Path] = {}
     for name, samples in splits.as_dict().items():
         path = directory / f"{name}.jsonl"
@@ -223,12 +224,13 @@ def save_splits(splits: DatasetSplits, directory: Path) -> dict[str, Path]:
     return paths
 
 
-def load_splits(directory: Path) -> DatasetSplits:
+def load_splits(directory: Path | str) -> DatasetSplits:
     """Load splits previously written by :func:`save_splits`.
 
     Raises:
         DataError: if any of the three split files is missing or malformed.
     """
+    directory = Path(directory)
     loaded: dict[str, list[Sample]] = {}
     for name in _SPLIT_NAMES:
         path = directory / f"{name}.jsonl"

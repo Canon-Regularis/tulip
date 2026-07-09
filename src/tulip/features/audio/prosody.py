@@ -47,7 +47,7 @@ class PitchExtractor(TransformerMixin, BaseEstimator):
     with no voiced frames yield an all-zero row rather than NaNs.
 
     Args:
-        sr: Target sample rate.
+        sample_rate: Target sample rate.
         fmin: Lowest F0 candidate in Hz.
         fmax: Highest F0 candidate in Hz.
         frame_length: pyin analysis window in samples.
@@ -56,13 +56,13 @@ class PitchExtractor(TransformerMixin, BaseEstimator):
 
     def __init__(
         self,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         fmin: float = 65.0,
         fmax: float = 500.0,
         frame_length: int = 2048,
         hop_length: int = 256,
     ) -> None:
-        self.sr = sr
+        self.sample_rate = sample_rate
         self.fmin = fmin
         self.fmax = fmax
         self.frame_length = frame_length
@@ -82,7 +82,7 @@ class PitchExtractor(TransformerMixin, BaseEstimator):
         Returns:
             Float32 array of shape ``(len(X), 6)``, always finite.
         """
-        rows = [self._pitch_stats(load_audio(path, sr=self.sr)) for path in X]
+        rows = [self._pitch_stats(load_audio(path, sample_rate=self.sample_rate)) for path in X]
         if not rows:
             return np.zeros((0, len(_PITCH_FEATURE_NAMES)), dtype=np.float32)
         return np.vstack(rows)
@@ -104,7 +104,7 @@ class PitchExtractor(TransformerMixin, BaseEstimator):
             y=signal,
             fmin=self.fmin,
             fmax=self.fmax,
-            sr=self.sr,
+            sr=self.sample_rate,
             frame_length=self.frame_length,
             hop_length=self.hop_length,
         )
@@ -128,7 +128,7 @@ class PitchExtractor(TransformerMixin, BaseEstimator):
 
 def lpc_formant_frames(
     signal: np.ndarray,
-    sr: int,
+    sample_rate: int,
     *,
     n_formants: int = 3,
     frame_length: int = 400,
@@ -150,11 +150,11 @@ def lpc_formant_frames(
     2. Slice into Hamming-windowed frames (defaults: 25 ms / 10 ms at 16 kHz).
     3. Fit an all-pole model per frame with the autocorrelation method,
        solving the Toeplitz normal equations via Levinson-Durbin
-       (``scipy.linalg.solve_toeplitz``). Order defaults to the ``2 + sr/1000``
+       (``scipy.linalg.solve_toeplitz``). Order defaults to the ``2 + sample_rate/1000``
        rule of thumb.
     4. Root the LP polynomial; each positive-frequency root ``z`` is a
-       resonance candidate at ``F = angle(z) * sr / (2*pi)`` with bandwidth
-       ``B = -(sr / pi) * ln|z|``.
+       resonance candidate at ``F = angle(z) * sample_rate / (2*pi)`` with bandwidth
+       ``B = -(sample_rate / pi) * ln|z|``.
     5. Keep sharp resonances (``B < max_bandwidth_hz``) inside
        ``(min_formant_hz, max_formant_hz)``; the lowest ``n_formants`` in
        ascending frequency are F1..Fn.
@@ -165,11 +165,11 @@ def lpc_formant_frames(
 
     Args:
         signal: 1-D mono audio signal.
-        sr: Sample rate of ``signal`` in Hz.
+        sample_rate: Sample rate of ``signal`` in Hz.
         n_formants: Number of formants to keep per frame (F1..Fn).
         frame_length: Analysis window in samples.
         hop_length: Hop size in samples.
-        lpc_order: All-pole model order; ``None`` uses ``2 + sr // 1000``.
+        lpc_order: All-pole model order; ``None`` uses ``2 + sample_rate // 1000``.
         pre_emphasis: Pre-emphasis coefficient in ``[0, 1)``.
         min_formant_hz: Reject candidates at or below this frequency.
         max_formant_hz: Reject candidates at or above this frequency.
@@ -190,7 +190,7 @@ def lpc_formant_frames(
         )
     if n_formants <= 0:
         raise ConfigurationError(f"n_formants must be positive, got {n_formants}")
-    order = int(lpc_order) if lpc_order is not None else 2 + sr // 1000
+    order = int(lpc_order) if lpc_order is not None else 2 + sample_rate // 1000
     if order < 2:
         raise ConfigurationError(f"lpc_order must be at least 2, got {order}")
 
@@ -221,7 +221,7 @@ def lpc_formant_frames(
             rows.append(nan_row)
             continue
         frame = emphasized[start : start + frame_length] * window
-        candidates = _lpc_resonances(frame, sr, order)
+        candidates = _lpc_resonances(frame, sample_rate, order)
         if candidates.size == 0:
             rows.append(nan_row)
             continue
@@ -237,7 +237,7 @@ def lpc_formant_frames(
     return np.vstack(rows)
 
 
-def _lpc_resonances(frame: np.ndarray, sr: int, order: int) -> np.ndarray:
+def _lpc_resonances(frame: np.ndarray, sample_rate: int, order: int) -> np.ndarray:
     """Return ``(frequency_hz, bandwidth_hz)`` pairs of one frame's LP roots."""
     autocorr = np.correlate(frame, frame, mode="full")[frame.size - 1 : frame.size + order]
     if autocorr[0] <= 1e-12:
@@ -254,8 +254,8 @@ def _lpc_resonances(frame: np.ndarray, sr: int, order: int) -> np.ndarray:
     roots = roots[np.imag(roots) > 0.0]
     if roots.size == 0:
         return np.zeros((0, 2))
-    freqs = np.angle(roots) * sr / (2.0 * np.pi)
-    bandwidths = -(sr / np.pi) * np.log(np.clip(np.abs(roots), 1e-12, None))
+    freqs = np.angle(roots) * sample_rate / (2.0 * np.pi)
+    bandwidths = -(sample_rate / np.pi) * np.log(np.clip(np.abs(roots), 1e-12, None))
     return np.column_stack([freqs, bandwidths])
 
 
@@ -268,7 +268,7 @@ class FormantExtractor(PooledFrameExtractor):
     Frames where a formant is undefined are NaN and ignored by pooling.
 
     Args:
-        sr: Target sample rate.
+        sample_rate: Target sample rate.
         n_formants: Number of formants per frame (F1..Fn).
         method: ``"auto"`` (praat if importable, else LPC), ``"praat"``, or
             ``"lpc"``.
@@ -281,7 +281,7 @@ class FormantExtractor(PooledFrameExtractor):
 
     def __init__(
         self,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         n_formants: int = 3,
         method: str = "auto",
         frame_length: int = 400,
@@ -290,7 +290,7 @@ class FormantExtractor(PooledFrameExtractor):
         max_formant_hz: float = 5500.0,
         stats: Sequence[str] = DEFAULT_STATS,
     ) -> None:
-        super().__init__(sr=sr, stats=stats)
+        super().__init__(sample_rate=sample_rate, stats=stats)
         self.n_formants = n_formants
         self.method = method
         self.frame_length = frame_length
@@ -298,13 +298,13 @@ class FormantExtractor(PooledFrameExtractor):
         self.lpc_order = lpc_order
         self.max_formant_hz = max_formant_hz
 
-    def _frame_features(self, signal: np.ndarray, sr: int) -> np.ndarray:
+    def _frame_features(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
         method = self._resolve_method()
         if method == "praat":
-            return self._praat_formant_frames(signal, sr)
+            return self._praat_formant_frames(signal, sample_rate)
         return lpc_formant_frames(
             signal,
-            sr,
+            sample_rate,
             n_formants=self.n_formants,
             frame_length=self.frame_length,
             hop_length=self.hop_length,
@@ -327,16 +327,16 @@ class FormantExtractor(PooledFrameExtractor):
             f"unknown formant method {self.method!r}; expected 'auto', 'praat', or 'lpc'"
         )
 
-    def _praat_formant_frames(self, signal: np.ndarray, sr: int) -> np.ndarray:
+    def _praat_formant_frames(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
         parselmouth = optional.optional_import(
             "parselmouth", extra="audio", purpose="Praat (Burg) formant estimation"
         )
-        sound = parselmouth.Sound(signal.astype(np.float64), sampling_frequency=sr)
+        sound = parselmouth.Sound(signal.astype(np.float64), sampling_frequency=sample_rate)
         formant = sound.to_formant_burg(
-            time_step=self.hop_length / sr,
+            time_step=self.hop_length / sample_rate,
             max_number_of_formants=max(5.0, float(self.n_formants)),
             maximum_formant=self.max_formant_hz,
-            window_length=self.frame_length / sr,
+            window_length=self.frame_length / sample_rate,
         )
         times = np.asarray(formant.ts(), dtype=np.float64)
         if times.size == 0:

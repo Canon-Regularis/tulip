@@ -53,7 +53,7 @@ class MfccExtractor(PooledFrameExtractor):
     """Pooled MFCCs, optionally augmented with delta and delta-delta tracks.
 
     Args:
-        sr: Target sample rate.
+        sample_rate: Target sample rate.
         n_mfcc: Number of cepstral coefficients per frame.
         add_deltas: Append first- and second-order deltas (triples the width).
         n_fft: STFT window size in samples.
@@ -63,23 +63,27 @@ class MfccExtractor(PooledFrameExtractor):
 
     def __init__(
         self,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         n_mfcc: int = 13,
         add_deltas: bool = False,
         n_fft: int = DEFAULT_N_FFT,
         hop_length: int = DEFAULT_HOP_LENGTH,
         stats: Sequence[str] = DEFAULT_STATS,
     ) -> None:
-        super().__init__(sr=sr, stats=stats)
+        super().__init__(sample_rate=sample_rate, stats=stats)
         self.n_mfcc = n_mfcc
         self.add_deltas = add_deltas
         self.n_fft = n_fft
         self.hop_length = hop_length
 
-    def _frame_features(self, signal: np.ndarray, sr: int) -> np.ndarray:
+    def _frame_features(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
         librosa = _librosa()
         mfcc = librosa.feature.mfcc(
-            y=signal, sr=sr, n_mfcc=self.n_mfcc, n_fft=self.n_fft, hop_length=self.hop_length
+            y=signal,
+            sr=sample_rate,
+            n_mfcc=self.n_mfcc,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
         )
         if self.add_deltas:
             # mode="nearest" keeps deltas defined for clips shorter than the
@@ -102,7 +106,7 @@ class MelSpectrogramExtractor(PooledFrameExtractor):
     """Pooled log-mel spectrogram (power spectrogram in dB on a mel scale).
 
     Args:
-        sr: Target sample rate.
+        sample_rate: Target sample rate.
         n_mels: Number of mel bands.
         n_fft: STFT window size in samples.
         hop_length: STFT hop size in samples.
@@ -113,7 +117,7 @@ class MelSpectrogramExtractor(PooledFrameExtractor):
 
     def __init__(
         self,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         n_mels: int = 64,
         n_fft: int = DEFAULT_N_FFT,
         hop_length: int = DEFAULT_HOP_LENGTH,
@@ -121,18 +125,18 @@ class MelSpectrogramExtractor(PooledFrameExtractor):
         fmax: float | None = None,
         stats: Sequence[str] = DEFAULT_STATS,
     ) -> None:
-        super().__init__(sr=sr, stats=stats)
+        super().__init__(sample_rate=sample_rate, stats=stats)
         self.n_mels = n_mels
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.fmin = fmin
         self.fmax = fmax
 
-    def _frame_features(self, signal: np.ndarray, sr: int) -> np.ndarray:
+    def _frame_features(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
         librosa = _librosa()
         mel = librosa.feature.melspectrogram(
             y=signal,
-            sr=sr,
+            sr=sample_rate,
             n_mels=self.n_mels,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
@@ -152,7 +156,7 @@ class RmsEnergyExtractor(PooledFrameExtractor):
     """Pooled frame-wise RMS energy.
 
     Args:
-        sr: Target sample rate.
+        sample_rate: Target sample rate.
         frame_length: Analysis window size in samples.
         hop_length: Hop size in samples.
         stats: Pooling statistics.
@@ -160,17 +164,17 @@ class RmsEnergyExtractor(PooledFrameExtractor):
 
     def __init__(
         self,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         frame_length: int = DEFAULT_N_FFT,
         hop_length: int = DEFAULT_HOP_LENGTH,
         stats: Sequence[str] = DEFAULT_STATS,
     ) -> None:
-        super().__init__(sr=sr, stats=stats)
+        super().__init__(sample_rate=sample_rate, stats=stats)
         self.frame_length = frame_length
         self.hop_length = hop_length
 
-    def _frame_features(self, signal: np.ndarray, sr: int) -> np.ndarray:
-        del sr
+    def _frame_features(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
+        del sample_rate
         librosa = _librosa()
         rms = librosa.feature.rms(
             y=signal, frame_length=self.frame_length, hop_length=self.hop_length
@@ -186,7 +190,7 @@ class ZeroCrossingRateExtractor(PooledFrameExtractor):
     """Pooled frame-wise zero-crossing rate (crossings per sample).
 
     Args:
-        sr: Target sample rate.
+        sample_rate: Target sample rate.
         frame_length: Analysis window size in samples.
         hop_length: Hop size in samples.
         stats: Pooling statistics.
@@ -194,17 +198,17 @@ class ZeroCrossingRateExtractor(PooledFrameExtractor):
 
     def __init__(
         self,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         frame_length: int = DEFAULT_N_FFT,
         hop_length: int = DEFAULT_HOP_LENGTH,
         stats: Sequence[str] = DEFAULT_STATS,
     ) -> None:
-        super().__init__(sr=sr, stats=stats)
+        super().__init__(sample_rate=sample_rate, stats=stats)
         self.frame_length = frame_length
         self.hop_length = hop_length
 
-    def _frame_features(self, signal: np.ndarray, sr: int) -> np.ndarray:
-        del sr
+    def _frame_features(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
+        del sample_rate
         librosa = _librosa()
         zcr = librosa.feature.zero_crossing_rate(
             y=signal, frame_length=self.frame_length, hop_length=self.hop_length
@@ -220,7 +224,7 @@ class SpectralCentroidExtractor(PooledFrameExtractor):
     """Pooled spectral centroid (the spectrum's centre of mass, in Hz).
 
     Args:
-        sr: Target sample rate.
+        sample_rate: Target sample rate.
         n_fft: STFT window size in samples.
         hop_length: STFT hop size in samples.
         stats: Pooling statistics.
@@ -228,19 +232,19 @@ class SpectralCentroidExtractor(PooledFrameExtractor):
 
     def __init__(
         self,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         n_fft: int = DEFAULT_N_FFT,
         hop_length: int = DEFAULT_HOP_LENGTH,
         stats: Sequence[str] = DEFAULT_STATS,
     ) -> None:
-        super().__init__(sr=sr, stats=stats)
+        super().__init__(sample_rate=sample_rate, stats=stats)
         self.n_fft = n_fft
         self.hop_length = hop_length
 
-    def _frame_features(self, signal: np.ndarray, sr: int) -> np.ndarray:
+    def _frame_features(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
         librosa = _librosa()
         centroid = librosa.feature.spectral_centroid(
-            y=signal, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length
+            y=signal, sr=sample_rate, n_fft=self.n_fft, hop_length=self.hop_length
         )
         return centroid.T
 
@@ -253,7 +257,7 @@ class ChromaExtractor(PooledFrameExtractor):
     """Pooled chromagram (energy per pitch class).
 
     Args:
-        sr: Target sample rate.
+        sample_rate: Target sample rate.
         n_chroma: Number of pitch-class bins.
         n_fft: STFT window size in samples.
         hop_length: STFT hop size in samples.
@@ -262,21 +266,25 @@ class ChromaExtractor(PooledFrameExtractor):
 
     def __init__(
         self,
-        sr: int = DEFAULT_SAMPLE_RATE,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
         n_chroma: int = 12,
         n_fft: int = DEFAULT_N_FFT,
         hop_length: int = DEFAULT_HOP_LENGTH,
         stats: Sequence[str] = DEFAULT_STATS,
     ) -> None:
-        super().__init__(sr=sr, stats=stats)
+        super().__init__(sample_rate=sample_rate, stats=stats)
         self.n_chroma = n_chroma
         self.n_fft = n_fft
         self.hop_length = hop_length
 
-    def _frame_features(self, signal: np.ndarray, sr: int) -> np.ndarray:
+    def _frame_features(self, signal: np.ndarray, sample_rate: int) -> np.ndarray:
         librosa = _librosa()
         chroma = librosa.feature.chroma_stft(
-            y=signal, sr=sr, n_chroma=self.n_chroma, n_fft=self.n_fft, hop_length=self.hop_length
+            y=signal,
+            sr=sample_rate,
+            n_chroma=self.n_chroma,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
         )
         return chroma.T
 
