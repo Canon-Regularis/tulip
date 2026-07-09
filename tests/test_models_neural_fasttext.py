@@ -7,11 +7,10 @@ missing-dependency path is exercised by monkeypatching ``importlib``.
 
 from __future__ import annotations
 
-import importlib
-
 import numpy as np
 import pytest
 
+from conftest import block_imports
 from tulip.core.exceptions import (
     ConfigurationError,
     DataError,
@@ -28,19 +27,6 @@ from tulip.models.fasttext_model import (
     probability_row,
     sanitise_fasttext_text,
 )
-
-
-def block_imports(monkeypatch: pytest.MonkeyPatch, *blocked: str) -> None:
-    """Make ``importlib.import_module`` fail for the given module trees."""
-    real_import_module = importlib.import_module
-
-    def fake_import_module(name: str, package: str | None = None):
-        if any(name == root or name.startswith(root + ".") for root in blocked):
-            raise ImportError(f"blocked for test: {name}")
-        return real_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
-
 
 # --- registry / hyperparameter plumbing ----------------------------------------
 

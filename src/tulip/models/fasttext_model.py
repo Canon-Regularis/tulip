@@ -28,7 +28,12 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.models.neural_text import reconcile_seed_param, require_fitted
+from tulip.models._common import (
+    ArgmaxPredictMixin,
+    reconcile_seed_param,
+    require_fitted,
+    validate_fit_inputs,
+)
 from tulip.models.registry import MODELS
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
@@ -139,7 +144,7 @@ def probability_row(
     return row / total
 
 
-class FastTextClassifier(ClassifierMixin, BaseEstimator):
+class FastTextClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
     """Supervised fastText text classifier with a scikit-learn interface.
 
     Follows scikit-learn conventions: ``fit(texts, y)``, ``predict``,
@@ -239,14 +244,8 @@ class FastTextClassifier(ClassifierMixin, BaseEstimator):
             "fasttext", extra="fasttext", purpose="fastText supervised classification"
         )
         texts = [str(text) for text in X]
-        if not texts:
-            raise DataError("cannot fit on an empty dataset")
-        if len(texts) != len(y):
-            raise DataError(f"X and y length mismatch: {len(texts)} != {len(y)}")
-        labels = [str(value) for value in y]
-        classes = np.unique(np.asarray(labels, dtype=object))
-        if len(classes) < 2:
-            raise DataError(f"need at least 2 classes to fit, got {len(classes)}")
+        classes, encoded = validate_fit_inputs(texts, y)
+        labels = [str(label) for label in classes[encoded]]  # per-sample strings
 
         train_kwargs: dict[str, Any] = {
             "dim": self.dim,
@@ -304,11 +303,6 @@ class FastTextClassifier(ClassifierMixin, BaseEstimator):
                 probability_row(labels, probabilities, self._class_to_index_, len(self.classes_))
             )
         return np.vstack(rows)
-
-    def predict(self, X: Sequence[str]) -> np.ndarray:
-        """Return the most probable class label for each text."""
-        probabilities = self.predict_proba(X)
-        return self.classes_[np.argmax(probabilities, axis=1)]
 
     # The fitted fastText handle is a pybind11 C++ object with no pickle
     # support, which would make joblib-based persistence (save_model) fail

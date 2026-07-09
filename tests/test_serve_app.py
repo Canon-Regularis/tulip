@@ -6,22 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_samples
-from tulip.pipeline import DialectClassifier
-
 fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def client(tmp_path_factory: pytest.TempPathFactory) -> TestClient:
+def client(trained_text_artifact: Path) -> TestClient:
     from tulip.serve.app import create_app
 
-    artifact = tmp_path_factory.mktemp("serve-model") / "model"
-    classifier = DialectClassifier(model="logistic_regression", features=["char_tfidf"], seed=42)
-    classifier.fit(make_samples())
-    classifier.save(artifact)
-    return TestClient(create_app(artifact))
+    return TestClient(create_app(trained_text_artifact))
 
 
 class TestHealth:

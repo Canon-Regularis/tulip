@@ -50,6 +50,9 @@ src/tulip/
     audio/         # MFCC, mel, pitch, formants, ZCR, centroid, chroma, wav2vec2
   models/
     registry.py    # MODELS registry                              [frozen]
+    _common.py     # shared estimator machinery (label encoding, fit
+                   # validation, seed reconciliation, argmax-predict mixin,
+                   # torch training + batched-softmax inference loops)
     classical.py   # NB, LogReg, LinearSVM, RF, XGBoost, LightGBM
     neural_text.py # HerBERT, Polish RoBERTa, mBERT, XLM-R fine-tuning
     neural_audio.py# wav2vec2, HuBERT, Whisper-encoder, ECAPA-TDNN, x-vectors

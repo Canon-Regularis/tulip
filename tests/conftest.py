@@ -1,7 +1,8 @@
-"""Shared fixtures and corpus builders for the tulip test suite."""
+"""Shared fixtures, helpers, and corpus builders for the tulip test suite."""
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,23 @@ import pytest
 
 from tulip.config.schemas import ComponentConfig, DataConfig, ExperimentConfig, SplitConfig
 from tulip.core.types import DialectLabels, Sample
+
+
+def block_imports(monkeypatch: pytest.MonkeyPatch, *blocked: str) -> None:
+    """Make ``importlib.import_module`` fail for the given module trees.
+
+    Lets optional-dependency failure paths be exercised even on machines where
+    the dependency IS installed.
+    """
+    real_import_module = importlib.import_module
+
+    def fake_import_module(name: str, package: str | None = None):
+        if any(name == root or name.startswith(root + ".") for root in blocked):
+            raise ImportError(f"blocked for test: {name}")
+        return real_import_module(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+
 
 # Tiny synthetic corpus: crude dialect-flavoured Polish, multiple speakers per
 # dialect so speaker-disjoint splitting is exercisable. Not linguistically
@@ -81,6 +99,22 @@ def synthetic_texts_and_labels(synthetic_samples: list[Sample]) -> tuple[list[st
 def rng() -> np.random.Generator:
     """A seeded numpy random generator for deterministic tests."""
     return np.random.default_rng(42)
+
+
+@pytest.fixture(scope="session")
+def trained_text_artifact(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A small trained + saved text classifier, shared by the CLI/serve tests.
+
+    Session-scoped: training even this tiny model dominates those tests'
+    runtime, and every consumer only reads the artifact.
+    """
+    from tulip.pipeline import DialectClassifier
+
+    artifact = tmp_path_factory.mktemp("trained-model") / "model"
+    classifier = DialectClassifier(model="logistic_regression", features=["char_tfidf"], seed=42)
+    classifier.fit(make_samples())
+    classifier.save(artifact)
+    return artifact
 
 
 # Deliberately comma-free sentence templates: corpus builders below write

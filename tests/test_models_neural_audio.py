@@ -7,13 +7,13 @@ or replaced by stubs; the waveform helpers are pure numpy/scipy.
 
 from __future__ import annotations
 
-import importlib
 import sys
 from types import ModuleType
 
 import numpy as np
 import pytest
 
+from conftest import block_imports
 from tulip.core.exceptions import (
     ConfigurationError,
     DataError,
@@ -33,18 +33,6 @@ from tulip.models.neural_audio import (
 )
 
 SHARED_LOADER_MODULE = "tulip.features.audio.loading"
-
-
-def block_imports(monkeypatch: pytest.MonkeyPatch, *blocked: str) -> None:
-    """Make ``importlib.import_module`` fail for the given module trees."""
-    real_import_module = importlib.import_module
-
-    def fake_import_module(name: str, package: str | None = None):
-        if any(name == root or name.startswith(root + ".") for root in blocked):
-            raise ImportError(f"blocked for test: {name}")
-        return real_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
 
 
 # --- factory / hyperparameter plumbing ----------------------------------------

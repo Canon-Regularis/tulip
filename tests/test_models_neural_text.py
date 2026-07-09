@@ -7,16 +7,15 @@ uninstalled even on machines that have them.
 
 from __future__ import annotations
 
-import importlib
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from conftest import block_imports
 from tulip.core.exceptions import ConfigurationError, MissingDependencyError, TulipError
 from tulip.models import MODELS
-from tulip.models.neural_text import (
-    TransformerTextClassifier,
+from tulip.models._common import (
     balanced_class_weights,
     checkpoint_factory,
     encode_labels,
@@ -25,19 +24,7 @@ from tulip.models.neural_text import (
     require_fitted,
     resolve_device,
 )
-
-
-def block_imports(monkeypatch: pytest.MonkeyPatch, *blocked: str) -> None:
-    """Make ``importlib.import_module`` fail for the given module trees."""
-    real_import_module = importlib.import_module
-
-    def fake_import_module(name: str, package: str | None = None):
-        if any(name == root or name.startswith(root + ".") for root in blocked):
-            raise ImportError(f"blocked for test: {name}")
-        return real_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
-
+from tulip.models.neural_text import TransformerTextClassifier
 
 # --- factory / hyperparameter plumbing (no torch needed by contract) ---------
 

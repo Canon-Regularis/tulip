@@ -39,13 +39,16 @@ from scipy.signal import resample_poly
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 from tulip.core.exceptions import ConfigurationError, DataError, TulipError
-from tulip.models.neural_text import (
+from tulip.models._common import (
+    ArgmaxPredictMixin,
     balanced_class_weights,
+    batched_softmax_probabilities,
     checkpoint_factory,
-    encode_labels,
     require_fitted,
     resolve_device,
     train_torch_classifier,
+    validate_common_training_params,
+    validate_fit_inputs,
 )
 from tulip.models.registry import MODELS
 from tulip.utils.logging import get_logger
@@ -248,7 +251,7 @@ def _load_clipped_waveforms(
     return waveforms
 
 
-class FinetunedSpeechClassifier(ClassifierMixin, BaseEstimator):
+class FinetunedSpeechClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
     """Fine-tune a Hugging Face audio-classification model on audio files.
 
     Follows scikit-learn conventions: ``fit(paths, y)``, ``predict``,
@@ -339,22 +342,7 @@ class FinetunedSpeechClassifier(ClassifierMixin, BaseEstimator):
             raise ConfigurationError(f"max_seconds must be > 0, got {self.max_seconds}")
         if self.sample_rate < 1:
             raise ConfigurationError(f"sample_rate must be >= 1, got {self.sample_rate}")
-        if self.epochs < 1:
-            raise ConfigurationError(f"epochs must be >= 1, got {self.epochs}")
-        if self.batch_size < 1:
-            raise ConfigurationError(f"batch_size must be >= 1, got {self.batch_size}")
-        if self.learning_rate <= 0:
-            raise ConfigurationError(f"learning_rate must be > 0, got {self.learning_rate}")
-        if not 0.0 <= self.warmup_ratio <= 1.0:
-            raise ConfigurationError(f"warmup_ratio must be in [0, 1], got {self.warmup_ratio}")
-        if self.gradient_accumulation_steps < 1:
-            raise ConfigurationError(
-                f"gradient_accumulation_steps must be >= 1, got {self.gradient_accumulation_steps}"
-            )
-        if self.class_weight not in (None, "balanced"):
-            raise ConfigurationError(
-                f'class_weight must be None or "balanced", got {self.class_weight!r}'
-            )
+        validate_common_training_params(self)
 
     def _encode_features(self, feature_extractor: Any, waveforms: list[np.ndarray]) -> Any:
         """Run the feature extractor with padding appropriate to its family."""
@@ -387,13 +375,7 @@ class FinetunedSpeechClassifier(ClassifierMixin, BaseEstimator):
             "transformers", extra="speech", purpose="speech classification models"
         )
         paths = [Path(path) for path in X]
-        if not paths:
-            raise DataError("cannot fit on an empty dataset")
-        if len(paths) != len(y):
-            raise DataError(f"X and y length mismatch: {len(paths)} != {len(y)}")
-        classes, encoded = encode_labels(y)
-        if len(classes) < 2:
-            raise DataError(f"need at least 2 classes to fit, got {len(classes)}")
+        classes, encoded = validate_fit_inputs(paths, y)
 
         device = resolve_device(self.device, torch)
         # Seed BEFORE model construction: from_pretrained randomly initialises
@@ -473,35 +455,29 @@ class FinetunedSpeechClassifier(ClassifierMixin, BaseEstimator):
         """
         require_fitted(self, "model_", "feature_extractor_")
         torch = optional_import("torch", extra="speech", purpose="speech model inference")
-        paths = [Path(path) for path in X]
-        if not paths:
-            return np.zeros((0, len(self.classes_)), dtype=np.float64)
-        self.model_.eval()
-        rows: list[np.ndarray] = []
-        with torch.no_grad():
-            for start in range(0, len(paths), self.batch_size):
-                batch_paths = paths[start : start + self.batch_size]
-                waveforms = _load_clipped_waveforms(
-                    batch_paths, sample_rate=self.sample_rate, max_seconds=self.max_seconds
-                )
-                features = self._encode_features(self.feature_extractor_, waveforms)
-                inputs = {key: value.to(self.device_) for key, value in features.items()}
-                logits = self.model_(**inputs).logits
-                probabilities = torch.softmax(logits, dim=-1)
-                rows.append(probabilities.detach().cpu().numpy())
-        return np.vstack(rows).astype(np.float64)
 
-    def predict(self, X: Sequence[str | Path]) -> np.ndarray:
-        """Return the most probable class label for each audio file."""
-        probabilities = self.predict_proba(X)
-        return self.classes_[np.argmax(probabilities, axis=1)]
+        def encode_batch(batch_paths: Sequence[Path]) -> Any:
+            waveforms = _load_clipped_waveforms(
+                list(batch_paths), sample_rate=self.sample_rate, max_seconds=self.max_seconds
+            )
+            return self._encode_features(self.feature_extractor_, waveforms)
+
+        return batched_softmax_probabilities(
+            torch,
+            self.model_,
+            [Path(path) for path in X],
+            encode_batch,
+            batch_size=self.batch_size,
+            n_classes=len(self.classes_),
+            device=self.device_,
+        )
 
 
 #: Alias matching the architecture document's family name for these wrappers.
 SpeechClassifier = FinetunedSpeechClassifier
 
 
-class EmbeddingSpeechClassifier(ClassifierMixin, BaseEstimator):
+class EmbeddingSpeechClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
     """Frozen speechbrain speaker embeddings + a logistic-regression head.
 
     This is embedding + head, **not** end-to-end fine-tuning: the pretrained
@@ -646,13 +622,8 @@ class EmbeddingSpeechClassifier(ClassifierMixin, BaseEstimator):
             "torch", extra="speech", purpose="pretrained speaker embedding encoders"
         )
         paths = [Path(path) for path in X]
-        if not paths:
-            raise DataError("cannot fit on an empty dataset")
-        if len(paths) != len(y):
-            raise DataError(f"X and y length mismatch: {len(paths)} != {len(y)}")
-        labels = np.asarray([str(value) for value in y], dtype=object)
-        if len(np.unique(labels)) < 2:
-            raise DataError(f"need at least 2 classes to fit, got {len(np.unique(labels))}")
+        classes, encoded = validate_fit_inputs(paths, y)
+        labels = classes[encoded]  # per-sample string labels for the sklearn head
 
         encoder, device = self._load_encoder(torch)
         logger.info(
@@ -698,11 +669,6 @@ class EmbeddingSpeechClassifier(ClassifierMixin, BaseEstimator):
             return np.zeros((0, len(self.classes_)), dtype=np.float64)
         embeddings = self._embed(torch, self.embedder_, paths, self.device_)
         return np.asarray(self.head_.predict_proba(embeddings), dtype=np.float64)
-
-    def predict(self, X: Sequence[str | Path]) -> np.ndarray:
-        """Return the most probable class label for each audio file."""
-        probabilities = self.predict_proba(X)
-        return self.classes_[np.argmax(probabilities, axis=1)]
 
 
 def _register_factories() -> None:

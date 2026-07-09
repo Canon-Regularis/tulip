@@ -8,22 +8,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from conftest import make_manifest_experiment_config, make_samples, write_manifest_corpus
+from conftest import make_manifest_experiment_config, write_manifest_corpus
 from tulip.cli.app import app
 from tulip.config import save_experiment_config
-from tulip.pipeline import DialectClassifier
 
 runner = CliRunner()
-
-
-@pytest.fixture(scope="module")
-def model_artifact(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """A small trained text model saved to disk once per module."""
-    artifact = tmp_path_factory.mktemp("cli-model") / "model"
-    classifier = DialectClassifier(model="logistic_regression", features=["char_tfidf"], seed=42)
-    classifier.fit(make_samples())
-    classifier.save(artifact)
-    return artifact
 
 
 @pytest.fixture
@@ -80,25 +69,31 @@ class TestTrainAndPredict:
         assert predicted.exit_code == 0, predicted.output
         assert "podhale" in predicted.output
 
-    def test_predict_json_output_is_parseable(self, model_artifact: Path) -> None:
+    def test_predict_json_output_is_parseable(self, trained_text_artifact: Path) -> None:
         result = runner.invoke(
-            app, ["predict", str(model_artifact), "Godom po naszymu cołki czos.", "--json"]
+            app, ["predict", str(trained_text_artifact), "Godom po naszymu cołki czos.", "--json"]
         )
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         assert payload["label"] == "silesia"
         assert len(payload["probabilities"]) == 3
 
-    def test_predict_with_explanation(self, model_artifact: Path) -> None:
+    def test_predict_with_explanation(self, trained_text_artifact: Path) -> None:
         result = runner.invoke(
             app,
-            ["predict", str(model_artifact), "Kaj żeś boł wczorej?", "--explain", "top_tfidf"],
+            [
+                "predict",
+                str(trained_text_artifact),
+                "Kaj żeś boł wczorej?",
+                "--explain",
+                "top_tfidf",
+            ],
         )
         assert result.exit_code == 0, result.output
         assert "evidence" in result.output
 
-    def test_predict_requires_exactly_one_input(self, model_artifact: Path) -> None:
-        result = runner.invoke(app, ["predict", str(model_artifact)])
+    def test_predict_requires_exactly_one_input(self, trained_text_artifact: Path) -> None:
+        result = runner.invoke(app, ["predict", str(trained_text_artifact)])
         assert result.exit_code == 1
         assert "exactly one input" in result.output
 
