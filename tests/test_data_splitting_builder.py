@@ -54,6 +54,14 @@ class TestSpeakerDisjointSplit:
         with pytest.raises(DataError, match="empty"):
             speaker_disjoint_split([], SplitConfig())
 
+    def test_save_load_accept_string_paths(self, tmp_path: Path) -> None:
+        # Every other save/load pair in the toolkit accepts str; these must too.
+        from tulip.data import load_splits, save_splits
+
+        splits = speaker_disjoint_split(make_samples(repeats=4), SplitConfig(seed=42))
+        save_splits(splits, str(tmp_path))
+        assert load_splits(str(tmp_path)).sizes() == splits.sizes()
+
     def test_missing_speaker_id_raises(self) -> None:
         nameless = Sample(id="x", text="tekst bez mówcy", labels=DialectLabels())
         with pytest.raises(DataError, match="surrogate"):

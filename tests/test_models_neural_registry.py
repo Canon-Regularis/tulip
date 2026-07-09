@@ -19,6 +19,25 @@ from tulip.models.neural_audio import (
 )
 from tulip.models.neural_text import TEXT_CHECKPOINTS, TransformerTextClassifier
 
+
+def test_documented_surface_importable_from_subsystem_root() -> None:
+    # architecture.md contracts these names on tulip.models, like every
+    # sibling subsystem's root re-exports.
+    import tulip.models as models_root
+
+    for name in (
+        "EmbeddingSpeechClassifier",
+        "FastTextClassifier",
+        "FinetunedSpeechClassifier",
+        "SpeechClassifier",
+        "TransformerTextClassifier",
+        "load_model",
+        "save_model",
+    ):
+        assert hasattr(models_root, name), name
+        assert name in models_root.__all__, name
+
+
 NEURAL_MODEL_NAMES = (
     "herbert",
     "polish_roberta",

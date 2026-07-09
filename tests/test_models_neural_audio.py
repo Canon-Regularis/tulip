@@ -1,39 +1,28 @@
 """Tests for :mod:`tulip.models.neural_audio` that need no optional dependency.
 
-torch/transformers/speechbrain/soundfile are exercised only through failure
-paths (``importlib.import_module`` monkeypatched so they appear uninstalled)
-or replaced by stubs; the waveform helpers are pure numpy/scipy.
+torch/transformers/speechbrain are exercised only through failure paths
+(``importlib.import_module`` monkeypatched so they appear uninstalled) or
+replaced by stubs; decoding goes through the canonical shared loader, tested
+in ``test_features_audio_loading.py``.
 """
 
 from __future__ import annotations
 
-import sys
-from types import ModuleType
+import wave
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from conftest import block_imports
-from tulip.core.exceptions import (
-    ConfigurationError,
-    DataError,
-    MissingDependencyError,
-    TulipError,
-)
+from tulip.core.exceptions import ConfigurationError, MissingDependencyError, TulipError
 from tulip.models import MODELS
 from tulip.models.neural_audio import (
     EmbeddingSpeechClassifier,
     FinetunedSpeechClassifier,
     SpeechClassifier,
-    ensure_mono,
     is_whisper_extractor,
-    load_waveform,
-    normalise_loader_output,
-    resample_waveform,
 )
-
-SHARED_LOADER_MODULE = "tulip.features.audio.loading"
-
 
 # --- factory / hyperparameter plumbing ----------------------------------------
 
@@ -167,59 +156,37 @@ def test_predict_before_fit_raises_tulip_error() -> None:
         EmbeddingSpeechClassifier().predict(["a.wav"])
 
 
-# --- pure waveform helpers ------------------------------------------------------
+# --- decoding through the canonical shared loader --------------------------------
 
 
-def test_ensure_mono_passes_through_1d() -> None:
-    waveform = np.array([0.1, -0.2, 0.3], dtype=np.float64)
-    mono = ensure_mono(waveform)
-    assert mono.ndim == 1
-    assert mono.dtype == np.float32
-    assert mono == pytest.approx(waveform, abs=1e-6)
+def _write_wav(path: Path, *, seconds: float, framerate: int) -> Path:
+    samples = np.zeros(int(seconds * framerate), dtype=np.int16)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(framerate)
+        handle.writeframes(samples.tobytes())
+    return path
 
 
-def test_ensure_mono_averages_frames_by_channels_layout() -> None:
-    # soundfile layout: (frames, channels)
-    stereo = np.stack([np.ones(100), np.zeros(100)], axis=1)
-    assert ensure_mono(stereo) == pytest.approx(np.full(100, 0.5))
+def test_clipped_waveforms_honour_sample_rate_through_real_loader(tmp_path: Path) -> None:
+    # Regression: an earlier local decode path silently ignored sample_rate
+    # (it called the shared loader with the wrong keyword and fell back to
+    # the 16 kHz default). Decoding a 1 s 8 kHz file AT 8 kHz must yield
+    # 8000 samples, not 16000.
+    pytest.importorskip("soundfile")
+    from tulip.models.neural_audio import _load_clipped_waveforms
 
+    clip = _write_wav(tmp_path / "clip.wav", seconds=1.0, framerate=8_000)
+    (waveform,) = _load_clipped_waveforms([clip], sample_rate=8_000, max_seconds=5.0)
+    assert waveform.shape == (8_000,)
 
-def test_ensure_mono_averages_channels_by_frames_layout() -> None:
-    # torchaudio layout: (channels, frames)
-    stereo = np.stack([np.ones(100), np.zeros(100)], axis=0)
-    assert ensure_mono(stereo) == pytest.approx(np.full(100, 0.5))
+    (upsampled,) = _load_clipped_waveforms([clip], sample_rate=16_000, max_seconds=5.0)
+    assert upsampled.shape == (16_000,)
 
-
-def test_ensure_mono_rejects_3d_input() -> None:
-    with pytest.raises(DataError):
-        ensure_mono(np.zeros((2, 3, 4)))
-
-
-def test_resample_waveform_identity_at_same_rate() -> None:
-    waveform = np.linspace(-1, 1, 50, dtype=np.float32)
-    assert resample_waveform(waveform, 16_000, 16_000) is not None
-    assert resample_waveform(waveform, 16_000, 16_000) == pytest.approx(waveform)
-
-
-def test_resample_waveform_doubles_length_8k_to_16k() -> None:
-    waveform = np.ones(8_000, dtype=np.float32)
-    resampled = resample_waveform(waveform, 8_000, 16_000)
-    assert resampled.shape == (16_000,)
-    assert resampled.dtype == np.float32
-    # interior of a constant signal must stay ~constant after polyphase filtering
-    assert resampled[100:-100] == pytest.approx(np.ones(15_800), abs=1e-3)
-
-
-def test_resample_waveform_rejects_nonpositive_rates() -> None:
-    with pytest.raises(DataError):
-        resample_waveform(np.zeros(10, dtype=np.float32), 0, 16_000)
-
-
-def test_normalise_loader_output_handles_pair_and_bare_array() -> None:
-    pair = (np.ones(100, dtype=np.float32), 8_000)
-    assert normalise_loader_output(pair, target_sr=16_000).shape == (200,)
-    bare = np.ones(100, dtype=np.float32)
-    assert normalise_loader_output(bare, target_sr=16_000).shape == (100,)
+    # max_seconds clips at the requested rate.
+    (clipped,) = _load_clipped_waveforms([clip], sample_rate=8_000, max_seconds=0.5)
+    assert clipped.shape == (4_000,)
 
 
 def test_is_whisper_extractor_by_class_name() -> None:
@@ -231,44 +198,3 @@ def test_is_whisper_extractor_by_class_name() -> None:
 
     assert is_whisper_extractor(WhisperFeatureExtractor()) is True
     assert is_whisper_extractor(Wav2Vec2FeatureExtractor()) is False
-
-
-# --- decoding entry point --------------------------------------------------------
-
-
-def _install_fake_shared_loader(monkeypatch: pytest.MonkeyPatch, loader) -> None:
-    module = ModuleType(SHARED_LOADER_MODULE)
-    module.load_audio = loader
-    monkeypatch.setitem(sys.modules, SHARED_LOADER_MODULE, module)
-
-
-def test_load_waveform_prefers_shared_loader(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: dict = {}
-
-    def fake_loader(path, *, sample_rate):
-        seen["path"] = path
-        seen["sample_rate"] = sample_rate
-        return np.ones(100, dtype=np.float32), 8_000
-
-    _install_fake_shared_loader(monkeypatch, fake_loader)
-    waveform = load_waveform("clip.wav", sample_rate=16_000)
-    assert seen["sample_rate"] == 16_000
-    assert str(seen["path"]) == "clip.wav"
-    assert waveform.shape == (200,)  # 8 kHz pair resampled up to 16 kHz
-
-
-def test_load_waveform_retries_shared_loader_positionally(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def positional_only_loader(path):
-        return np.zeros(10, dtype=np.float32)
-
-    _install_fake_shared_loader(monkeypatch, positional_only_loader)
-    assert load_waveform("clip.wav").shape == (10,)
-
-
-def test_load_waveform_fallback_requires_soundfile(monkeypatch: pytest.MonkeyPatch) -> None:
-    block_imports(monkeypatch, SHARED_LOADER_MODULE, "soundfile")
-    with pytest.raises(MissingDependencyError) as excinfo:
-        load_waveform("clip.wav")
-    assert excinfo.value.extra == "audio"

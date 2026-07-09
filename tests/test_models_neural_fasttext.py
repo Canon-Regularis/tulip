@@ -100,6 +100,18 @@ def test_registry_factory_accepts_random_state_alias() -> None:
         MODELS.create("fasttext", seed=1, random_state=2)
 
 
+def test_factory_accepts_standard_training_knob_spellings() -> None:
+    # A config can swap model.name between fasttext and any other trainable
+    # model without renaming epochs/learning_rate to fastText's epoch/lr.
+    from tulip.models import MODELS
+
+    model = MODELS.create("fasttext", epochs=10, learning_rate=0.1)
+    assert model.epoch == 10
+    assert model.lr == pytest.approx(0.1)
+    with pytest.raises(ConfigurationError, match="conflicting"):
+        MODELS.create("fasttext", epochs=10, epoch=5)
+
+
 def test_unfitted_classifier_pickles_without_fasttext() -> None:
     # __getstate__/__setstate__ must be no-ops for unfitted instances: no
     # native handle, no optional import needed.
