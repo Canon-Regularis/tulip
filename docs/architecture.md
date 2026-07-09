@@ -37,7 +37,7 @@ component names, shared conventions, and public API expectations.
 
 ## Package layout and ownership
 
-```
+```text
 src/tulip/
   core/          # types, registry, interfaces, exceptions        [frozen]
   labels/        # taxonomy (families, dialects), geo centroids   [frozen]
@@ -93,9 +93,16 @@ docs, and tests refer to them.
 ## Module contracts
 
 ### tulip.data
+
 - `registry.py`: `DATASETS: Registry` holding `DatasetLoader` **classes**.
 - `catalog.py`: declarative `DatasetInfo` metadata for every corpus (tiers 1-4,
   URLs, tasks, contents, label levels) + `catalog()` accessor.
+- `manifest.py`: the generic manifest reader (`read_manifest`,
+  `ManifestColumns`, `surrogate_speaker_id`) every manifest-backed loader
+  delegates to.
+- `reading.py`: `read_samples(path)` — labelled samples back from anything
+  tulip writes or documents (split JSONL, manifest file, manifest directory);
+  shared by `tulip evaluate` and library callers.
 - Loaders subclass `tulip.core.interfaces.DatasetLoader` (`info` property,
   `load(root) -> Iterator[Sample]`). Loaders are generous in what they accept
   (CSV/TSV/JSONL manifests) and strict in what they emit (validated `Sample`s
@@ -116,6 +123,7 @@ docs, and tests refer to them.
   -> persist (JSONL per split + a manifest with counts and config hash).
 
 ### tulip.features.text
+
 Extractors are sklearn transformers (subclass `BaseEstimator, TransformerMixin`
 where sensible) operating on sequences of strings:
 - `char_tfidf` / `word_tfidf`: thin, well-defaulted wrappers over
@@ -133,6 +141,7 @@ where sensible) operating on sequences of strings:
 - `build_text_features(configs: list[ComponentConfig]) -> FeatureUnion` helper.
 
 ### tulip.features.audio
+
 Extractors take sequences of audio file paths and return fixed-size row
 vectors (frame-level features pooled with mean+std by a shared `pooling.py`).
 librosa/soundfile/parselmouth imported lazily; formants fall back to an
@@ -140,6 +149,7 @@ LPC-based estimate (scipy) when parselmouth is unavailable. A shared
 `loading.py` handles decoding + resampling to 16 kHz mono.
 
 ### tulip.models
+
 - `classical.py`: registered factories returning sklearn-compatible
   classifiers. `linear_svm` must wrap `LinearSVC` in
   `CalibratedClassifierCV` so `predict_proba` exists. `xgboost`/`lightgbm`
@@ -158,22 +168,28 @@ LPC-based estimate (scipy) when parselmouth is unavailable. A shared
   config, classes, metrics).
 
 ### tulip.evaluation
+
 - `metrics.py`: `compute_metrics(y_true, y_pred, y_proba=None, labels=None) ->
   EvaluationReport` — accuracy, macro/weighted precision/recall/F1, per-class
   breakdown, macro one-vs-rest ROC AUC (guarded: omit when y_proba is absent
   or a class is missing), confusion matrix.
 - `report.py`: `EvaluationReport` pydantic model with `to_markdown()`,
   `save(path)`.
-- `benchmark.py`: run several models over identical frozen splits and produce
-  a comparison table — the reproducible-benchmark deliverable.
+- `benchmark.py`: the benchmark result schema (`BenchmarkResult`), comparison
+  tables, and JSON persistence — the reporting half of the
+  reproducible-benchmark deliverable. The orchestration half (`run_benchmark`,
+  training several models over identical frozen splits) lives in
+  `tulip.pipeline.experiment`, which layers *above* evaluation.
 
 ### tulip.explain
+
 `EXPLAINERS` registry; implementations satisfy `tulip.core.interfaces.Explainer`
 and return `tulip.core.types.Explanation`. `top_tfidf` reads linear-model
 coefficients through a fitted sklearn Pipeline; `nearest_examples` retrieves
 cosine-similar training samples; `lime`/`shap`/`attention` guard their imports.
 
 ### tulip.viz
+
 - `map.py`: folium map builders — `prediction_map(prediction)` highlighting the
   predicted region (top-3 shown with graded opacity) and
   `confidence_heatmap(prediction)` shading all regions by probability, using
@@ -184,24 +200,30 @@ cosine-similar training samples; `lime`/`shap`/`attention` guard their imports.
   dialect embeddings for cluster visualisation.
 
 ### tulip.pipeline
+
 - `classifier.py`: `DialectClassifier` — the user-facing facade. Composes
-  feature configs + model config into one trainable object;
-  `fit(samples, target=LabelLevel.DIALECT)`, `predict(raw) -> Prediction`
-  (top-k probabilities, abstention below `abstain_threshold`),
-  `predict_batch`, `explain(raw, method=...)`, `save`/`load` via
-  `models.persistence`.
+  feature configs + model config into one trainable object (`task`, `target`,
+  and `abstain_threshold` are constructor arguments); `fit(samples)`,
+  `predict(raw) -> Prediction` (top-k probabilities, abstention below
+  `abstain_threshold`), `predict_batch`, `predict_proba`,
+  `labelled_batch(samples) -> LabelledBatch` (the public raw-input/label
+  pairing used by training and evaluation), `explain(raw, method=...)`
+  (routing in `explaining.py`), `save`/`load` via `models.persistence`.
 - `experiment.py`: `run_experiment(config: ExperimentConfig) -> ExperimentResult`
   — seed, load+prepare data, split, train, evaluate on validation+test, persist
   model, metrics, splits, and the resolved config under
-  `output_dir/<experiment-name>/`.
+  `output_dir/<experiment-name>/`. Also `evaluate_samples(classifier, samples)`
+  and `run_benchmark(config, models)` (several models, one frozen split).
 
 ### tulip.cli (typer)
+
 `tulip.cli.app:main` — command groups: `data` (list/prepare), `train`,
 `evaluate`, `predict` (text arg or `--audio` path; `--json` output; map export
-via `--map out.html`), `explain`, `benchmark`, `serve`. Rich tables for human
-output; `--json` for machine output.
+via `--map out.html`; explanations via `--explain <method>`), `benchmark`,
+`serve`. Rich tables for human output; `--json` for machine output.
 
 ### tulip.serve (FastAPI)
+
 `create_app(model_path) -> FastAPI`: `POST /predict/text` (JSON body),
 `POST /predict/audio` (multipart upload), `GET /health`. Returns `Prediction`
 JSON (pydantic-native).
