@@ -1,30 +1,50 @@
 """HTTP inference service: one interface for typed text and uploaded audio.
 
-``create_app`` loads a saved :class:`~tulip.pipeline.DialectClassifier` once
-and exposes it over three endpoints:
+``create_app`` loads a saved :class:`~tulip.pipeline.DialectClassifier` once and
+exposes it over an observable, self-documenting API:
 
-* ``GET /health`` -- liveness plus model identity.
+* ``GET /`` -- a self-contained demo web page (see :mod:`tulip.serve._demo`).
+* ``GET /health`` -- liveness plus model identity and abstention config.
+* ``GET /metrics`` -- Prometheus text exposition (see :mod:`tulip.serve._metrics`).
 * ``POST /predict/text`` -- JSON body ``{"text": ..., "top_k": ...}``.
+* ``POST /predict/text/batch`` -- JSON body ``{"texts": [...], "top_k": ...}``.
 * ``POST /predict/audio`` -- multipart file upload (audio-trained models).
 
-Responses are :class:`~tulip.core.types.Prediction` JSON. FastAPI and
-uvicorn are optional (extra ``serve``); this module imports them lazily so
-``import tulip.serve`` never requires them.
+Every request flows through one ASGI middleware that assigns a correlation ID,
+times the handler, stamps ``X-Request-ID`` / ``X-Process-Time-Ms`` response
+headers, records Prometheus metrics, and emits one structured log line.
+
+Prediction responses are :class:`~tulip.core.types.Prediction` JSON, enriched
+with ``X-Tulip-Version`` / ``X-Model-Target`` / ``X-Model-Classes`` headers so a
+client learns the model identity without a second call. FastAPI and uvicorn are
+optional (extra ``serve``); this module imports them lazily so ``import
+tulip.serve`` never requires them.
 """
 
 from __future__ import annotations
 
 import tempfile
+import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from tulip import __version__
 from tulip.core.exceptions import DataError
 from tulip.core.types import Prediction, TaskType
+from tulip.serve._demo import demo_page
+from tulip.serve._metrics import CONTENT_TYPE, MetricsRegistry
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
+
+if TYPE_CHECKING:
+    # Runtime-only for FastAPI: these names are imported lazily (fastapi is an
+    # optional extra), so they live here for the type checker. ``Response`` is
+    # additionally injected into module globals inside ``create_app`` because
+    # FastAPI resolves endpoint annotations against them at route registration.
+    from fastapi import Request, Response
 
 _logger = get_logger(__name__)
 
@@ -32,13 +52,59 @@ _logger = get_logger(__name__)
 #: in the feature extractor; this is just a first-line sanity filter).
 _AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".opus"}
 
+#: Concrete dialect sentences reused across OpenAPI examples so ``/docs`` shows
+#: real Polish rather than "string".
+_PODHALE_EXAMPLE = "Hej, baca się pyto, kaj się owce pasą na holi."
+_SILESIA_EXAMPLE = "Jo żech je z Katowic i godom po naszymu cołki czos."
+
+#: Upper bound on batch size: large enough to be useful, small enough that one
+#: request cannot monopolise the worker or exhaust memory.
+_MAX_BATCH = 512
+
 
 class TextRequest(BaseModel):
     """Request body for ``POST /predict/text``."""
 
-    text: str = Field(min_length=1, description="The text to classify.")
+    model_config = ConfigDict(
+        json_schema_extra={"examples": [{"text": _PODHALE_EXAMPLE, "top_k": 3}]}
+    )
+
+    text: str = Field(
+        min_length=1, description="The text to classify.", examples=[_PODHALE_EXAMPLE]
+    )
     top_k: int | None = Field(
-        default=None, ge=1, description="Truncate the returned distribution to k classes."
+        default=None,
+        ge=1,
+        description="Truncate the returned distribution to k classes.",
+        examples=[3],
+    )
+
+
+class BatchTextRequest(BaseModel):
+    """Request body for ``POST /predict/text/batch``.
+
+    ``texts`` is capped at :data:`_MAX_BATCH` at the schema level (an oversized
+    list is a 422). Emptiness and per-item blankness are enforced in the handler
+    so they surface as a 400 -- the same "your content is unusable" semantics as
+    the single-text endpoint -- rather than a schema-shaped 422.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"texts": [_PODHALE_EXAMPLE, _SILESIA_EXAMPLE], "top_k": None}]
+        }
+    )
+
+    texts: list[str] = Field(
+        max_length=_MAX_BATCH,
+        description=f"One to {_MAX_BATCH} texts to classify in a single call.",
+        examples=[[_PODHALE_EXAMPLE, _SILESIA_EXAMPLE]],
+    )
+    top_k: int | None = Field(
+        default=None,
+        ge=1,
+        description="Truncate every returned distribution to k classes.",
+        examples=[None],
     )
 
 
@@ -47,6 +113,20 @@ def _truncated(prediction: Prediction, top_k: int | None) -> Prediction:
     if top_k is None or top_k >= len(prediction.probabilities):
         return prediction
     return prediction.model_copy(update={"probabilities": prediction.top_k(top_k)})
+
+
+def _path_template(request: Request) -> str:
+    """Return the matched route *template* for metrics, not the concrete URL.
+
+    Using the template (``/predict/text``) rather than ``request.url.path`` keeps
+    metric cardinality bounded even if a future route grows path parameters. The
+    route is populated on the shared scope during routing, so it is available by
+    the time the middleware inspects it after ``call_next``; a request that
+    matched no route (a 404) falls back to the raw path.
+    """
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    return template if isinstance(template, str) else request.url.path
 
 
 def create_app(model_path: Path | str) -> Any:
@@ -65,6 +145,13 @@ def create_app(model_path: Path | str) -> Any:
     fastapi = optional_import("fastapi", extra="serve", purpose="the HTTP service")
     from tulip.pipeline import DialectClassifier  # deferred: heavy sklearn import chain
 
+    # FastAPI resolves endpoint annotations (``response: Response``) against this
+    # module's globals at route-registration time. ``Response`` cannot be a
+    # top-level import (fastapi is optional), so publish it now -- before any
+    # endpoint below is defined -- rather than annotating with the lazily
+    # imported type, which the NOTE on the audio endpoint forbids.
+    globals()["Response"] = fastapi.Response
+
     classifier = DialectClassifier.load(model_path)
     _logger.info(
         "serving %s (task=%s, %d classes)",
@@ -80,8 +167,59 @@ def create_app(model_path: Path | str) -> Any:
     )
     # Endpoints close over `classifier` directly; only the path is state.
     app.state.model_path = str(model_path)
+    registry = MetricsRegistry()
+    app.state.metrics = registry
 
-    @app.get("/health")
+    def _set_identity_headers(response: Response) -> None:
+        """Stamp model-identity headers so a client sees the model without /health."""
+        response.headers["X-Tulip-Version"] = __version__
+        response.headers["X-Model-Target"] = classifier.target.value
+        response.headers["X-Model-Classes"] = ",".join(classifier.classes_)
+
+    @app.middleware("http")
+    async def observability(request: Request, call_next: Any) -> Any:
+        """Assign a correlation ID, time the handler, record metrics, and log once."""
+        request_id = request.headers.get("X-Request-ID") or uuid4().hex
+        request.state.request_id = request_id
+        start = time.perf_counter()
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start) * 1000.0
+        path = _path_template(request)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Process-Time-Ms"] = f"{duration_ms:.3f}"
+        registry.observe(
+            method=request.method,
+            path=path,
+            status=response.status_code,
+            duration_ms=duration_ms,
+        )
+        _logger.info(
+            "request_id=%s method=%s path=%s status=%d duration_ms=%.3f",
+            request_id,
+            request.method,
+            path,
+            response.status_code,
+            duration_ms,
+        )
+        return response
+
+    @app.get(
+        "/",
+        response_class=fastapi.responses.HTMLResponse,
+        tags=["demo"],
+        summary="Interactive demo UI",
+        description="A self-contained HTML page that classifies text and maps the result.",
+    )
+    def demo() -> str:
+        return demo_page(title="tulip -- Polish dialect detection")
+
+    @app.get(
+        "/health",
+        tags=["operations"],
+        summary="Liveness and model identity",
+        description="Report service status plus the loaded model's task, classes, and "
+        "abstention configuration.",
+    )
     def health() -> dict[str, Any]:
         return {
             "status": "ok",
@@ -90,10 +228,29 @@ def create_app(model_path: Path | str) -> Any:
             "task": classifier.task.value,
             "target": classifier.target.value,
             "classes": list(classifier.classes_),
+            "n_classes": len(classifier.classes_),
+            "abstain_threshold": classifier.abstain_threshold,
+            "abstain_enabled": classifier.abstain_threshold is not None,
         }
 
-    @app.post("/predict/text", response_model=Prediction)
-    def predict_text(request: TextRequest) -> Prediction:
+    @app.get(
+        "/metrics",
+        tags=["operations"],
+        summary="Prometheus metrics",
+        description="Request counts and per-path latency in Prometheus text exposition format.",
+    )
+    def metrics() -> Response:
+        return fastapi.Response(content=registry.render(), media_type=CONTENT_TYPE)
+
+    @app.post(
+        "/predict/text",
+        response_model=Prediction,
+        tags=["inference"],
+        summary="Classify one Polish text",
+        description="Return the full ranked dialect probability distribution for one text "
+        "(text-trained models only).",
+    )
+    def predict_text(request: TextRequest, response: Response) -> Prediction:
         if classifier.task is not TaskType.TEXT:
             raise fastapi.HTTPException(
                 status_code=400,
@@ -101,14 +258,46 @@ def create_app(model_path: Path | str) -> Any:
             )
         if not request.text.strip():
             raise fastapi.HTTPException(status_code=400, detail="text must not be blank")
-        return _truncated(classifier.predict(request.text), request.top_k)
+        result = _truncated(classifier.predict(request.text), request.top_k)
+        _set_identity_headers(response)
+        return result
+
+    @app.post(
+        "/predict/text/batch",
+        response_model=list[Prediction],
+        tags=["inference"],
+        summary="Classify a batch of Polish texts",
+        description="Classify up to "
+        f"{_MAX_BATCH} texts in one call, returning one prediction per input in order.",
+    )
+    def predict_text_batch(request: BatchTextRequest, response: Response) -> list[Prediction]:
+        if classifier.task is not TaskType.TEXT:
+            raise fastapi.HTTPException(
+                status_code=400,
+                detail=f"this model classifies {classifier.task.value}, not text",
+            )
+        if not request.texts:
+            raise fastapi.HTTPException(status_code=400, detail="texts must not be empty")
+        if any(not text.strip() for text in request.texts):
+            raise fastapi.HTTPException(status_code=400, detail="every text must be non-blank")
+        predictions = classifier.predict_batch(list(request.texts))
+        _set_identity_headers(response)
+        return [_truncated(prediction, request.top_k) for prediction in predictions]
 
     # NOTE: endpoint annotations must resolve from module globals (FastAPI
     # calls get_type_hints under `from __future__ import annotations`), so
     # only builtins and module-level names appear in the signatures below --
-    # never the lazily imported fastapi types.
-    @app.post("/predict/audio", response_model=Prediction)
+    # never the lazily imported fastapi types. `Response` satisfies this via
+    # the globals() injection at the top of create_app.
+    @app.post(
+        "/predict/audio",
+        response_model=Prediction,
+        tags=["inference"],
+        summary="Classify an uploaded audio clip",
+        description="Classify a multipart audio upload (audio-trained models only).",
+    )
     def predict_audio(
+        response: Response,
         file: bytes = fastapi.File(..., description="The audio file content."),
         audio_format: str = fastapi.Query(
             "wav", alias="format", description="Audio container format of the upload."
@@ -138,7 +327,7 @@ def create_app(model_path: Path | str) -> Any:
             handle.write(file)
             temp_path = Path(handle.name)
         try:
-            return _truncated(classifier.predict(temp_path), top_k)
+            prediction = classifier.predict(temp_path)
         except DataError as exc:
             # The suffix is validated above, but the *bytes* are not: a caller can
             # upload anything under a .wav name. An undecodable upload is a bad
@@ -149,8 +338,10 @@ def create_app(model_path: Path | str) -> Any:
             ) from exc
         finally:
             temp_path.unlink(missing_ok=True)
+        _set_identity_headers(response)
+        return _truncated(prediction, top_k)
 
     return app
 
 
-__all__ = ["TextRequest", "create_app"]
+__all__ = ["BatchTextRequest", "TextRequest", "create_app"]
