@@ -24,6 +24,7 @@ EXPECTED_REGISTRY_NAMES = [
     "nkjp",
     "spokes",
     "synthetic",
+    "synthetic_audio",
 ]
 
 
@@ -121,7 +122,7 @@ class TestCatalogAndRegistry:
 
     def test_catalog_is_tier_sorted_and_complete(self) -> None:
         infos = catalog()
-        assert len(infos) == 9  # the generic manifest loader is not a corpus
+        assert len(infos) == 10  # the generic manifest loader is not a corpus
         assert [info.tier for info in infos] == sorted(info.tier for info in infos)
         assert {info.name for info in infos} == set(EXPECTED_REGISTRY_NAMES) - {"manifest"}
         assert all(info.url for info in infos)

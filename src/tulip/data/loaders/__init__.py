@@ -11,6 +11,7 @@ from tulip.data.loaders.manifest_loader import GenericManifestLoader
 from tulip.data.loaders.nkjp import NkjpLoader
 from tulip.data.loaders.spokes import SpokesLoader
 from tulip.data.loaders.synthetic import SyntheticLoader
+from tulip.data.loaders.synthetic_audio import SyntheticAudioLoader
 
 __all__ = [
     "BigosLoader",
@@ -23,5 +24,6 @@ __all__ = [
     "ManifestBackedLoader",
     "NkjpLoader",
     "SpokesLoader",
+    "SyntheticAudioLoader",
     "SyntheticLoader",
 ]

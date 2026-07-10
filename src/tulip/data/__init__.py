@@ -20,11 +20,17 @@ from tulip.data.splitting import (
     speaker_disjoint_split,
 )
 from tulip.data.synthetic import SyntheticSpec, generate_corpus, write_synthetic_manifest
+from tulip.data.synthetic_audio import (
+    AudioSyntheticSpec,
+    generate_audio_corpus,
+    write_synthetic_audio_manifest,
+)
 from tulip.data.validation import ManifestIssue, ManifestReport, validate_manifest
 
 __all__ = [
     "BUILD_MANIFEST_NAME",
     "DATASETS",
+    "AudioSyntheticSpec",
     "DatasetBuilder",
     "DatasetSplits",
     "DedupResult",
@@ -38,6 +44,7 @@ __all__ = [
     "catalog",
     "deduplicate_samples",
     "download_datasets",
+    "generate_audio_corpus",
     "generate_corpus",
     "get_dataset_info",
     "load_splits",
@@ -47,5 +54,6 @@ __all__ = [
     "speaker_disjoint_split",
     "surrogate_speaker_id",
     "validate_manifest",
+    "write_synthetic_audio_manifest",
     "write_synthetic_manifest",
 ]

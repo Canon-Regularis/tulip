@@ -170,6 +170,37 @@ _CATALOG: dict[str, DatasetInfo] = {
             ),
             license="generated data; no source-corpus restrictions (public domain)",
         ),
+        # Tier 4 for the same reason as "synthetic": the frozen DatasetInfo tier
+        # bound is 1..4, so a dedicated "generated" tier cannot be expressed.
+        # Implementation notes (source-filter synthesis, per-class F0/formants)
+        # live in tulip.data.synthetic_audio, NOT here: `description` is rendered
+        # verbatim into user-facing dataset cards and must describe the corpus.
+        DatasetInfo(
+            name="synthetic_audio",
+            description=(
+                "Synthetic audio reference corpus: procedurally synthesised speech-like "
+                "WAV clips whose pitch register, vowel-space formants, and spectral tilt "
+                "are correlated with dialect class. Generated in-process, so the audio "
+                "path runs end-to-end with zero data acquisition. It is a reproducible "
+                "benchmark fixture, NOT real speech: scores on it say nothing about "
+                "real-world dialect identification accuracy."
+            ),
+            url="generated in-process; see tulip.data.synthetic_audio and docs/datasets.md",
+            tier=4,
+            tasks=(_AUDIO,),
+            contents=(
+                "generated speech-like audio",
+                "dialect-correlated F0/formants/spectral tilt",
+                "region/voivodeship metadata",
+            ),
+            label_levels=(
+                LabelLevel.FAMILY,
+                LabelLevel.DIALECT,
+                LabelLevel.REGION,
+                LabelLevel.VOIVODESHIP,
+            ),
+            license="generated data; no source-corpus restrictions (public domain)",
+        ),
     )
 }
 

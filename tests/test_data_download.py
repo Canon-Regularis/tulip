@@ -271,9 +271,9 @@ class TestDownloadDatasets:
         assert [report.name for report in reports] == [info.name for info in catalog()]
         statuses = {report.name: report.status for report in reports}
         automatic = {"bigos", "common_voice_pl", "nkjp"}
-        # `synthetic` is a third kind of corpus: it needs no acquisition at all,
-        # because it is generated in-process. It is always already present.
-        generated = {"synthetic"}
+        # The synthetic corpora are a third kind: they need no acquisition at
+        # all, because they are generated in-process. Always already present.
+        generated = {"synthetic", "synthetic_audio"}
         for name in automatic:
             assert statuses[name] is DownloadStatus.DOWNLOADED, name
         for name in generated:

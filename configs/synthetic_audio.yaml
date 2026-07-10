@@ -1,0 +1,55 @@
+# Dialect-level baseline on the generated synthetic AUDIO reference corpus.
+#
+# This config needs NO data acquisition: the `synthetic_audio` loader synthesises
+# short, dialect-correlated WAV clips in-process (see tulip.data.synthetic_audio)
+# and writes them under data/raw/synthetic_audio/audio, so `tulip train
+# configs/synthetic_audio.yaml` runs end to end on a clean checkout. It exists so
+# the AUDIO feature/model machinery, the splits, and the metrics are exercisable
+# and reproducible without any licensed speech corpus.
+#
+# The features here are all CLASSICAL (mfcc/pitch/formants/spectral_centroid),
+# which run from the `audio` extra (librosa/soundfile/parselmouth) with no
+# torch/speechbrain -- matching the corpus's design, where dialect signal lives
+# in pitch register, vowel-space formants, and spectral tilt.
+name: synthetic-audio
+seed: 42
+task: audio
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: synthetic_audio
+      params:
+        n_speakers_per_dialect: 8
+        samples_per_speaker: 6
+        seed: 7
+  # No text pipeline applies to audio-only samples: cleaning and text dedup are
+  # off, and the min-text-chars filter is disabled (audio samples carry no text).
+  clean: false
+  deduplicate: false
+  min_text_chars: 0
+
+features:
+  - name: mfcc
+    params:
+      n_mfcc: 20
+  - name: pitch
+  - name: formants
+  - name: spectral_centroid
+
+model:
+  name: logistic_regression
+  params:
+    C: 1.0
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  group_by: speaker_id
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts
+abstain_threshold: null
