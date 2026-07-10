@@ -21,6 +21,32 @@ def client(trained_text_artifact: Path) -> TestClient:
     return TestClient(create_app(trained_text_artifact))
 
 
+class TestUndecodableAudioUpload:
+    """A `.wav` name proves nothing about the bytes inside it."""
+
+    def test_undecodable_audio_is_a_400_not_a_500(self, monkeypatch, tmp_path: Path) -> None:
+        from tulip.core.exceptions import DataError
+        from tulip.core.types import TaskType
+        from tulip.pipeline import DialectClassifier
+
+        class _AudioStub:
+            task = TaskType.AUDIO
+            classes_ = ("podhale", "silesia")
+            target = None
+
+            def predict(self, raw: object) -> object:
+                raise DataError(f"could not decode audio file {raw}")
+
+        monkeypatch.setattr(DialectClassifier, "load", classmethod(lambda cls, path: _AudioStub()))
+        from tulip.serve.app import create_app
+
+        client = TestClient(create_app(tmp_path))
+        response = client.post("/predict/audio", files={"file": ("x.wav", b"definitely not audio")})
+
+        assert response.status_code == 400, response.text
+        assert "could not be decoded" in response.json()["detail"]
+
+
 class TestHealth:
     def test_health_reports_model_identity(self, client: TestClient) -> None:
         response = client.get("/health")

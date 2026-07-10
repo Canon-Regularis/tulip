@@ -21,6 +21,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from tulip import __version__
+from tulip.core.exceptions import DataError
 from tulip.core.types import Prediction, TaskType
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
@@ -138,6 +139,14 @@ def create_app(model_path: Path | str) -> Any:
             temp_path = Path(handle.name)
         try:
             return _truncated(classifier.predict(temp_path), top_k)
+        except DataError as exc:
+            # The suffix is validated above, but the *bytes* are not: a caller can
+            # upload anything under a .wav name. An undecodable upload is a bad
+            # request, not a server fault, so do not let it surface as a 500.
+            raise fastapi.HTTPException(
+                status_code=400,
+                detail=f"uploaded file could not be decoded as {suffix} audio",
+            ) from exc
         finally:
             temp_path.unlink(missing_ok=True)
 
