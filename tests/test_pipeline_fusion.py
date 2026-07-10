@@ -147,6 +147,22 @@ class TestFusionStrategyContract:
         with pytest.raises(DataError):
             strategy.fuse(stack, mask)
 
+    def test_a_degenerate_zero_sum_row_falls_back_to_uniform(
+        self, strategy: FusionStrategy
+    ) -> None:
+        """A present modality whose row is all zeros must not renormalise to NaN.
+
+        The strategy is a public value object; a caller can hand it a stack whose
+        pooled row sums to zero. The no-NaN postcondition still holds -- such a
+        row becomes uniform.
+        """
+        stack = np.zeros((2, 1, 3))  # one sample; present modality row is all-zero
+        mask = np.array([[True], [False]])
+        fused = strategy.fuse(stack, mask)
+        assert not np.isnan(fused).any()
+        np.testing.assert_allclose(fused.sum(axis=1), 1.0)
+        np.testing.assert_allclose(fused[0], np.full(3, 1 / 3))
+
     def test_satisfies_fusion_strategy_protocol(self, strategy: FusionStrategy) -> None:
         assert isinstance(strategy, FusionStrategy)
 

@@ -148,13 +148,23 @@ class _FusionBase(abc.ABC):
 
     @staticmethod
     def _renormalise(combined: np.ndarray) -> np.ndarray:
-        """Scale every row to sum to 1.
+        """Scale every row to sum to 1, honouring the strategy's no-``NaN`` postcondition.
 
-        Upstream invariants keep row sums strictly positive -- each present
-        modality's row sums to 1 and no pooling zeroes every class at once -- so
-        this never divides by zero or yields ``NaN``.
+        In the shipping product each present modality's row already sums to 1, so
+        row sums are positive. But a strategy is a public value object that a
+        caller may hand a degenerate stack whose pooled row sums to zero (e.g. an
+        all-zero probability column across every modality). Dividing that by its
+        zero sum would yield ``NaN`` and break the documented postcondition, so a
+        zero-sum row falls back to uniform -- the same guard
+        :func:`tulip.models.calibration` uses.
         """
-        return combined / combined.sum(axis=1, keepdims=True)
+        row_sums = combined.sum(axis=1, keepdims=True)
+        degenerate = np.ravel(row_sums <= 0.0)
+        if degenerate.any():
+            combined = combined.copy()
+            combined[degenerate] = 1.0
+            row_sums = combined.sum(axis=1, keepdims=True)
+        return combined / row_sums
 
     @abc.abstractmethod
     def _pool(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
