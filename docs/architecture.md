@@ -77,7 +77,9 @@ docs, and tests refer to them.
 
 - `tulip.data.DATASETS` (`Registry` defined in `tulip/data/registry.py`):
   `dialektarium`, `dgp`, `korpus_spiski`, `mackowce`, `nkjp`, `spokes`,
-  `common_voice_pl`, `bigos`, `manifest` (generic CSV/JSONL manifest loader).
+  `common_voice_pl`, `bigos`, `manifest` (generic CSV/JSONL manifest loader),
+  `synthetic` (generated in-process; needs no acquisition, so the toolkit runs
+  end-to-end on a fresh clone — see `docs/datasets.md`).
 - `tulip.features.TEXT_FEATURES`:
   `char_tfidf`, `word_tfidf`, `stylometry`, `affix_frequency`, `dialect_keywords`.
 - `tulip.features.AUDIO_FEATURES`:
@@ -222,10 +224,29 @@ cosine-similar training samples; `lime`/`shap`/`attention` guard their imports.
 
 ### tulip.cli (typer)
 
-`tulip.cli.app:main` — command groups: `data` (list/prepare), `train`,
-`evaluate`, `predict` (text arg or `--audio` path; `--json` output; map export
-via `--map out.html`; explanations via `--explain <method>`), `benchmark`,
-`serve`. Rich tables for human output; `--json` for machine output.
+`tulip.cli.app:main` — command groups: `data`
+(list/download/prepare/synthesize/validate), `train`, `evaluate`, `predict`
+(text arg or `--audio` path; `--json` output; map export via `--map out.html`;
+explanations via `--explain <method>`), `benchmark`, `leaderboard`, `card`
+(dataset/model), `selftrain`, `serve`. Rich tables for human output; `--json`
+for machine output. `data validate` exits non-zero on errors so it can gate CI.
+
+### tulip.evaluation (benchmark surface)
+
+- `leaderboard.py`: `LeaderboardSuite` + `run_leaderboard`/`write_leaderboard`
+  over the untouched `run_benchmark`. `leaderboard.md` and `provenance.json` are
+  deterministic — no timestamps, no `wall_seconds` — so a committed leaderboard
+  regenerates byte-identically. Rows are keyed by `(experiment, model)`.
+- `cards.py`: `dataset_card` / `model_card` render byte-stable markdown from
+  artifacts the toolkit already writes (`build_manifest.json`, `metadata.json`,
+  `report_<split>.json`).
+
+### tulip.pipeline (semi-supervised)
+
+- `selftrain.py`: `self_train` grows a classifier from a labelled seed set using
+  confident pseudo-labels, so label-less corpora (e.g. `bigos`) contribute.
+  Knobs live in a module-owned `SelfTrainConfig` — `ExperimentConfig` is frozen
+  and forbids extra fields.
 
 ### tulip.serve (FastAPI)
 

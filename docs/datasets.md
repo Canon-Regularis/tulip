@@ -154,6 +154,74 @@ datasets:
       limit: 10000
 ```
 
+## The `synthetic` reference corpus — no acquisition required
+
+Every corpus above needs a licence and a download. `synthetic` needs neither: it
+is **generated in-process**, so a fresh clone can run the whole toolkit
+end to end:
+
+```bash
+tulip train configs/synthetic_text.yaml     # dialect level
+tulip train configs/synthetic_family.yaml   # family level, incl. the `standard` class
+```
+
+It is a **benchmark fixture, not real speech**. Scores on it say nothing about
+real-world dialect identification. What it does provide is a *reproducible,
+learnable* task, grounded in the project's own linguistic resources:
+
+- **Lexical signal** — genuine marker lexemes drawn from
+  `src/tulip/features/text/lexicons/dialect_markers.yaml` (Podhale *baca*,
+  Silesian *gryfny*, Kashubian *chëcz*, …).
+- **Phonological signal** — real sound changes applied as deterministic string
+  transforms: *mazurzenie* (cz/sz/ż → c/s/z) for the Masovian group, and
+  asynchronous soft-labials (pi → psi, bi → bzi) for Kurpie. These are what
+  character n-grams can see and a whole-word lexicon cannot.
+- **Speaker idiolect** — each speaker gets a personal filler vocabulary, so a
+  model can partly re-identify the speaker. That is exactly the leakage
+  speaker-disjoint splitting must defend against, so the split step is
+  genuinely exercised rather than trivially satisfied.
+
+The knob that matters is **`marker_dropout`** (default `0.20`): the fraction of
+samples carrying *no* lexical marker at all, mirroring the fact that plenty of
+real dialect utterances contain no diagnostic lexeme. It gives the task an
+irreducible error floor. Set it to `0.0` and every linear model scores a perfect
+1.000 — a benchmark that cannot rank anything. Generator parameters are passed
+through `params:` like any other loader:
+
+```yaml
+data:
+  datasets:
+    - name: synthetic
+      params:
+        n_speakers_per_dialect: 12
+        samples_per_speaker: 12
+        include_standard: false
+        marker_dropout: 0.20
+        seed: 7
+```
+
+To materialise an auditable copy on disk (a JSONL manifest, byte-identical for a
+given seed):
+
+```bash
+tulip data synthesize --out data/raw/synthetic --seed 7
+```
+
+## Validating a manifest
+
+Before trusting a manifest you assembled by hand, check it:
+
+```bash
+tulip data validate data/raw/<corpus>/manifest.csv
+```
+
+It reports structural errors (no `text`/`audio_path` column, malformed rows, bad
+encoding), missing audio files, and whether surrogate `speaker_id`s will be
+synthesised — which changes how speaker-disjoint splitting groups your data.
+Labels outside the taxonomy are **warnings, not errors**: corpus-specific label
+strings are explicitly allowed to flow through. The command exits non-zero only
+on errors, so it works as a CI gate.
+
 ## Building a reproducible benchmark split
 
 ```bash
@@ -167,3 +235,8 @@ directory (where licences allow) is what makes results comparable:
 deduplication runs **before** splitting so near-duplicates can never straddle
 splits, and grouping guarantees speaker disjointness. `tulip benchmark`
 then evaluates any number of models against the identical frozen split.
+
+For a whole suite of experiments at once, `tulip leaderboard benchmarks/suite.yaml`
+regenerates the committed leaderboard under `benchmarks/results/`. Its
+`leaderboard.md` and `provenance.json` are byte-identical across re-runs for a
+fixed seed — see `benchmarks/README.md`.

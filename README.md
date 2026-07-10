@@ -47,13 +47,23 @@ pip install -e ".[dev]"           # tests, ruff, mypy, pre-commit
 
 ## Quickstart
 
-Corpora are acquired locally (tulip never scrapes at runtime) - see
-[docs/datasets.md](docs/datasets.md) for per-corpus instructions, then:
+No data acquisition required — the `synthetic` corpus is generated in-process,
+so a fresh clone runs end to end:
+
+```bash
+tulip train configs/synthetic_text.yaml      # generate, split, train, evaluate, persist
+tulip leaderboard benchmarks/suite.yaml      # regenerate the reproducible leaderboard
+```
+
+It is a benchmark fixture, not real speech (see
+[docs/datasets.md](docs/datasets.md)). For real corpora — acquired locally,
+since tulip never scrapes at runtime:
 
 ```bash
 tulip data list                              # catalog, tiers, local availability
 tulip data download --all                    # fetch what has an automatic source;
                                              # prints exact manual steps for the rest
+tulip data validate data/raw/dgp/manifest.csv  # check a manifest before trusting it
 tulip data prepare configs/text_baseline.yaml  # build speaker-disjoint splits
 tulip train configs/text_baseline.yaml       # train + evaluate + persist
 
@@ -134,17 +144,20 @@ src/tulip/
 | Spokes | 3 | conversational spoken Polish | <https://spokes.clarin-pl.eu/> |
 | Common Voice PL | 3 | read speech + accent metadata | <https://commonvoice.mozilla.org/> |
 | BIGOS | 4 | aggregated Polish ASR corpora | <https://huggingface.co/datasets/michaljunczyk/pl-asr-bigos> |
+| `synthetic` | — | generated dialect text (benchmark fixture, not real speech) | generated in-process |
 
-Acquisition steps and the manifest format are documented in
-[docs/datasets.md](docs/datasets.md).
+Acquisition steps, the manifest format, and the synthetic corpus are documented
+in [docs/datasets.md](docs/datasets.md).
 
 ## Project status
 
-Alpha. The toolkit, tests, and benchmark machinery are complete; corpora
-require local acquisition (most sources have no bulk download and unclear
-redistribution rights). Trained-model quality therefore depends on the data
-you assemble. Contributions welcome — see
-[docs/development.md](docs/development.md).
+Alpha. The toolkit, tests, and benchmark machinery are complete, and the
+`synthetic` corpus makes them runnable end to end with no downloads — but it is
+a fixture, so its scores say nothing about real-world accuracy. The **real**
+corpora still require local acquisition (most sources have no bulk download and
+unclear redistribution rights), and trained-model quality depends on the data
+you assemble. There are as yet no published benchmark numbers on real dialect
+data. Contributions welcome — see [docs/development.md](docs/development.md).
 
 ## License
 
