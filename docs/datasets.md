@@ -207,6 +207,27 @@ given seed):
 tulip data synthesize --out data/raw/synthetic --seed 7
 ```
 
+## The `synthetic_audio` corpus — audio parity, no acquisition
+
+The audio analogue of `synthetic`. A deterministic source-filter synthesiser
+writes short 16 kHz mono WAV clips whose **pitch register (F0)**, **vowel-space
+formants (F1/F2/F3)**, and **spectral tilt** are correlated with the dialect
+class, so the classical audio features (`mfcc`, `pitch`, `formants`,
+`spectral_centroid`) separate the classes and the whole audio path runs
+end-to-end with no data acquisition:
+
+```bash
+tulip train configs/synthetic_audio.yaml       # generate clips, split, train, evaluate
+tulip data synthesize-audio --out data/raw/synthetic_audio --seed 7   # materialise an auditable copy
+```
+
+Clips are written with the stdlib `wave` module (int16, no dithering), so
+*generation* needs no audio extra; *reading* them (the feature extractors) needs
+the `audio` extra (`librosa`/`soundfile`/`parselmouth`). Neural speech models
+(`wav2vec2`, `ecapa_tdnn`, …) need the heavier `speech` extra and are not
+exercised by this fixture. Like `synthetic`, it is a **benchmark fixture, not
+real speech** — scores on it say nothing about real dialect identification.
+
 ## Validating a manifest
 
 Before trusting a manifest you assembled by hand, check it:

@@ -79,7 +79,10 @@ docs, and tests refer to them.
   `dialektarium`, `dgp`, `korpus_spiski`, `mackowce`, `nkjp`, `spokes`,
   `common_voice_pl`, `bigos`, `manifest` (generic CSV/JSONL manifest loader),
   `synthetic` (generated in-process; needs no acquisition, so the toolkit runs
-  end-to-end on a fresh clone — see `docs/datasets.md`).
+  end-to-end on a fresh clone — see `docs/datasets.md`),
+  `synthetic_audio` (the audio analogue: writes deterministic 16 kHz WAV clips
+  whose per-class pitch/formants/spectral tilt make the classical audio features
+  separable, so the audio path is exercised end-to-end too).
 - `tulip.features.TEXT_FEATURES`:
   `char_tfidf`, `word_tfidf`, `stylometry`, `affix_frequency`, `dialect_keywords`,
   `phonological_markers` (sub-lexical isoglosses the whole-word lexicon cannot
@@ -228,11 +231,13 @@ cosine-similar training samples; `lime`/`shap`/`attention` guard their imports.
 ### tulip.cli (typer)
 
 `tulip.cli.app:main` — command groups: `data`
-(list/download/prepare/synthesize/validate), `train`, `evaluate`, `predict`
-(text arg or `--audio` path; `--json` output; map export via `--map out.html`;
-explanations via `--explain <method>`), `benchmark`, `leaderboard`, `card`
-(dataset/model), `selftrain`, `serve`. Rich tables for human output; `--json`
-for machine output. `data validate` exits non-zero on errors so it can gate CI.
+(list/download/prepare/synthesize/synthesize-audio/validate), `train`,
+`evaluate`, `predict` (text arg or `--audio` path; `--json`; map export via
+`--map out.html`; inline explanations via `--explain <method>`), `explain`
+(standalone; the command group the contract lists), `benchmark`, `leaderboard`,
+`card` (dataset/model), `selftrain`, `serve`. Rich tables for human output;
+`--json` for machine output. `data validate` exits non-zero on errors so it can
+gate CI.
 
 ### tulip.evaluation (benchmark surface)
 
@@ -293,9 +298,16 @@ satisfies the protocol via a `predict_samples` adapter.
 
 ### tulip.serve (FastAPI)
 
-`create_app(model_path) -> FastAPI`: `POST /predict/text` (JSON body),
-`POST /predict/audio` (multipart upload), `GET /health`. Returns `Prediction`
-JSON (pydantic-native).
+`create_app(model_path) -> FastAPI`. Endpoints: `POST /predict/text` (JSON
+body), `POST /predict/text/batch` (a list of texts), `POST /predict/audio`
+(multipart upload) — all returning pydantic-native `Prediction` JSON (with the
+`abstained` flag) plus `X-Tulip-Version`/`X-Model-Target`/`X-Model-Classes`
+headers; `GET /health` (model identity, class count, abstention config);
+`GET /metrics` (Prometheus text exposition, dependency-free); and `GET /`, a
+self-contained demo UI (inline SVG Poland map + probability bars). One HTTP
+middleware assigns/echoes an `X-Request-ID`, times each request
+(`X-Process-Time-Ms`), records the metrics, and emits one structured log line
+per request.
 
 ## Conventions (enforced)
 

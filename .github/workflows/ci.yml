@@ -90,6 +90,20 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: mypy
 
+  docs:
+    # `--strict` fails the build on a broken mkdocstrings reference or a dead
+    # link, so the API docs cannot silently rot as the public API changes. The
+    # package is installed so the python handler can import and introspect it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[docs]"
+      - run: mkdocs build --strict
+
   build:
     # Catches packaging regressions that an editable install hides -- a missing
     # py.typed marker, or the dialect-marker lexicon not shipped as package data.

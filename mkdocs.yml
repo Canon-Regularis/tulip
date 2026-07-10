@@ -1,0 +1,64 @@
+site_name: tulip
+site_description: Polish dialect detection from text, transcribed speech, and raw audio.
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    # Light / dark toggle so the rendered API docs are legible either way.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.follow
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          # Import from the src/ layout rather than a site-packages install so
+          # the docs render the working tree exactly as it is.
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            members_order: source
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Guide:
+      - Quickstart: guide/quickstart.md
+      - Synthetic corpora: guide/synthetic-corpora.md
+      - Serving: guide/serving.md
+  - API Reference:
+      - Overview: reference/index.md
+      - Pipeline: reference/pipeline.md
+      - Data: reference/data.md
+      - Features: reference/features.md
+      - Evaluation: reference/evaluation.md
+  - Project:
+      - Architecture: architecture.md
+      - Datasets: datasets.md
+      - Development: development.md

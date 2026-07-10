@@ -52,10 +52,12 @@ so a fresh clone runs end to end:
 
 ```bash
 tulip train configs/synthetic_text.yaml      # generate, split, train, evaluate, persist
+tulip train configs/synthetic_audio.yaml     # the same, end-to-end on synthesised audio
 tulip leaderboard benchmarks/suite.yaml      # regenerate the reproducible leaderboard
+tulip serve artifacts/synthetic-text/model   # HTTP API + a demo UI at http://127.0.0.1:8000/
 ```
 
-It is a benchmark fixture, not real speech (see
+Both are benchmark fixtures, not real speech (see
 [docs/datasets.md](docs/datasets.md)). For real corpora — acquired locally,
 since tulip never scrapes at runtime:
 
@@ -145,9 +147,11 @@ src/tulip/
 | Common Voice PL | 3 | read speech + accent metadata | <https://commonvoice.mozilla.org/> |
 | BIGOS | 4 | aggregated Polish ASR corpora | <https://huggingface.co/datasets/michaljunczyk/pl-asr-bigos> |
 | `synthetic` | — | generated dialect text (benchmark fixture, not real speech) | generated in-process |
+| `synthetic_audio` | — | generated dialect audio clips (benchmark fixture, not real speech) | generated in-process |
 
-Acquisition steps, the manifest format, and the synthetic corpus are documented
-in [docs/datasets.md](docs/datasets.md).
+Acquisition steps, the manifest format, and the synthetic corpora are documented
+in [docs/datasets.md](docs/datasets.md). Full API docs build with
+`mkdocs serve` (install the `docs` extra).
 
 ## Project status
 
