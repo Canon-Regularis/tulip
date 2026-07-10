@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from typer.testing import CliRunner
@@ -11,6 +11,9 @@ from typer.testing import CliRunner
 from conftest import make_manifest_experiment_config, write_manifest_corpus
 from tulip.cli.app import app
 from tulip.config import save_experiment_config
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 runner = CliRunner()
 
@@ -84,6 +87,141 @@ class TestDatasets:
         assert result.exit_code == 0, result.output
         assert (out / "train.jsonl").is_file()
         assert "train:" in result.output
+
+
+class TestSynthesize:
+    def test_synthesize_writes_a_labelled_manifest(self, tmp_path: Path) -> None:
+        out = tmp_path / "synth"
+        result = runner.invoke(
+            app,
+            ["data", "synthesize", "--out", str(out), "--speakers", "2", "--per-speaker", "2"],
+        )
+        assert result.exit_code == 0, result.output
+        assert (out / "manifest.jsonl").is_file()
+        # The per-class table must show real labels, not "__unlabelled__": that
+        # would mean the written manifest is being read back as a split file.
+        assert "__unlabelled__" not in result.output
+        assert "podhale" in result.output
+
+    def test_synthesize_is_reproducible_for_a_seed(self, tmp_path: Path) -> None:
+        first, second = tmp_path / "a", tmp_path / "b"
+        for out in (first, second):
+            result = runner.invoke(
+                app,
+                ["data", "synthesize", "--out", str(out), "--seed", "7", "--speakers", "2"],
+            )
+            assert result.exit_code == 0, result.output
+        left = (first / "manifest.jsonl").read_bytes()
+        assert left == (second / "manifest.jsonl").read_bytes()
+
+
+class TestValidate:
+    def test_a_clean_manifest_exits_zero(self, tmp_path: Path) -> None:
+        out = tmp_path / "synth"
+        runner.invoke(app, ["data", "synthesize", "--out", str(out), "--speakers", "2"])
+        result = runner.invoke(app, ["data", "validate", str(out / "manifest.jsonl")])
+        assert result.exit_code == 0, result.output
+
+    def test_a_broken_manifest_exits_one(self, tmp_path: Path) -> None:
+        """The CI contract: `data validate` must gate on errors."""
+        manifest = tmp_path / "bad.csv"
+        manifest.write_text("id,speaker_id\n1,spk1\n", encoding="utf-8")
+        result = runner.invoke(app, ["data", "validate", str(manifest)])
+        assert result.exit_code == 1
+        assert "text" in result.output  # names the missing column
+
+    def test_json_output_is_parseable(self, tmp_path: Path) -> None:
+        out = tmp_path / "synth"
+        runner.invoke(app, ["data", "synthesize", "--out", str(out), "--speakers", "2"])
+        result = runner.invoke(app, ["data", "validate", str(out / "manifest.jsonl"), "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["n_rows"] > 0
+
+
+class TestCards:
+    def test_model_card_renders_from_a_trained_artifact(
+        self, mini_config: Path, tmp_path: Path
+    ) -> None:
+        assert runner.invoke(app, ["train", str(mini_config)]).exit_code == 0
+        model_dir = tmp_path / "artifacts" / "cli-mini" / "model"
+
+        result = runner.invoke(app, ["card", "model", str(model_dir)])
+        assert result.exit_code == 0, result.output
+        assert "Model card" in result.output
+
+    def test_dataset_card_writes_to_a_file(self, mini_config: Path, tmp_path: Path) -> None:
+        assert runner.invoke(app, ["train", str(mini_config)]).exit_code == 0
+        manifest = tmp_path / "artifacts" / "cli-mini" / "splits" / "build_manifest.json"
+        destination = tmp_path / "DATASET_CARD.md"
+
+        result = runner.invoke(
+            app,
+            ["card", "dataset", str(manifest), "--dataset", "manifest", "--out", str(destination)],
+        )
+        assert result.exit_code == 0, result.output
+        assert destination.read_text(encoding="utf-8").startswith("# Dataset card")
+
+
+class TestSelfTrain:
+    def test_selftrain_reports_pseudo_label_rounds(self, mini_config: Path, tmp_path: Path) -> None:
+        out = tmp_path / "splits"
+        assert (
+            runner.invoke(
+                app, ["data", "prepare", str(mini_config), "--output", str(out)]
+            ).exit_code
+            == 0
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "selftrain",
+                str(out / "train.jsonl"),
+                str(out / "test.jsonl"),
+                "-f",
+                "char_tfidf",
+                "--threshold",
+                "0.5",
+                "--iters",
+                "2",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "pseudo-label" in result.output
+
+    def test_missing_features_fails_with_guidance_not_a_traceback(
+        self, mini_config: Path, tmp_path: Path
+    ) -> None:
+        """A classical model handed raw text dies deep in sklearn; catch it early."""
+        out = tmp_path / "splits"
+        runner.invoke(app, ["data", "prepare", str(mini_config), "--output", str(out)])
+
+        result = runner.invoke(
+            app, ["selftrain", str(out / "train.jsonl"), str(out / "test.jsonl")]
+        )
+        assert result.exit_code == 1
+        assert "char_tfidf" in result.output  # tells the user what to pass
+        assert "--raw" in result.output
+
+    def test_raw_and_feature_are_mutually_exclusive(
+        self, mini_config: Path, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "splits"
+        runner.invoke(app, ["data", "prepare", str(mini_config), "--output", str(out)])
+
+        result = runner.invoke(
+            app,
+            [
+                "selftrain",
+                str(out / "train.jsonl"),
+                str(out / "test.jsonl"),
+                "--raw",
+                "-f",
+                "char_tfidf",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "drop one of them" in result.output
 
 
 class TestTrainAndPredict:

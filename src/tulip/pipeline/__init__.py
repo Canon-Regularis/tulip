@@ -7,12 +7,16 @@ from tulip.pipeline.experiment import (
     run_benchmark,
     run_experiment,
 )
+from tulip.pipeline.selftrain import SelfTrainConfig, SelfTrainResult, self_train
 
 __all__ = [
     "DialectClassifier",
     "ExperimentResult",
     "LabelledBatch",
+    "SelfTrainConfig",
+    "SelfTrainResult",
     "evaluate_samples",
     "run_benchmark",
     "run_experiment",
+    "self_train",
 ]

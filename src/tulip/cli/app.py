@@ -36,6 +36,8 @@ app = typer.Typer(
 )
 datasets_app = typer.Typer(help="Inspect and prepare the source corpora.", no_args_is_help=True)
 app.add_typer(datasets_app, name="data")
+cards_app = typer.Typer(help="Render dataset and model cards.", no_args_is_help=True)
+app.add_typer(cards_app, name="card")
 
 _console = Console()
 _errors = Console(stderr=True, style="bold red")
@@ -196,6 +198,79 @@ def data_prepare(
     _console.print(f"[green]splits written to {destination}[/green]")
 
 
+@datasets_app.command("synthesize")
+@_tulip_errors
+def data_synthesize(
+    out: Path = typer.Option(Path("data/raw/synthetic"), "--out", help="Destination directory."),
+    seed: int = typer.Option(7, help="Generator seed; fixes the corpus byte for byte."),
+    speakers: int = typer.Option(8, "--speakers", min=2, help="Speakers per class."),
+    per_speaker: int = typer.Option(12, "--per-speaker", min=1, help="Samples per speaker."),
+    noise: float = typer.Option(0.10, "--noise", min=0.0, max=1.0, help="Foreign-marker rate."),
+    marker_dropout: float = typer.Option(
+        0.20, "--marker-dropout", min=0.0, max=1.0, help="Share of samples with no lexical marker."
+    ),
+    standard: bool = typer.Option(True, "--standard/--no-standard", help="Emit a standard class."),
+) -> None:
+    """Write a linguistically-grounded synthetic corpus (no data acquisition needed).
+
+    The corpus is generated in-process, so a fresh checkout can run `tulip
+    train configs/synthetic_text.yaml` immediately. Raising --marker-dropout
+    makes the task harder; at 0.0 every linear model saturates at 1.000.
+    """
+    from tulip.data.reading import read_samples
+    from tulip.data.synthetic import SyntheticSpec, write_synthetic_manifest
+
+    spec = SyntheticSpec(
+        n_speakers_per_dialect=speakers,
+        samples_per_speaker=per_speaker,
+        include_standard=standard,
+        noise_level=noise,
+        marker_dropout=marker_dropout,
+        seed=seed,
+    )
+    path = write_synthetic_manifest(spec, out)
+
+    # Read back what we wrote: the distribution is reported from the artifact
+    # itself, which also proves the manifest is loadable.
+    counts: dict[str, int] = {}
+    for sample in read_samples(path):
+        key = sample.labels.dialect or sample.labels.family or "__unlabelled__"
+        counts[key] = counts.get(key, 0) + 1
+
+    table = Table(title=f"synthetic corpus (seed={seed})")
+    table.add_column("class", style="bold")
+    table.add_column("samples", justify="right")
+    for label in sorted(counts):
+        table.add_row(label, str(counts[label]))
+    _console.print(table)
+    _console.print(f"[green]{sum(counts.values())} samples written to {path}[/green]")
+
+
+@datasets_app.command("validate")
+@_tulip_errors
+def data_validate(
+    manifest: Path = typer.Argument(..., help="Manifest file (CSV/TSV/JSONL) to validate."),
+    audio_root: Path | None = typer.Option(
+        None, "--audio-root", help="Base directory for relative audio paths."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+) -> None:
+    """Check a manifest's integrity; exit 1 on errors so CI can gate on it.
+
+    Out-of-taxonomy labels are warnings, not errors: corpus-specific label
+    strings are explicitly allowed to flow through the pipeline.
+    """
+    from tulip.data.validation import validate_manifest
+
+    report = validate_manifest(manifest, audio_root=audio_root)
+    if json_output:
+        _console.print_json(report.model_dump_json())
+    else:
+        _console.print(report.to_markdown())
+    if not report.ok:
+        raise typer.Exit(code=1)
+
+
 # --------------------------------------------------------------- train/eval
 
 
@@ -235,6 +310,98 @@ def benchmark(
         table.add_row(*(_format_cell(value) for value in row))
     _console.print(table)
     _console.print(f"[green]benchmark artifacts under {config.output_dir / config.name}[/green]")
+
+
+@app.command()
+@_tulip_errors
+def leaderboard(
+    suite_path: Path = typer.Argument(..., help="Leaderboard suite YAML (see benchmarks/)."),
+    out: Path = typer.Option(Path("benchmarks/results"), "--out", help="Artifact root."),
+    split: str = typer.Option("test", help="Split shown in the printed table."),
+) -> None:
+    """Regenerate the reproducible leaderboard for a whole suite of configs.
+
+    ``leaderboard.md`` and ``provenance.json`` are deterministic: the same seeds
+    reproduce them byte for byte, which is what makes the committed artifact an
+    auditable benchmark rather than a snapshot.
+    """
+    from tulip.evaluation.benchmark import comparison_table
+    from tulip.evaluation.leaderboard import load_suite, run_leaderboard, write_leaderboard
+
+    suite = load_suite(suite_path)
+    results = run_leaderboard(suite)
+    destination = out / suite.name
+    write_leaderboard(results, destination, suite=suite)
+
+    frame = comparison_table(results, split=split, sort_by="f1_macro")
+    table = Table(title=f"leaderboard {suite.name!r} ({split} split)")
+    for column in frame.columns:
+        table.add_column(str(column))
+    for _, row in frame.iterrows():
+        table.add_row(*(_format_cell(value) for value in row))
+    _console.print(table)
+    _console.print(f"[green]leaderboard written to {destination}[/green]")
+
+
+@app.command()
+@_tulip_errors
+def selftrain(
+    labeled: Path = typer.Argument(..., help="Labelled samples (split .jsonl or manifest)."),
+    unlabeled: Path = typer.Argument(..., help="Unlabelled samples to pseudo-label."),
+    model: str = typer.Option("logistic_regression", "--model", "-m", help="Model registry name."),
+    feature: list[str] = typer.Option(
+        [], "--feature", "-f", help="Feature registry name (repeatable)."
+    ),
+    raw: bool = typer.Option(
+        False, "--raw", help="The model consumes raw text/audio itself (neural); pass no features."
+    ),
+    threshold: float = typer.Option(
+        0.90, "--threshold", min=0.0, max=1.0, help="Minimum confidence to trust a pseudo-label."
+    ),
+    iters: int = typer.Option(3, "--iters", min=1, help="Maximum self-training rounds."),
+    out: Path | None = typer.Option(None, "--out", help="Save the improved model here."),
+) -> None:
+    """Grow a classifier from a labelled seed set using confident pseudo-labels.
+
+    This is what makes label-less corpora (e.g. `bigos`, which carries no
+    dialect labels) contribute to training rather than sitting unused.
+    """
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.data import read_samples
+    from tulip.pipeline.selftrain import SelfTrainConfig, self_train
+
+    # A classical model handed raw strings dies deep inside sklearn with an
+    # unreadable ValueError. The registry carries no "raw input" capability flag
+    # to infer this from, so make the caller say which shape they meant.
+    if raw and feature:
+        raise ConfigurationError("--raw takes no --feature; drop one of them")
+    if not raw and not feature:
+        raise ConfigurationError(
+            "no --feature given: classical models need at least one feature extractor "
+            "(e.g. -f char_tfidf). Raw-input models (herbert, fasttext, wav2vec2, ...) "
+            "take none -- pass --raw to say so explicitly."
+        )
+
+    result = self_train(
+        labeled=list(read_samples(labeled)),
+        unlabeled=list(read_samples(unlabeled)),
+        model=model,
+        features=list(feature),
+        config=SelfTrainConfig(confidence_threshold=threshold, max_iterations=iters),
+    )
+
+    table = Table(title="self-training")
+    table.add_column("round", justify="right")
+    table.add_column("pseudo-labels added", justify="right")
+    for index, added in enumerate(result.n_pseudo_per_iteration, start=1):
+        table.add_row(str(index), str(added))
+    _console.print(table)
+    _console.print(
+        f"converged after {result.iterations} round(s); "
+        f"{len(result.pseudo_samples)} pseudo-label(s) total"
+    )
+    if out is not None:
+        _console.print(f"[green]model saved to {result.classifier.save(out)}[/green]")
 
 
 @app.command()
@@ -341,6 +508,80 @@ def _print_explanation(classifier: Any, raw: Any, method: str) -> None:
         for neighbor in explanation.neighbors:
             table.add_row(neighbor.label or "?", f"{neighbor.similarity:.2f}", neighbor.text or "")
         _console.print(table)
+
+
+# -------------------------------------------------------------------- cards
+
+
+def _emit(markdown: str, destination: Path | None) -> None:
+    """Print a rendered card, or write it to ``destination``."""
+    if destination is None:
+        _console.print(markdown)
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(markdown + "\n", encoding="utf-8", newline="\n")
+    _console.print(f"[green]card written to {destination}[/green]")
+
+
+@cards_app.command("dataset")
+@_tulip_errors
+def card_dataset(
+    build_manifest: Path = typer.Argument(..., help="A build_manifest.json from `data prepare`."),
+    dataset: str | None = typer.Option(
+        None, "--dataset", help="Catalogued corpus name (default: inferred from the manifest)."
+    ),
+    out: Path | None = typer.Option(None, "--out", help="Write the card here instead of stdout."),
+) -> None:
+    """Render a dataset card from a built dataset's audit manifest."""
+    from tulip.core.exceptions import ConfigurationError, DataError
+    from tulip.data import DATASETS, get_dataset_info
+    from tulip.evaluation.cards import dataset_card
+    from tulip.utils.io import read_json
+
+    manifest = read_json(build_manifest)
+    name = dataset
+    if name is None:
+        sources = list(manifest.get("sources") or {})
+        if len(sources) != 1:
+            raise ConfigurationError(
+                f"cannot infer the corpus from {len(sources)} source(s) {sources}; "
+                "pass --dataset NAME"
+            )
+        name = sources[0]
+
+    try:
+        info = get_dataset_info(name)
+    except DataError:
+        # Not every dataset is catalogued -- the generic `manifest` loader
+        # deliberately is not. Ask the loader for its own metadata rather than
+        # fabricating a tier and a licence. An unknown name still raises.
+        info = DATASETS.create(name).info
+    _emit(dataset_card(info, manifest), out)
+
+
+@cards_app.command("model")
+@_tulip_errors
+def card_model(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    report: list[Path] = typer.Option(
+        [], "--report", help="Evaluation report JSON (repeatable); default: auto-discovered."
+    ),
+    out: Path | None = typer.Option(None, "--out", help="Write the card here instead of stdout."),
+) -> None:
+    """Render a model card from a saved model's metadata and its evaluation reports.
+
+    Reports are read from disk rather than from the model artifact: `save_model`
+    deliberately does not embed metrics, so the card pairs `metadata.json` with
+    the sibling `report_<split>.json` files written by `tulip train`.
+    """
+    from tulip.evaluation.cards import model_card
+    from tulip.evaluation.report import EvaluationReport
+    from tulip.models.persistence import METADATA_FILENAME
+    from tulip.utils.io import read_json
+
+    paths = list(report) or sorted(model_path.parent.glob("report_*.json"))
+    reports = {path.stem.removeprefix("report_"): EvaluationReport.load(path) for path in paths}
+    _emit(model_card(read_json(model_path / METADATA_FILENAME), reports), out)
 
 
 # -------------------------------------------------------------------- serve

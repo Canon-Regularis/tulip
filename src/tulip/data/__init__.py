@@ -19,6 +19,8 @@ from tulip.data.splitting import (
     save_splits,
     speaker_disjoint_split,
 )
+from tulip.data.synthetic import SyntheticSpec, generate_corpus, write_synthetic_manifest
+from tulip.data.validation import ManifestIssue, ManifestReport, validate_manifest
 
 __all__ = [
     "BUILD_MANIFEST_NAME",
@@ -29,10 +31,14 @@ __all__ = [
     "DownloadReport",
     "DownloadStatus",
     "ManifestColumns",
+    "ManifestIssue",
+    "ManifestReport",
+    "SyntheticSpec",
     "TextCleaner",
     "catalog",
     "deduplicate_samples",
     "download_datasets",
+    "generate_corpus",
     "get_dataset_info",
     "load_splits",
     "read_manifest",
@@ -40,4 +46,6 @@ __all__ = [
     "save_splits",
     "speaker_disjoint_split",
     "surrogate_speaker_id",
+    "validate_manifest",
+    "write_synthetic_manifest",
 ]

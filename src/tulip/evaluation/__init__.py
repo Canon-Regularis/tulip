@@ -20,11 +20,19 @@ from tulip.evaluation.benchmark import (
     save_benchmark,
     to_markdown_table,
 )
+from tulip.evaluation.cards import dataset_card, dataset_card_from_splits, model_card
 from tulip.evaluation.confusion import (
     NORMALIZE_OPTIONS,
     confusion_from_report,
     plot_confusion,
     to_dataframe,
+)
+from tulip.evaluation.leaderboard import (
+    LeaderboardSuite,
+    load_suite,
+    render_leaderboard_markdown,
+    run_leaderboard,
+    write_leaderboard,
 )
 from tulip.evaluation.metrics import compute_metrics
 from tulip.evaluation.report import ClassMetrics, EvaluationReport
@@ -35,12 +43,20 @@ __all__ = [
     "BenchmarkResult",
     "ClassMetrics",
     "EvaluationReport",
+    "LeaderboardSuite",
     "comparison_table",
     "compute_metrics",
     "confusion_from_report",
+    "dataset_card",
+    "dataset_card_from_splits",
     "load_benchmark",
+    "load_suite",
+    "model_card",
     "plot_confusion",
+    "render_leaderboard_markdown",
+    "run_leaderboard",
     "save_benchmark",
     "to_dataframe",
     "to_markdown_table",
+    "write_leaderboard",
 ]
