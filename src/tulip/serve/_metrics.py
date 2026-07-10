@@ -24,6 +24,15 @@ _DURATION_NAME = "tulip_request_duration_ms"
 #: Exposition ``Content-Type`` for the Prometheus text format (version 0.0.4).
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
+#: Path label every series collapses into once the cardinality ceiling is hit.
+_CAPPED_PATH = "<capped>"
+
+#: Defense-in-depth ceiling on distinct label tuples. The middleware already
+#: labels by bounded route templates, so this is never reached in normal use; it
+#: caps memory should a future label source (a new path parameter) ever leak an
+#: unbounded value into the registry, turning a would-be OOM into a lost detail.
+_DEFAULT_MAX_SERIES = 1024
+
 
 def _escape_label_value(value: str) -> str:
     """Escape a Prometheus label value (backslash, double-quote, newline).
@@ -44,8 +53,9 @@ class MetricsRegistry:
     across apps (which matters for isolated tests).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, max_series: int = _DEFAULT_MAX_SERIES) -> None:
         self._lock = threading.Lock()
+        self._max_series = max_series
         self._request_counts: dict[tuple[str, str, int], int] = {}
         self._duration_sum_ms: dict[str, float] = {}
         self._duration_count: dict[str, int] = {}
@@ -54,14 +64,22 @@ class MetricsRegistry:
         """Record one completed request.
 
         Args:
-            method: HTTP method (``GET``, ``POST``, ...).
-            path: The matched route *template* (e.g. ``/predict/text``), never
-                the concrete URL, so path parameters cannot explode cardinality.
+            method: HTTP method (``GET``, ``POST``, ...), normalised by the caller
+                to a bounded set so an arbitrary extension method cannot explode
+                cardinality.
+            path: The matched route *template* (e.g. ``/predict/text``), never the
+                concrete URL, so path parameters cannot explode cardinality.
             status: Final HTTP status code of the response.
             duration_ms: Wall-clock handler duration in milliseconds.
         """
         with self._lock:
             key = (method, path, status)
+            # Once the ceiling is reached, a genuinely new label tuple collapses
+            # into a single ``<capped>`` bucket rather than growing the maps
+            # without bound (see _DEFAULT_MAX_SERIES).
+            if key not in self._request_counts and len(self._request_counts) >= self._max_series:
+                path = _CAPPED_PATH
+                key = (method, path, status)
             self._request_counts[key] = self._request_counts.get(key, 0) + 1
             self._duration_sum_ms[path] = self._duration_sum_ms.get(path, 0.0) + duration_ms
             self._duration_count[path] = self._duration_count.get(path, 0) + 1

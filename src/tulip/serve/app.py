@@ -115,18 +115,34 @@ def _truncated(prediction: Prediction, top_k: int | None) -> Prediction:
     return prediction.model_copy(update={"probabilities": prediction.top_k(top_k)})
 
 
+#: HTTP methods labelled verbatim in metrics. Anything else (an arbitrary
+#: extension method a client can invent) collapses to ``OTHER`` so the method
+#: label cannot explode metric cardinality.
+_KNOWN_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"})
+
+#: Metric ``path`` label for a request that matched no route (a 404). Using a
+#: constant instead of the raw URL is what keeps cardinality bounded: otherwise
+#: an unauthenticated client hitting ``/aaa``, ``/bbb``, ... would add a
+#: permanent metric series per distinct path and grow memory without bound.
+_UNMATCHED_PATH = "<unmatched>"
+
+
 def _path_template(request: Request) -> str:
     """Return the matched route *template* for metrics, not the concrete URL.
 
     Using the template (``/predict/text``) rather than ``request.url.path`` keeps
-    metric cardinality bounded even if a future route grows path parameters. The
-    route is populated on the shared scope during routing, so it is available by
-    the time the middleware inspects it after ``call_next``; a request that
-    matched no route (a 404) falls back to the raw path.
+    metric cardinality bounded even if a future route grows path parameters. A
+    request that matched no route (a 404) is labelled with a single
+    :data:`_UNMATCHED_PATH` bucket rather than its attacker-controlled raw path.
     """
     route = request.scope.get("route")
     template = getattr(route, "path", None)
-    return template if isinstance(template, str) else request.url.path
+    return template if isinstance(template, str) else _UNMATCHED_PATH
+
+
+def _metric_method(method: str) -> str:
+    """Normalise an HTTP method to the bounded :data:`_KNOWN_METHODS` set."""
+    return method if method in _KNOWN_METHODS else "OTHER"
 
 
 def create_app(model_path: Path | str) -> Any:
@@ -151,6 +167,9 @@ def create_app(model_path: Path | str) -> Any:
     # endpoint below is defined -- rather than annotating with the lazily
     # imported type, which the NOTE on the audio endpoint forbids.
     globals()["Response"] = fastapi.Response
+    # Used only inside the middleware closure (not an endpoint annotation), so a
+    # local binding of the lazily-imported type is enough.
+    json_response = fastapi.responses.JSONResponse
 
     classifier = DialectClassifier.load(model_path)
     _logger.info(
@@ -178,30 +197,58 @@ def create_app(model_path: Path | str) -> Any:
 
     @app.middleware("http")
     async def observability(request: Request, call_next: Any) -> Any:
-        """Assign a correlation ID, time the handler, record metrics, and log once."""
+        """Assign a correlation ID, time the handler, record metrics, and log once.
+
+        A handler that raises an *unhandled* exception (a genuine 500 -- handled
+        HTTPExceptions are already turned into responses inside ``call_next``)
+        must not slip past observability: it is still timed, counted as a 500,
+        logged with its traceback and correlation ID, and answered with a clean
+        JSON 500 that still carries the ``X-Request-ID``/``X-Process-Time-Ms``
+        headers, rather than an unheaded, uncounted, unlogged failure.
+        """
         request_id = request.headers.get("X-Request-ID") or uuid4().hex
         request.state.request_id = request_id
         start = time.perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000.0
+            _record(request, request_id, status=500, duration_ms=duration_ms, level="exception")
+            return json_response(
+                status_code=500,
+                content={"detail": "internal server error"},
+                headers={
+                    "X-Request-ID": request_id,
+                    "X-Process-Time-Ms": f"{duration_ms:.3f}",
+                },
+            )
         duration_ms = (time.perf_counter() - start) * 1000.0
-        path = _path_template(request)
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Process-Time-Ms"] = f"{duration_ms:.3f}"
-        registry.observe(
-            method=request.method,
-            path=path,
-            status=response.status_code,
-            duration_ms=duration_ms,
-        )
-        _logger.info(
+        _record(request, request_id, status=response.status_code, duration_ms=duration_ms)
+        return response
+
+    def _record(
+        request: Request,
+        request_id: str,
+        *,
+        status: int,
+        duration_ms: float,
+        level: str = "info",
+    ) -> None:
+        """Record one request into metrics and the structured log."""
+        method = _metric_method(request.method)
+        path = _path_template(request)
+        registry.observe(method=method, path=path, status=status, duration_ms=duration_ms)
+        log = _logger.exception if level == "exception" else _logger.info
+        log(
             "request_id=%s method=%s path=%s status=%d duration_ms=%.3f",
             request_id,
-            request.method,
+            method,
             path,
-            response.status_code,
+            status,
             duration_ms,
         )
-        return response
 
     @app.get(
         "/",

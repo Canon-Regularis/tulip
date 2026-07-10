@@ -189,15 +189,30 @@ _HTML_TEMPLATE = """<!doctype html>
   }
 
   function renderBars(probs, abstained) {
-    bars.innerHTML = "";
+    bars.textContent = "";
     probs.forEach((p, i) => {
       const row = document.createElement("div");
       row.className = "row" + (i === 0 && !abstained ? " top" : "");
       const pct = (p.probability * 100).toFixed(1);
-      row.innerHTML =
-        '<span class="name" title="' + prettify(p.label) + '">' + prettify(p.label) + "</span>" +
-        '<span class="track"><span class="fill" style="width:' + pct + '%"></span></span>' +
-        '<span class="pct">' + pct + "%</span>";
+      // Build via textContent/.title, never innerHTML: p.label is a model class
+      // name that can contain arbitrary characters (a dataset controls it), so
+      // concatenating it into markup would be an HTML/JS injection sink.
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = prettify(p.label);
+      name.title = prettify(p.label);
+      const track = document.createElement("span");
+      track.className = "track";
+      const fill = document.createElement("span");
+      fill.className = "fill";
+      fill.style.width = pct + "%";
+      track.appendChild(fill);
+      const pctEl = document.createElement("span");
+      pctEl.className = "pct";
+      pctEl.textContent = pct + "%";
+      row.appendChild(name);
+      row.appendChild(track);
+      row.appendChild(pctEl);
       bars.appendChild(row);
     });
   }

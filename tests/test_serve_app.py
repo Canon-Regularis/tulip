@@ -93,6 +93,69 @@ class TestPredictAudio:
         assert "not audio" in response.json()["detail"]
 
 
+class TestObservabilityHardening:
+    """Security + robustness fixes for the observability layer (quality pass 2)."""
+
+    def test_unmatched_paths_do_not_explode_metric_cardinality(self, client: TestClient) -> None:
+        """A 404 flood must not add a metric series per attacker-controlled path.
+
+        The raw path used to become the metric label, so hitting distinct URLs
+        grew the registry without bound -- an unauthenticated memory DoS.
+        """
+        registry = client.app.state.metrics
+        for i in range(150):
+            client.get(f"/no-such-path-{i}")
+        paths = {key[1] for key in registry._request_counts}
+        assert "<unmatched>" in paths
+        assert not any(p.startswith("/no-such-path-") for p in paths)
+        assert "no-such-path" not in client.get("/metrics").text
+
+    def test_unknown_http_method_is_bucketed(self, client: TestClient) -> None:
+        client.request("PROPFIND", "/predict/text")
+        methods = {key[0] for key in client.app.state.metrics._request_counts}
+        assert "OTHER" in methods
+        assert "PROPFIND" not in methods
+
+    def test_unhandled_500_is_headed_counted_and_clean(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unhandled handler error must not bypass observability.
+
+        It is still timed, counted as a 500, and answered with a clean JSON body
+        carrying the correlation-ID/timing headers -- not an unheaded, uncounted,
+        unlogged failure.
+        """
+        from tulip.pipeline import DialectClassifier
+
+        def _boom(self: object, raw: object) -> object:
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(DialectClassifier, "predict", _boom)
+        # TestClient re-raises server exceptions by default; opt out to observe the response.
+        raw_client = TestClient(client.app, raise_server_exceptions=False)
+        response = raw_client.post("/predict/text", json={"text": "hej baca"})
+
+        assert response.status_code == 500
+        assert response.headers["X-Request-ID"]
+        assert float(response.headers["X-Process-Time-Ms"]) >= 0.0
+        assert response.json() == {"detail": "internal server error"}
+        assert any(key[2] == 500 for key in client.app.state.metrics._request_counts)
+
+
+class TestDemoNoInjection:
+    """The demo must not build markup from model class labels via innerHTML (XSS)."""
+
+    def test_labels_are_rendered_via_textcontent_not_innerhtml(self) -> None:
+        from tulip.serve._demo import demo_page
+
+        page = demo_page(title="tulip")
+        # The bug: row.innerHTML built from prettify(p.label). The fix uses
+        # textContent/.title, which the browser escapes automatically.
+        assert "row.innerHTML" not in page
+        assert "bars.innerHTML" not in page
+        assert ".textContent = prettify(p.label)" in page
+
+
 class TestCreateApp:
     def test_missing_artifact_raises_data_error(self, tmp_path: Path) -> None:
         from tulip.core.exceptions import DataError
