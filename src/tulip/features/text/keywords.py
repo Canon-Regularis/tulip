@@ -19,22 +19,20 @@ from dialect key to a list of single-word markers.
 from __future__ import annotations
 
 from collections import Counter
-from importlib import resources
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import yaml
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.exceptions import NotFittedError
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.features.registries import TEXT_FEATURES
+from tulip.features.text._base import DenseTextExtractor
+from tulip.features.text._resource import read_yaml_resource
 from tulip.features.text._tokenize import word_tokens
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
 __all__ = ["DialectKeywordExtractor", "load_lexicon"]
 
@@ -42,14 +40,6 @@ logger = get_logger(__name__)
 
 #: Name of the bundled starter lexicon (package data under ``lexicons/``).
 _BUNDLED_LEXICON = "dialect_markers.yaml"
-
-
-def _bundled_lexicon_text() -> str:
-    """Read the bundled starter lexicon via importlib.resources (zip/Windows-safe)."""
-    resource = (
-        resources.files("tulip.features.text").joinpath("lexicons").joinpath(_BUNDLED_LEXICON)
-    )
-    return resource.read_text(encoding="utf-8")
 
 
 def load_lexicon(path: str | Path | None = None) -> dict[str, tuple[str, ...]]:
@@ -67,17 +57,7 @@ def load_lexicon(path: str | Path | None = None) -> dict[str, tuple[str, ...]]:
         ConfigurationError: If the file is missing or the lexicon is not a
             non-empty mapping of dialect keys to lists of single-word strings.
     """
-    if path is None:
-        source = f"bundled lexicon {_BUNDLED_LEXICON!r}"
-        raw = _bundled_lexicon_text()
-    else:
-        lexicon_path = Path(path)
-        source = str(lexicon_path)
-        if not lexicon_path.is_file():
-            raise ConfigurationError(f"lexicon file not found: {lexicon_path}")
-        raw = lexicon_path.read_text(encoding="utf-8")
-
-    data = yaml.safe_load(raw)
+    source, data = read_yaml_resource(path, bundled_name=_BUNDLED_LEXICON, noun="lexicon")
     if not isinstance(data, dict) or not data:
         raise ConfigurationError(
             f"{source}: lexicon must be a non-empty mapping of dialect -> list of markers"
@@ -112,7 +92,7 @@ def load_lexicon(path: str | Path | None = None) -> dict[str, tuple[str, ...]]:
 
 
 @TEXT_FEATURES.register("dialect_keywords")
-class DialectKeywordExtractor(TransformerMixin, BaseEstimator):
+class DialectKeywordExtractor(DenseTextExtractor):
     """Per-dialect counts of known dialect-marker lexemes, per 1000 tokens.
 
     Emits one column per lexicon dialect (``keywords:<dialect>``, dialects in
@@ -201,14 +181,3 @@ class DialectKeywordExtractor(TransformerMixin, BaseEstimator):
                 total += hits
             matrix[row, -1] = total * scale
         return matrix
-
-    def get_feature_names_out(self, input_features: Any = None) -> np.ndarray:
-        """Return ``keywords:<dialect>`` column names plus ``keywords:total``."""
-        self._check_fitted()
-        return np.asarray(self.feature_names_, dtype=object)
-
-    def _check_fitted(self) -> None:
-        if not hasattr(self, "feature_names_"):
-            raise NotFittedError(
-                "This DialectKeywordExtractor instance is not fitted yet; call fit first."
-            )

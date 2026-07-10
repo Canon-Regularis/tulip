@@ -48,22 +48,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from importlib import resources
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import numpy as np
-import yaml
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.exceptions import NotFittedError
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.features.registries import TEXT_FEATURES
+from tulip.features.text._base import DenseTextExtractor
+from tulip.features.text._resource import read_yaml_resource
 from tulip.features.text._tokenize import word_tokens
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+    from pathlib import Path
 
 __all__ = [
     "DigraphRate",
@@ -236,14 +234,6 @@ _FEATURE_KINDS: dict[str, Callable[..., PhonologicalFeature]] = {
 }
 
 
-def _bundled_isoglosses_text() -> str:
-    """Read the bundled starter isogloss set via importlib.resources."""
-    resource = (
-        resources.files("tulip.features.text").joinpath("lexicons").joinpath(_BUNDLED_ISOGLOSSES)
-    )
-    return resource.read_text(encoding="utf-8")
-
-
 def load_isoglosses(path: str | Path | None = None) -> tuple[PhonologicalFeature, ...]:
     """Load and validate a phonological isogloss set.
 
@@ -263,17 +253,9 @@ def load_isoglosses(path: str | Path | None = None) -> tuple[PhonologicalFeature
             has an empty/duplicate/malformed entry, names an unknown ``kind``, or
             carries an invalid regex or empty digraph list.
     """
-    if path is None:
-        source = f"bundled isoglosses {_BUNDLED_ISOGLOSSES!r}"
-        raw = _bundled_isoglosses_text()
-    else:
-        isogloss_path = Path(path)
-        source = str(isogloss_path)
-        if not isogloss_path.is_file():
-            raise ConfigurationError(f"isogloss file not found: {isogloss_path}")
-        raw = isogloss_path.read_text(encoding="utf-8")
-
-    data = yaml.safe_load(raw)
+    source, data = read_yaml_resource(
+        path, bundled_name=_BUNDLED_ISOGLOSSES, noun="isogloss", bundled_label="isoglosses"
+    )
     if not isinstance(data, dict):
         raise ConfigurationError(
             f"{source}: isogloss file must be a mapping with 'version' and 'isoglosses'"
@@ -312,7 +294,7 @@ def load_isoglosses(path: str | Path | None = None) -> tuple[PhonologicalFeature
 
 
 @TEXT_FEATURES.register("phonological_markers")
-class PhonologicalMarkerExtractor(TransformerMixin, BaseEstimator):
+class PhonologicalMarkerExtractor(DenseTextExtractor):
     """Per-document rates of phonological dialect markers.
 
     Emits one ``phon:<name>`` column per isogloss (in file order). Each cell is
@@ -396,14 +378,3 @@ class PhonologicalMarkerExtractor(TransformerMixin, BaseEstimator):
             for column, feature in enumerate(self.features_):
                 matrix[row, column] = feature.rate(text, tokens) * self.per_tokens
         return matrix
-
-    def get_feature_names_out(self, input_features: Any = None) -> np.ndarray:
-        """Return the ``phon:<name>`` column names, in isogloss file order."""
-        self._check_fitted()
-        return np.asarray(self.feature_names_, dtype=object)
-
-    def _check_fitted(self) -> None:
-        if not hasattr(self, "feature_names_"):
-            raise NotFittedError(
-                "This PhonologicalMarkerExtractor instance is not fitted yet; call fit first."
-            )

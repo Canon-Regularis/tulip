@@ -17,14 +17,13 @@ and emits their per-document relative frequencies.
 from __future__ import annotations
 
 from collections import Counter
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.exceptions import NotFittedError
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.features.registries import TEXT_FEATURES
+from tulip.features.text._base import DenseTextExtractor
 from tulip.features.text._tokenize import word_tokens
 from tulip.utils.logging import get_logger
 
@@ -37,7 +36,7 @@ logger = get_logger(__name__)
 
 
 @TEXT_FEATURES.register("affix_frequency")
-class AffixFrequencyExtractor(TransformerMixin, BaseEstimator):
+class AffixFrequencyExtractor(DenseTextExtractor):
     """Relative frequencies of learned word-final suffixes and word-initial prefixes.
 
     The affix vocabulary is learned in :meth:`fit` by document frequency: every
@@ -59,6 +58,10 @@ class AffixFrequencyExtractor(TransformerMixin, BaseEstimator):
         include_prefixes: Learn word-initial prefixes.
         lowercase: Lowercase tokens before extracting affixes.
     """
+
+    #: Fitted when the learned vocabulary exists (set together with
+    #: ``feature_names_`` in :meth:`fit`); guards the not-fitted check.
+    _fitted_attr: ClassVar[str] = "vocabulary_"
 
     def __init__(
         self,
@@ -174,14 +177,3 @@ class AffixFrequencyExtractor(TransformerMixin, BaseEstimator):
                 if column is not None:
                     matrix[row, column] = count / n_tokens
         return matrix
-
-    def get_feature_names_out(self, input_features: Any = None) -> np.ndarray:
-        """Return learned affix column names (``suffix:-...`` / ``prefix:...-``)."""
-        self._check_fitted()
-        return np.asarray(self.feature_names_, dtype=object)
-
-    def _check_fitted(self) -> None:
-        if not hasattr(self, "vocabulary_"):
-            raise NotFittedError(
-                "This AffixFrequencyExtractor instance is not fitted yet; call fit first."
-            )

@@ -3,11 +3,63 @@
 from __future__ import annotations
 
 import pytest
+from sklearn.base import clone
+from sklearn.exceptions import NotFittedError
 
 from tulip.core.exceptions import ConfigurationError, UnknownComponentError
 from tulip.features.audio.composite import build_audio_features
 from tulip.features.audio.spectral import MfccExtractor
+from tulip.features.text.affixes import AffixFrequencyExtractor
 from tulip.features.text.composite import build_text_features
+from tulip.features.text.keywords import DialectKeywordExtractor
+from tulip.features.text.phonology import PhonologicalMarkerExtractor
+
+#: (extractor class, its own hyper-parameter names) for the estimator-contract tests.
+_DENSE_EXTRACTOR_CASES = [
+    (DialectKeywordExtractor, {"lexicon_path", "per_tokens"}),
+    (PhonologicalMarkerExtractor, {"isogloss_path", "per_tokens"}),
+    (
+        AffixFrequencyExtractor,
+        {
+            "min_len",
+            "max_len",
+            "max_features",
+            "min_df",
+            "include_suffixes",
+            "include_prefixes",
+            "lowercase",
+        },
+    ),
+]
+
+
+class TestDenseExtractorEstimatorContract:
+    """The shared _DenseTextExtractor base must not break the sklearn estimator API.
+
+    A base ``__init__`` would shadow the concrete signature that ``get_params`` /
+    ``clone`` introspect, silently breaking ``clone()`` and ``GridSearchCV``. The
+    base deliberately defines none; these tests pin that.
+    """
+
+    @pytest.mark.parametrize(("cls", "params"), _DENSE_EXTRACTOR_CASES)
+    def test_get_params_reports_the_concrete_signature(self, cls, params: set) -> None:
+        assert set(cls().get_params()) == params
+
+    @pytest.mark.parametrize(("cls", "params"), _DENSE_EXTRACTOR_CASES)
+    def test_clone_preserves_params(self, cls, params: set) -> None:
+        cloned = clone(cls())
+        assert set(cloned.get_params()) == params
+
+    @pytest.mark.parametrize(("cls", "params"), _DENSE_EXTRACTOR_CASES)
+    def test_feature_names_before_fit_raises(self, cls, params: set) -> None:
+        with pytest.raises(NotFittedError):
+            cls().get_feature_names_out()
+
+    def test_distinct_per_tokens_defaults_are_preserved(self) -> None:
+        # They differ on purpose: phon columns are dense and unioned with sparse
+        # TF-IDF (scale parity, default 1.0); keywords report per-1000 rates.
+        assert PhonologicalMarkerExtractor().per_tokens == 1.0
+        assert DialectKeywordExtractor().per_tokens == 1000.0
 
 
 class TestUniformPolicies:
