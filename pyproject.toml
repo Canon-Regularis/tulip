@@ -76,7 +76,7 @@ viz = ["folium>=0.16", "plotly>=5.20", "matplotlib>=3.8"]
 # UMAP projection for the dialect embedding space (pulls in numba).
 umap = ["umap-learn>=0.5"]
 # HTTP inference service (single interface for typed text and uploaded audio).
-serve = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "python-multipart>=0.0.9"]
+serve = ["fastapi>=0.110", "uvicorn[standard]>=0.51.0", "python-multipart>=0.0.9"]
 # Documentation site: MkDocs + Material theme + API reference from docstrings.
 docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.26"]
 dev = [
