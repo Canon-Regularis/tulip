@@ -356,6 +356,22 @@ class TestTrainAndPredict:
         assert result.exit_code == 1
         assert "exactly one input" in result.output
 
+    def test_audio_input_on_a_text_model_fails_cleanly(
+        self, trained_text_artifact: Path, tmp_path: Path
+    ) -> None:
+        """Feeding audio to a text model used to die deep in the feature stack.
+
+        The mismatch escaped the TulipError boundary as a raw traceback; it now
+        surfaces as one clean error line, for both `predict` and `explain`.
+        """
+        clip = tmp_path / "x.wav"
+        clip.write_bytes(b"RIFF....")
+        for command in ("predict", "explain"):
+            result = runner.invoke(app, [command, str(trained_text_artifact), "--audio", str(clip)])
+            assert result.exit_code == 1, command
+            assert "Traceback" not in result.output, command
+            assert "not audio" in result.output, command
+
     def test_missing_model_fails_cleanly(self, tmp_path: Path) -> None:
         result = runner.invoke(app, ["predict", str(tmp_path / "nope"), "tekst"])
         assert result.exit_code == 1

@@ -198,6 +198,28 @@ def data_prepare(
     _console.print(f"[green]splits written to {destination}[/green]")
 
 
+def _report_written_corpus(path: Path, *, title: str, unit: str) -> None:
+    """Read a freshly written corpus back and print its per-class distribution.
+
+    Both synthesize commands report from the artifact (not the in-memory spec),
+    which doubles as proof that the written manifest is loadable.
+    """
+    from tulip.data.reading import read_samples
+
+    counts: dict[str, int] = {}
+    for sample in read_samples(path):
+        key = sample.labels.dialect or sample.labels.family or "__unlabelled__"
+        counts[key] = counts.get(key, 0) + 1
+
+    table = Table(title=title)
+    table.add_column("class", style="bold")
+    table.add_column(unit, justify="right")
+    for label in sorted(counts):
+        table.add_row(label, str(counts[label]))
+    _console.print(table)
+    _console.print(f"[green]{sum(counts.values())} {unit} written to {path}[/green]")
+
+
 @datasets_app.command("synthesize")
 @_tulip_errors
 def data_synthesize(
@@ -217,7 +239,6 @@ def data_synthesize(
     train configs/synthetic_text.yaml` immediately. Raising --marker-dropout
     makes the task harder; at 0.0 every linear model saturates at 1.000.
     """
-    from tulip.data.reading import read_samples
     from tulip.data.synthetic import SyntheticSpec, write_synthetic_manifest
 
     spec = SyntheticSpec(
@@ -229,21 +250,7 @@ def data_synthesize(
         seed=seed,
     )
     path = write_synthetic_manifest(spec, out)
-
-    # Read back what we wrote: the distribution is reported from the artifact
-    # itself, which also proves the manifest is loadable.
-    counts: dict[str, int] = {}
-    for sample in read_samples(path):
-        key = sample.labels.dialect or sample.labels.family or "__unlabelled__"
-        counts[key] = counts.get(key, 0) + 1
-
-    table = Table(title=f"synthetic corpus (seed={seed})")
-    table.add_column("class", style="bold")
-    table.add_column("samples", justify="right")
-    for label in sorted(counts):
-        table.add_row(label, str(counts[label]))
-    _console.print(table)
-    _console.print(f"[green]{sum(counts.values())} samples written to {path}[/green]")
+    _report_written_corpus(path, title=f"synthetic corpus (seed={seed})", unit="samples")
 
 
 @datasets_app.command("synthesize-audio")
@@ -264,7 +271,6 @@ def data_synthesize_audio(
     separate them. It is a benchmark fixture, not real speech. Run
     `tulip train configs/synthetic_audio.yaml` afterwards.
     """
-    from tulip.data.reading import read_samples
     from tulip.data.synthetic_audio import AudioSyntheticSpec, write_synthetic_audio_manifest
 
     spec = AudioSyntheticSpec(
@@ -274,19 +280,7 @@ def data_synthesize_audio(
         seed=seed,
     )
     path = write_synthetic_audio_manifest(spec, out)
-
-    counts: dict[str, int] = {}
-    for sample in read_samples(path):
-        key = sample.labels.dialect or sample.labels.family or "__unlabelled__"
-        counts[key] = counts.get(key, 0) + 1
-
-    table = Table(title=f"synthetic audio corpus (seed={seed})")
-    table.add_column("class", style="bold")
-    table.add_column("clips", justify="right")
-    for label in sorted(counts):
-        table.add_row(label, str(counts[label]))
-    _console.print(table)
-    _console.print(f"[green]{sum(counts.values())} clips + manifest written to {path}[/green]")
+    _report_written_corpus(path, title=f"synthetic audio corpus (seed={seed})", unit="clips")
 
 
 @datasets_app.command("validate")
@@ -494,6 +488,7 @@ def predict(
         raise ConfigurationError("provide exactly one input: a TEXT argument or --audio PATH")
     raw: Any = text if text is not None else audio
     classifier = DialectClassifier.load(model_path)
+    _require_input_matches_task(classifier, text=text, audio=audio)
     prediction = classifier.predict(raw)
 
     if json_output:
@@ -533,9 +528,30 @@ def explain(
         raise ConfigurationError("provide exactly one input: a TEXT argument or --audio PATH")
     raw: Any = text if text is not None else audio
     classifier = DialectClassifier.load(model_path)
+    _require_input_matches_task(classifier, text=text, audio=audio)
     prediction = classifier.predict(raw)
     _print_prediction(prediction, top_k=3)
     _print_explanation(classifier, raw, method)
+
+
+def _require_input_matches_task(classifier: Any, *, text: str | None, audio: Path | None) -> None:
+    """Reject a text/audio input that mismatches the model's modality.
+
+    Feeding an audio path to a text model (or vice versa) otherwise dies deep in
+    the feature stack with an opaque ``ValueError``/``TypeError`` that escapes the
+    ``TulipError`` boundary as a raw traceback. This turns it into one clean line.
+    """
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.core.types import TaskType
+
+    if text is not None and classifier.task is not TaskType.TEXT:
+        raise ConfigurationError(
+            f"this model classifies {classifier.task.value}, not text; pass --audio PATH"
+        )
+    if audio is not None and classifier.task is not TaskType.AUDIO:
+        raise ConfigurationError(
+            f"this model classifies {classifier.task.value}, not audio; pass a text argument"
+        )
 
 
 def _print_prediction(prediction: Prediction, top_k: int) -> None:
