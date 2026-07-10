@@ -246,6 +246,49 @@ def data_synthesize(
     _console.print(f"[green]{sum(counts.values())} samples written to {path}[/green]")
 
 
+@datasets_app.command("synthesize-audio")
+@_tulip_errors
+def data_synthesize_audio(
+    out: Path = typer.Option(
+        Path("data/raw/synthetic_audio"), "--out", help="Destination directory."
+    ),
+    seed: int = typer.Option(7, help="Generator seed; fixes the clips byte for byte."),
+    speakers: int = typer.Option(8, "--speakers", min=2, help="Speakers per class."),
+    per_speaker: int = typer.Option(6, "--per-speaker", min=1, help="Clips per speaker."),
+    duration: float = typer.Option(0.8, "--duration", min=0.1, help="Clip length in seconds."),
+) -> None:
+    """Write a synthetic audio corpus (16 kHz mono WAV clips) with zero acquisition.
+
+    Each class has a distinct acoustic fingerprint (pitch register, vowel-space
+    formants, spectral tilt), so classical audio features (mfcc/pitch/formants)
+    separate them. It is a benchmark fixture, not real speech. Run
+    `tulip train configs/synthetic_audio.yaml` afterwards.
+    """
+    from tulip.data.reading import read_samples
+    from tulip.data.synthetic_audio import AudioSyntheticSpec, write_synthetic_audio_manifest
+
+    spec = AudioSyntheticSpec(
+        n_speakers_per_dialect=speakers,
+        samples_per_speaker=per_speaker,
+        duration_s=duration,
+        seed=seed,
+    )
+    path = write_synthetic_audio_manifest(spec, out)
+
+    counts: dict[str, int] = {}
+    for sample in read_samples(path):
+        key = sample.labels.dialect or sample.labels.family or "__unlabelled__"
+        counts[key] = counts.get(key, 0) + 1
+
+    table = Table(title=f"synthetic audio corpus (seed={seed})")
+    table.add_column("class", style="bold")
+    table.add_column("clips", justify="right")
+    for label in sorted(counts):
+        table.add_row(label, str(counts[label]))
+    _console.print(table)
+    _console.print(f"[green]{sum(counts.values())} clips + manifest written to {path}[/green]")
+
+
 @datasets_app.command("validate")
 @_tulip_errors
 def data_validate(
@@ -462,6 +505,37 @@ def predict(
         _export_map(prediction, map_out)
     if explain is not None:
         _print_explanation(classifier, raw, explain)
+
+
+@app.command()
+@_tulip_errors
+def explain(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    text: str | None = typer.Argument(None, help="Text to explain."),
+    audio: Path | None = typer.Option(None, "--audio", help="Audio file to explain."),
+    method: str = typer.Option(
+        "top_tfidf",
+        "--method",
+        "-m",
+        help="Explainer name (top_tfidf, lime, shap, nearest_examples).",
+    ),
+) -> None:
+    """Explain one prediction: which features drove it, or its nearest neighbours.
+
+    The architecture contract lists ``explain`` as its own command group; it is
+    also reachable as ``predict --explain <method>``. This standalone form
+    classifies the input and renders only the explanation.
+    """
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.pipeline import DialectClassifier
+
+    if (text is None) == (audio is None):
+        raise ConfigurationError("provide exactly one input: a TEXT argument or --audio PATH")
+    raw: Any = text if text is not None else audio
+    classifier = DialectClassifier.load(model_path)
+    prediction = classifier.predict(raw)
+    _print_prediction(prediction, top_k=3)
+    _print_explanation(classifier, raw, method)
 
 
 def _print_prediction(prediction: Prediction, top_k: int) -> None:

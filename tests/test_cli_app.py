@@ -114,6 +114,27 @@ class TestSynthesize:
         left = (first / "manifest.jsonl").read_bytes()
         assert left == (second / "manifest.jsonl").read_bytes()
 
+    def test_synthesize_audio_writes_clips_and_a_manifest(self, tmp_path: Path) -> None:
+        out = tmp_path / "audio"
+        result = runner.invoke(
+            app,
+            [
+                "data",
+                "synthesize-audio",
+                "--out",
+                str(out),
+                "--speakers",
+                "2",
+                "--per-speaker",
+                "2",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert (out / "manifest.jsonl").is_file()
+        assert list((out / "audio").glob("*.wav")), "no WAV clips were written"
+        assert "__unlabelled__" not in result.output
+        assert "podhale" in result.output
+
 
 class TestValidate:
     def test_a_clean_manifest_exits_zero(self, tmp_path: Path) -> None:
@@ -313,6 +334,25 @@ class TestTrainAndPredict:
 
     def test_predict_requires_exactly_one_input(self, trained_text_artifact: Path) -> None:
         result = runner.invoke(app, ["predict", str(trained_text_artifact)])
+        assert result.exit_code == 1
+        assert "exactly one input" in result.output
+
+    def test_standalone_explain_command(self, trained_text_artifact: Path) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "explain",
+                str(trained_text_artifact),
+                "Kaj żeś boł wczorej?",
+                "--method",
+                "top_tfidf",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "evidence" in result.output
+
+    def test_explain_requires_exactly_one_input(self, trained_text_artifact: Path) -> None:
+        result = runner.invoke(app, ["explain", str(trained_text_artifact)])
         assert result.exit_code == 1
         assert "exactly one input" in result.output
 
