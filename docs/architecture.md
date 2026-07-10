@@ -266,7 +266,7 @@ those postconditions. Relating them by protocol rather than inheritance is the
 Liskov substitution principle being *obeyed*, not sidestepped. `DialectClassifier`
 satisfies the protocol via a `predict_samples` adapter.
 
-- `hierarchical.py`: `HierarchicalDialectClassifier` composes one
+- `hierarchical/`: `HierarchicalDialectClassifier` composes one
   `DialectClassifier` per `LabelLevel` (coarse → fine) and returns the finest
   prediction a `BackoffPolicy` accepts, so `Prediction.level` varies per sample.
   With `mask_to_coarse`, a dialect row is projected onto the predicted family by
@@ -280,11 +280,13 @@ satisfies the protocol via a `predict_samples` adapter.
   `ProbabilityCalibrator` fitted on a **held-out** split, and applies
   `abstain_threshold` to the *calibrated* top probability — an uncalibrated
   cutoff does not mean what it looks like.
-- `fusion.py`: `MultimodalClassifier` fuses a text and an audio classifier via a
+- `fusion/`: `MultimodalClassifier` fuses a text and an audio classifier via a
   `FusionStrategy` (weighted average, maximum, logarithmic pooling), aligning
   their classes to the sorted union and degrading to whichever modality a sample
   actually carries. `TaskType` is frozen, so this is composition rather than a
-  `MULTIMODAL` enum member.
+  `MULTIMODAL` enum member. (Both `hierarchical/` and `fusion/` are packages: a
+  leaf `policies`/`strategies` module plus the classifier, so the value-object
+  families are testable without the classifier stack.)
 
 ### tulip.evaluation (calibration)
 

@@ -45,6 +45,8 @@ benchmarks/results/**/leaderboard.json
 .env.*
 *.pem
 *.pfx
+*.key
+*.p12
 secrets/
 
 # Editors / OS
