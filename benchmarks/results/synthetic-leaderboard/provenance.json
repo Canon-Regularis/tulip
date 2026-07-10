@@ -1,0 +1,162 @@
+{
+  "configs": [
+    {
+      "class_distribution": {
+        "test": {
+          "greater_poland": 24,
+          "kashubia": 24,
+          "kurpie": 24,
+          "mazovia_proper": 24,
+          "podhale": 24,
+          "silesia": 24
+        },
+        "train": {
+          "greater_poland": 96,
+          "kashubia": 96,
+          "kurpie": 96,
+          "mazovia_proper": 96,
+          "podhale": 96,
+          "silesia": 96
+        },
+        "validation": {
+          "greater_poland": 24,
+          "kashubia": 24,
+          "kurpie": 24,
+          "mazovia_proper": 24,
+          "podhale": 24,
+          "silesia": 24
+        }
+      },
+      "name": "synthetic-char-baseline",
+      "path": "benchmarks/configs/char_baseline.yaml",
+      "seed": 42,
+      "sizes": {
+        "test": 144,
+        "train": 576,
+        "validation": 144
+      },
+      "split_seed": 42
+    },
+    {
+      "class_distribution": {
+        "test": {
+          "greater_poland": 24,
+          "kashubia": 24,
+          "kurpie": 24,
+          "mazovia_proper": 24,
+          "podhale": 24,
+          "silesia": 24
+        },
+        "train": {
+          "greater_poland": 96,
+          "kashubia": 96,
+          "kurpie": 96,
+          "mazovia_proper": 96,
+          "podhale": 96,
+          "silesia": 96
+        },
+        "validation": {
+          "greater_poland": 24,
+          "kashubia": 24,
+          "kurpie": 24,
+          "mazovia_proper": 24,
+          "podhale": 24,
+          "silesia": 24
+        }
+      },
+      "name": "synthetic-lexical-baseline",
+      "path": "benchmarks/configs/lexical_baseline.yaml",
+      "seed": 42,
+      "sizes": {
+        "test": 144,
+        "train": 576,
+        "validation": 144
+      },
+      "split_seed": 42
+    }
+  ],
+  "float_precision": 6,
+  "models": [
+    "linear_svm",
+    "logistic_regression",
+    "naive_bayes",
+    "random_forest"
+  ],
+  "results": [
+    {
+      "accuracy": 0.833333,
+      "experiment": "synthetic-char-baseline",
+      "f1_macro": 0.831328,
+      "f1_weighted": 0.831328,
+      "model": "linear_svm",
+      "n_train": 576,
+      "roc_auc": 0.952025
+    },
+    {
+      "accuracy": 0.8125,
+      "experiment": "synthetic-char-baseline",
+      "f1_macro": 0.810945,
+      "f1_weighted": 0.810945,
+      "model": "naive_bayes",
+      "n_train": 576,
+      "roc_auc": 0.967419
+    },
+    {
+      "accuracy": 0.798611,
+      "experiment": "synthetic-char-baseline",
+      "f1_macro": 0.797249,
+      "f1_weighted": 0.797249,
+      "model": "logistic_regression",
+      "n_train": 576,
+      "roc_auc": 0.950521
+    },
+    {
+      "accuracy": 0.680556,
+      "experiment": "synthetic-char-baseline",
+      "f1_macro": 0.689966,
+      "f1_weighted": 0.689966,
+      "model": "random_forest",
+      "n_train": 576,
+      "roc_auc": 0.904601
+    },
+    {
+      "accuracy": 0.798611,
+      "experiment": "synthetic-lexical-baseline",
+      "f1_macro": 0.792517,
+      "f1_weighted": 0.792517,
+      "model": "linear_svm",
+      "n_train": 576,
+      "roc_auc": 0.945602
+    },
+    {
+      "accuracy": 0.743056,
+      "experiment": "synthetic-lexical-baseline",
+      "f1_macro": 0.74522,
+      "f1_weighted": 0.74522,
+      "model": "random_forest",
+      "n_train": 576,
+      "roc_auc": 0.910041
+    },
+    {
+      "accuracy": 0.743056,
+      "experiment": "synthetic-lexical-baseline",
+      "f1_macro": 0.738919,
+      "f1_weighted": 0.738919,
+      "model": "logistic_regression",
+      "n_train": 576,
+      "roc_auc": 0.915336
+    },
+    {
+      "accuracy": 0.444444,
+      "experiment": "synthetic-lexical-baseline",
+      "f1_macro": 0.356207,
+      "f1_weighted": 0.356207,
+      "model": "naive_bayes",
+      "n_train": 576,
+      "roc_auc": 0.861516
+    }
+  ],
+  "split": "test",
+  "suite": "synthetic-leaderboard",
+  "tulip_version": "0.1.0"
+}

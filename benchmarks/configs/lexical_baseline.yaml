@@ -1,0 +1,48 @@
+# Word-level + stylometry track of the reproducible tulip leaderboard.
+#
+# The contrast with char_baseline.yaml is the point: character n-grams can see
+# the phonological transforms (mazurzenie, asynchronous soft-labials), whereas
+# word-level TF-IDF and stylometry only see whole-word markers. On the samples
+# where marker dropout removed those markers, this track has strictly less to
+# go on -- so the two tracks should not score alike, and the leaderboard shows it.
+#
+# Generator params are pinned; see char_baseline.yaml for why.
+name: synthetic-lexical-baseline
+seed: 42
+task: text
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: synthetic
+      params:
+        n_speakers_per_dialect: 12
+        samples_per_speaker: 12
+        include_standard: false
+        noise_level: 0.10
+        marker_dropout: 0.20
+        seed: 7
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features:
+  - name: word_tfidf
+  - name: stylometry
+
+model:
+  name: logistic_regression
+  params:
+    C: 1.0
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  group_by: speaker_id
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts/benchmarks
+abstain_threshold: null

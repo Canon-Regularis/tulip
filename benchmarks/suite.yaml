@@ -1,0 +1,19 @@
+# Reproducible tulip leaderboard suite.
+#
+# Every config below uses the offline "synthetic" corpus, so the entire suite
+# runs deterministically with no downloads and no locally acquired data. Each
+# competitor model is trained on every config's identical, speaker-disjoint,
+# frozen split. See benchmarks/README.md for the reproducibility guarantee and
+# regeneration instructions.
+name: synthetic-leaderboard
+
+configs:
+  - benchmarks/configs/char_baseline.yaml
+  - benchmarks/configs/lexical_baseline.yaml
+
+# Classical competitors only (no heavy or optional dependencies).
+models:
+  - naive_bayes
+  - logistic_regression
+  - linear_svm
+  - random_forest

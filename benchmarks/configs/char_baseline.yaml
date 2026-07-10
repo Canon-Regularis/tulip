@@ -1,0 +1,53 @@
+# Char n-gram TF-IDF track of the reproducible tulip leaderboard.
+#
+# Uses the offline "synthetic" corpus so the whole suite runs without any
+# downloads or locally acquired data. See benchmarks/README.md.
+#
+# The generator params below are pinned rather than left to library defaults:
+# they fix the task's difficulty -- in particular `marker_dropout`, which sets
+# the irreducible error floor -- so a change to a default can never silently
+# move the committed leaderboard numbers.
+#
+# `output_dir` points into the gitignored artifacts/ tree because run_benchmark
+# writes models and split files there. Only the rendered leaderboard is
+# committed, under benchmarks/results/.
+name: synthetic-char-baseline
+seed: 42
+task: text
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: synthetic
+      params:
+        n_speakers_per_dialect: 12
+        samples_per_speaker: 12
+        include_standard: false
+        noise_level: 0.10
+        marker_dropout: 0.20
+        seed: 7
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features:
+  - name: char_tfidf
+    params:
+      ngram_range: [2, 5]
+
+model:
+  name: logistic_regression
+  params:
+    C: 1.0
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  group_by: speaker_id
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts/benchmarks
+abstain_threshold: null
