@@ -149,6 +149,37 @@ class TestCards:
         assert result.exit_code == 0, result.output
         assert "Model card" in result.output
 
+    def test_card_commands_never_leak_a_traceback(self, tmp_path: Path) -> None:
+        """File readers raise FileNotFoundError/ValidationError, which are not TulipErrors.
+
+        They escaped `_tulip_errors` as a rich traceback that leaked absolute
+        filesystem paths, unlike every other file-reading command.
+        """
+        (tmp_path / "list.json").write_text("[1, 2, 3]", encoding="utf-8")
+        (tmp_path / "bad_report.json").write_text('{"not": "a report"}', encoding="utf-8")
+
+        invocations = [
+            ["card", "dataset", str(tmp_path / "missing.json")],
+            ["card", "dataset", str(tmp_path / "list.json")],
+            ["card", "model", str(tmp_path / "no_such_model_dir")],
+        ]
+        for argv in invocations:
+            result = runner.invoke(app, argv)
+            assert result.exit_code == 1, argv
+            assert "Traceback" not in result.output, argv
+            assert "error:" in result.output, argv
+
+    def test_card_model_rejects_a_malformed_report(self, mini_config: Path, tmp_path: Path) -> None:
+        assert runner.invoke(app, ["train", str(mini_config)]).exit_code == 0
+        model_dir = tmp_path / "artifacts" / "cli-mini" / "model"
+        bad = tmp_path / "bad_report.json"
+        bad.write_text('{"not": "a report"}', encoding="utf-8")
+
+        result = runner.invoke(app, ["card", "model", str(model_dir), "--report", str(bad)])
+        assert result.exit_code == 1
+        assert "Traceback" not in result.output
+        assert "not a valid evaluation report" in result.output
+
     def test_dataset_card_writes_to_a_file(self, mini_config: Path, tmp_path: Path) -> None:
         assert runner.invoke(app, ["train", str(mini_config)]).exit_code == 0
         manifest = tmp_path / "artifacts" / "cli-mini" / "splits" / "build_manifest.json"
@@ -202,6 +233,26 @@ class TestSelfTrain:
         assert result.exit_code == 1
         assert "char_tfidf" in result.output  # tells the user what to pass
         assert "--raw" in result.output
+
+    def test_raw_with_a_classical_model_fails_cleanly(
+        self, mini_config: Path, tmp_path: Path
+    ) -> None:
+        """`--raw` defaults to logistic_regression, which cannot take raw text.
+
+        This used to sail past the guard and die inside sklearn with
+        `could not convert string to float`, escaping the TulipError boundary as
+        a full traceback.
+        """
+        out = tmp_path / "splits"
+        runner.invoke(app, ["data", "prepare", str(mini_config), "--output", str(out)])
+
+        result = runner.invoke(
+            app, ["selftrain", str(out / "train.jsonl"), str(out / "test.jsonl"), "--raw"]
+        )
+        assert result.exit_code == 1
+        assert "Traceback" not in result.output
+        assert "could not convert string to float" not in result.output
+        assert "cannot consume raw text input" in result.output
 
     def test_raw_and_feature_are_mutually_exclusive(
         self, mini_config: Path, tmp_path: Path

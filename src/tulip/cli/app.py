@@ -523,6 +523,29 @@ def _emit(markdown: str, destination: Path | None) -> None:
     _console.print(f"[green]card written to {destination}[/green]")
 
 
+def _read_json_mapping(path: Path, *, what: str) -> dict[str, Any]:
+    """Read a JSON object, converting IO/parse failures into a clean ``DataError``.
+
+    ``tulip.utils.io.read_json`` raises the underlying ``FileNotFoundError`` /
+    ``JSONDecodeError``, and those escape the ``_tulip_errors`` boundary as a
+    traceback that leaks absolute paths. Every other file-reading command in this
+    CLI already fails with one clean ``error:`` line; this makes the card
+    commands behave the same.
+    """
+    from tulip.core.exceptions import DataError
+    from tulip.utils.io import read_json
+
+    if not path.is_file():
+        raise DataError(f"{what} not found: {path}")
+    try:
+        payload = read_json(path)
+    except (OSError, ValueError) as exc:  # JSONDecodeError subclasses ValueError
+        raise DataError(f"{what} at {path} is not readable JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise DataError(f"{what} at {path} must be a JSON object, got {type(payload).__name__}")
+    return payload
+
+
 @cards_app.command("dataset")
 @_tulip_errors
 def card_dataset(
@@ -536,9 +559,8 @@ def card_dataset(
     from tulip.core.exceptions import ConfigurationError, DataError
     from tulip.data import DATASETS, get_dataset_info
     from tulip.evaluation.cards import dataset_card
-    from tulip.utils.io import read_json
 
-    manifest = read_json(build_manifest)
+    manifest = _read_json_mapping(build_manifest, what="build manifest")
     name = dataset
     if name is None:
         sources = list(manifest.get("sources") or {})
@@ -574,14 +596,26 @@ def card_model(
     deliberately does not embed metrics, so the card pairs `metadata.json` with
     the sibling `report_<split>.json` files written by `tulip train`.
     """
+    from pydantic import ValidationError
+
+    from tulip.core.exceptions import DataError
     from tulip.evaluation.cards import model_card
     from tulip.evaluation.report import EvaluationReport
     from tulip.models.persistence import METADATA_FILENAME
-    from tulip.utils.io import read_json
 
+    sidecar = _read_json_mapping(model_path / METADATA_FILENAME, what="model metadata")
     paths = list(report) or sorted(model_path.parent.glob("report_*.json"))
-    reports = {path.stem.removeprefix("report_"): EvaluationReport.load(path) for path in paths}
-    _emit(model_card(read_json(model_path / METADATA_FILENAME), reports), out)
+    reports = {}
+    for path in paths:
+        _read_json_mapping(path, what="evaluation report")  # clean error on missing/corrupt JSON
+        try:
+            reports[path.stem.removeprefix("report_")] = EvaluationReport.load(path)
+        except ValidationError as exc:
+            raise DataError(
+                f"{path} is not a valid evaluation report ({exc.error_count()} schema error(s)); "
+                "expected a file written by `tulip train`"
+            ) from exc
+    _emit(model_card(sidecar, reports), out)
 
 
 # -------------------------------------------------------------------- serve
