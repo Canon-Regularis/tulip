@@ -16,6 +16,12 @@ _register_builtins()
 
 # The documented public surface, importable from the subsystem root like
 # every sibling package (the registration imports above make these free).
+from tulip.models.calibration import (  # noqa: E402
+    IdentityCalibrator,
+    IsotonicCalibrator,
+    ProbabilityCalibrator,
+    TemperatureScaling,
+)
 from tulip.models.fasttext_model import FastTextClassifier  # noqa: E402
 from tulip.models.neural_audio import (  # noqa: E402
     EmbeddingSpeechClassifier,
@@ -30,7 +36,11 @@ __all__ = [
     "EmbeddingSpeechClassifier",
     "FastTextClassifier",
     "FinetunedSpeechClassifier",
+    "IdentityCalibrator",
+    "IsotonicCalibrator",
+    "ProbabilityCalibrator",
     "SpeechClassifier",
+    "TemperatureScaling",
     "TransformerTextClassifier",
     "load_model",
     "save_model",
