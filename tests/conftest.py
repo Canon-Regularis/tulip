@@ -11,6 +11,36 @@ import pytest
 from tulip.config.schemas import ComponentConfig, DataConfig, ExperimentConfig, SplitConfig
 from tulip.core.types import DialectLabels, Sample
 
+#: Records shaped like the BIGOS Hub schema (see loaders/bigos.py field probes).
+BIGOS_HUB_RECORDS: list[dict[str, str]] = [
+    {"ref_orig": "Pierwsze zdanie testowe.", "speaker_id": "spk-1", "dataset": "sub-a"},
+    {"ref_orig": "Drugie zdanie testowe.", "speaker_id": "spk-2", "dataset": "sub-a"},
+    {"ref_orig": "", "speaker_id": "spk-3", "dataset": "sub-a"},  # empty text: skipped
+    {"ref_orig": "Trzecie, z przecinkiem w tekście.", "dataset": "sub-b"},  # no speaker
+]
+
+
+@pytest.fixture
+def fake_bigos_hub(monkeypatch: pytest.MonkeyPatch):
+    """Install a stub ``datasets`` module streaming BIGOS_HUB_RECORDS.
+
+    Guarantees hub-touching tests never reach the network, even on machines
+    where the real ``datasets`` library is installed.
+    """
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    calls = SimpleNamespace(load_dataset_args=None)
+
+    def load_dataset(name, config, *, split, streaming):
+        calls.load_dataset_args = (name, config, split, streaming)
+        return iter(BIGOS_HUB_RECORDS)
+
+    module = ModuleType("datasets")
+    module.load_dataset = load_dataset
+    monkeypatch.setitem(sys.modules, "datasets", module)
+    return calls
+
 
 def block_imports(monkeypatch: pytest.MonkeyPatch, *blocked: str) -> None:
     """Make ``importlib.import_module`` fail for the given module trees.

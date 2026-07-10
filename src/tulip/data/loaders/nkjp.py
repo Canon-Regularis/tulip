@@ -29,6 +29,12 @@ class NkjpLoader(ManifestBackedLoader):
     """
 
     dataset_name = "nkjp"
+    acquisition: ClassVar[str] = (
+        "manual: download the NKJP-1M balanced subcorpus from "
+        "http://clip.ipipan.waw.pl/NationalCorpusOfPolish (GNU GPL), extract "
+        "paragraph text into data/raw/nkjp/manifest.csv with a `text` column "
+        "(see docs/datasets.md)"
+    )
     columns: ClassVar[ManifestColumns] = ManifestColumns(
         family=None, dialect=None, region=None, village=None, voivodeship=None
     )

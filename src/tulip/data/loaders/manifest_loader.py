@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from pathlib import Path
+from typing import ClassVar
 
 from tulip.core.types import DatasetInfo, Sample
 from tulip.data.loaders._base import ManifestBackedLoader
@@ -35,6 +36,10 @@ class GenericManifestLoader(ManifestBackedLoader):
     """
 
     dataset_name = "manifest"
+    acquisition: ClassVar[str] = (
+        "manual by definition: this generic loader reads whatever corpus you "
+        "assemble yourself into a manifest directory (see docs/datasets.md)"
+    )
 
     def __init__(
         self,

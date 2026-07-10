@@ -114,6 +114,58 @@ def datasets_list(
     _console.print(f"[dim]local root: {root} -- acquisition notes: docs/datasets.md[/dim]")
 
 
+@datasets_app.command("download")
+@_tulip_errors
+def data_download(
+    names: list[str] | None = typer.Argument(
+        None, help="Corpus names (see `tulip data list`); omit with --all for everything."
+    ),
+    all_datasets: bool = typer.Option(False, "--all", help="Acquire every catalogued corpus."),
+    root: Path = typer.Option(Path("data/raw"), help="Local corpora root directory."),
+    force: bool = typer.Option(False, "--force", help="Re-download corpora already present."),
+    limit: int | None = typer.Option(
+        None, "--limit", min=1, help="Sample cap forwarded to downloaders that support it."
+    ),
+) -> None:
+    """Download every corpus that has an automatic source; print exact steps for the rest.
+
+    Most dialect corpora have no licence-clean bulk download, so full
+    automation is impossible — this command does everything that can be done
+    and tells you precisely what remains.
+    """
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.data import DownloadStatus, download_datasets
+
+    if not names and not all_datasets:
+        raise ConfigurationError("name at least one corpus, or pass --all")
+    reports = download_datasets(
+        names if names else None,
+        root,
+        force=force,
+        options={"limit": limit} if limit is not None else None,
+    )
+
+    table = Table(title="corpus acquisition")
+    table.add_column("corpus", style="bold")
+    table.add_column("status", justify="center")
+    table.add_column("where / what next", overflow="fold")
+    status_styles = {
+        DownloadStatus.DOWNLOADED: "[green]downloaded[/green]",
+        DownloadStatus.ALREADY_PRESENT: "[green]present[/green]",
+        DownloadStatus.MANUAL: "[yellow]manual[/yellow]",
+    }
+    for report in reports:
+        table.add_row(report.name, status_styles[report.status], report.detail)
+    _console.print(table)
+
+    manual = [report for report in reports if report.status is DownloadStatus.MANUAL]
+    if manual:
+        _console.print(
+            f"[yellow]{len(manual)} corpus(es) need manual steps above[/yellow] — "
+            "full instructions: docs/datasets.md"
+        )
+
+
 @datasets_app.command("prepare")
 @_tulip_errors
 def data_prepare(

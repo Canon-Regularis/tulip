@@ -49,10 +49,13 @@ in experiment YAML, in `tulip benchmark -m my_model`, and in
 `TEXT_FEATURES` or `AUDIO_FEATURES` (`tulip/features/registries.py`).
 
 **A dataset** — subclass `ManifestBackedLoader`
-(`tulip/data/loaders/_base.py`), set `dataset_name` and `label_defaults`,
-register with `@DATASETS.register(...)`, add a `DatasetInfo` entry to
+(`tulip/data/loaders/_base.py`), set `dataset_name`, `label_defaults`, and an
+`acquisition` string (shown by `tulip data download`), register with
+`@DATASETS.register(...)`, add a `DatasetInfo` entry to
 `tulip/data/catalog.py`, and document the local layout in
-[docs/datasets.md](datasets.md).
+[docs/datasets.md](datasets.md). If the corpus has a licence-clean bulk
+source, set `auto_downloadable = True` and override `download(root,
+**options)` to materialise the documented layout (see `BigosLoader`).
 
 **An explainer** — register in `EXPLAINERS` (`tulip/explain/registry.py`);
 implement `explain(pipeline, raw_input, **kwargs) -> Explanation`.

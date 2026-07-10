@@ -9,6 +9,7 @@ from tulip.data.builder import BUILD_MANIFEST_NAME, DatasetBuilder
 from tulip.data.catalog import catalog, get_dataset_info
 from tulip.data.cleaning import TextCleaner
 from tulip.data.dedup import DedupResult, deduplicate_samples
+from tulip.data.download import DownloadReport, DownloadStatus, download_datasets
 from tulip.data.manifest import ManifestColumns, read_manifest, surrogate_speaker_id
 from tulip.data.reading import read_samples
 from tulip.data.registry import DATASETS
@@ -25,10 +26,13 @@ __all__ = [
     "DatasetBuilder",
     "DatasetSplits",
     "DedupResult",
+    "DownloadReport",
+    "DownloadStatus",
     "ManifestColumns",
     "TextCleaner",
     "catalog",
     "deduplicate_samples",
+    "download_datasets",
     "get_dataset_info",
     "load_splits",
     "read_manifest",

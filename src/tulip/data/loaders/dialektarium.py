@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from tulip.data.loaders._base import ManifestBackedLoader
 from tulip.data.registry import DATASETS
 
@@ -27,6 +29,11 @@ class DialektariumLoader(ManifestBackedLoader):
     """
 
     dataset_name = "dialektarium"
+    acquisition: ClassVar[str] = (
+        "manual: no bulk download exists; export or transcribe material you are "
+        "licensed to use from https://dialektarium.pl/ into "
+        "data/raw/dialektarium/manifest.csv + clips/ (see docs/datasets.md)"
+    )
 
 
 __all__ = ["DialektariumLoader"]

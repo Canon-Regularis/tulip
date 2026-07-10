@@ -26,6 +26,11 @@ class KorpusSpiskiLoader(ManifestBackedLoader):
     """
 
     dataset_name = "korpus_spiski"
+    acquisition: ClassVar[str] = (
+        "manual: obtain the corpus via the publication at "
+        "https://journals.akademicka.pl/lv/article/view/727 and assemble "
+        "data/raw/korpus_spiski/manifest.csv (see docs/datasets.md)"
+    )
     label_defaults: ClassVar[dict[str, str]] = {"dialect": "spisz"}
 
 

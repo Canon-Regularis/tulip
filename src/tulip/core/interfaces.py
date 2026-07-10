@@ -12,7 +12,9 @@ from __future__ import annotations
 import abc
 from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+
+from tulip.core.exceptions import DataError
 
 if TYPE_CHECKING:
     import numpy as np
@@ -68,10 +70,21 @@ class DatasetLoader(abc.ABC):
     """Loads one source corpus into the canonical :class:`Sample` stream.
 
     Loaders read from a local directory (``root``) whose expected layout is
-    documented per dataset in ``docs/datasets.md``; tulip does not scrape
-    remote sources at runtime. Loaders must be lazy (yield samples) so large
-    corpora never need to fit in memory.
+    documented per dataset in ``docs/datasets.md``; tulip never scrapes web
+    pages at runtime. Corpora with a licence-clean, stable bulk source may
+    additionally implement :meth:`download` (set ``auto_downloadable`` and
+    override); everything else documents its manual steps in
+    :attr:`acquisition`, which ``tulip data download`` surfaces to the user.
+    Loaders must be lazy (yield samples) so large corpora never need to fit
+    in memory.
     """
+
+    #: Whether :meth:`download` can fetch this corpus without manual steps.
+    auto_downloadable: ClassVar[bool] = False
+
+    #: Short human instructions for manual acquisition (the long form lives
+    #: in docs/datasets.md). Empty means "see the catalog URL".
+    acquisition: ClassVar[str] = ""
 
     @property
     @abc.abstractmethod
@@ -85,6 +98,26 @@ class DatasetLoader(abc.ABC):
         Raises:
             DataError: if the expected files are missing or malformed.
         """
+
+    def download(self, root: Path, **options: Any) -> None:
+        """Fetch a local copy of the corpus into ``root``.
+
+        Only meaningful when ``auto_downloadable`` is true; the base
+        implementation refuses so callers cannot mistake a manual corpus for
+        an automatable one.
+
+        Args:
+            root: Directory the corpus should be materialised into.
+            **options: Downloader-specific knobs (e.g. ``limit``).
+
+        Raises:
+            DataError: always, for corpora without an automatic source.
+        """
+        del root, options
+        raise DataError(
+            f"{self.info.name} has no automatic download "
+            f"({self.acquisition or f'see {self.info.url} and docs/datasets.md'})"
+        )
 
     def is_available(self, root: Path) -> bool:
         """Whether a local copy of the corpus appears to exist under ``root``."""

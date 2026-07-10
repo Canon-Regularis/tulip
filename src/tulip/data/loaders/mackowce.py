@@ -26,6 +26,12 @@ class MackowceLoader(ManifestBackedLoader):
     """
 
     dataset_name = "mackowce"
+    acquisition: ClassVar[str] = (
+        "manual: no bulk download exists; collect texts from the EKTGM corpus "
+        "(https://przewodnik.tmjp.pl/ektgm-elektroniczny-korpus-tekstow-gwarowych"
+        "-z-mackowiec-na-podolu/) into data/raw/mackowce/manifest.csv "
+        "(see docs/datasets.md)"
+    )
     label_defaults: ClassVar[dict[str, str]] = {
         "dialect": "podolia",
         "village": "Mackowce",

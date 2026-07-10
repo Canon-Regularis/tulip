@@ -52,6 +52,8 @@ Corpora are acquired locally (tulip never scrapes at runtime) - see
 
 ```bash
 tulip data list                              # catalog, tiers, local availability
+tulip data download --all                    # fetch what has an automatic source;
+                                             # prints exact manual steps for the rest
 tulip data prepare configs/text_baseline.yaml  # build speaker-disjoint splits
 tulip train configs/text_baseline.yaml       # train + evaluate + persist
 

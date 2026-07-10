@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 from collections.abc import Iterator, Mapping
 from pathlib import Path
+from typing import ClassVar
 
 from tulip.core.exceptions import DataError
 from tulip.core.interfaces import DatasetLoader
@@ -47,6 +48,13 @@ class CommonVoiceLoader(DatasetLoader):
             exact-match) accent string to a tulip dialect label; matching
             rows get that dialect instead of the standard-Polish default.
     """
+
+    acquisition: ClassVar[str] = (
+        "manual: Mozilla gates the download behind its terms — request the "
+        "Polish dataset at https://commonvoice.mozilla.org/en/datasets and "
+        "extract the release so validated.tsv and clips/ sit directly under "
+        "data/raw/common_voice_pl/ (see docs/datasets.md)"
+    )
 
     def __init__(
         self,

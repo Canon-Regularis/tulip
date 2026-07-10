@@ -48,6 +48,18 @@ class TestDatasets:
         assert "dialektarium" in result.output
         assert "docs/datasets.md" in result.output
 
+    def test_download_reports_auto_and_manual(self, fake_bigos_hub, tmp_path: Path) -> None:
+        result = runner.invoke(app, ["data", "download", "bigos", "dgp", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        assert "downloaded" in result.output
+        assert "manual" in result.output
+        assert (tmp_path / "bigos" / "manifest.csv").is_file()
+
+    def test_download_requires_names_or_all(self) -> None:
+        result = runner.invoke(app, ["data", "download"])
+        assert result.exit_code == 1
+        assert "name at least one corpus" in result.output
+
     def test_prepare_builds_splits(self, mini_config: Path, tmp_path: Path) -> None:
         out = tmp_path / "splits"
         result = runner.invoke(app, ["data", "prepare", str(mini_config), "--output", str(out)])

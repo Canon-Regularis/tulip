@@ -28,6 +28,11 @@ class SpokesLoader(ManifestBackedLoader):
     """
 
     dataset_name = "spokes"
+    acquisition: ClassVar[str] = (
+        "manual: export transcripts from https://spokes.clarin-pl.eu/ (CLARIN-PL "
+        "account) into data/raw/spokes/manifest.csv with text + speaker_id "
+        "columns (see docs/datasets.md)"
+    )
     label_defaults: ClassVar[dict[str, str]] = {"family": "standard"}
 
 

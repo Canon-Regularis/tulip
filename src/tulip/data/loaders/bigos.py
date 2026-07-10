@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import csv
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, ClassVar
 
-from tulip.core.exceptions import DataError
+from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.types import Sample
 from tulip.data.loaders._base import ManifestBackedLoader
 from tulip.data.manifest import surrogate_speaker_id
@@ -53,6 +54,14 @@ class BigosLoader(ManifestBackedLoader):
 
     dataset_name: ClassVar[str] = "bigos"
 
+    auto_downloadable: ClassVar[bool] = True
+
+    acquisition: ClassVar[str] = (
+        "automatic: `tulip data download bigos` streams the transcriptions from "
+        "the Hugging Face Hub into data/raw/bigos/manifest.csv (text-only; "
+        "requires the `hf` extra)"
+    )
+
     def __init__(
         self,
         manifest: str | None = None,
@@ -81,9 +90,57 @@ class BigosLoader(ManifestBackedLoader):
         if not self._from_hub:
             yield from super().load(root)
             return
-        yield from self._load_from_hub()
+        yield from self._load_from_hub(limit=self._limit)
 
-    def _load_from_hub(self) -> Iterator[Sample]:
+    def download(self, root: Path, **options: Any) -> None:
+        """Materialise the Hub transcriptions as a local ``manifest.csv``.
+
+        After this, the default (manifest) mode works fully offline. Audio is
+        deliberately not fetched: BIGOS audio is tens of GB and tier-4
+        pretraining material; audio experiments should download clips
+        selectively (see docs/datasets.md).
+
+        Args:
+            root: Corpus directory (``data/raw/bigos``).
+            **options: ``limit`` overrides the constructor's sample cap.
+
+        Raises:
+            ConfigurationError: on unknown options.
+            DataError: if the Hub yields no samples.
+            MissingDependencyError: without the ``hf`` extra installed.
+        """
+        limit = options.pop("limit", self._limit)
+        if options:
+            raise ConfigurationError(
+                f"bigos download got unknown option(s): {', '.join(sorted(options))}"
+            )
+        root.mkdir(parents=True, exist_ok=True)
+        manifest_path = root / "manifest.csv"
+        count = 0
+        with manifest_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["id", "text", "speaker_id", "subset"])
+            for sample in self._load_from_hub(limit=limit):
+                writer.writerow(
+                    [
+                        sample.id,
+                        sample.text,
+                        sample.speaker_id,
+                        str(sample.metadata.get("dataset", "")),
+                    ]
+                )
+                count += 1
+                if count % 5000 == 0:
+                    _logger.info("bigos download: %d samples written", count)
+        if count == 0:
+            manifest_path.unlink(missing_ok=True)
+            raise DataError(
+                "bigos download produced no samples; check the Hub dataset "
+                f"({self._hf_dataset!r}, config={self._hf_config!r}, split={self._split!r})"
+            )
+        _logger.info("bigos download complete: %d samples -> %s", count, manifest_path)
+
+    def _load_from_hub(self, limit: int | None = None) -> Iterator[Sample]:
         """Stream text-only samples from the Hub (lazy ``datasets`` import)."""
         datasets = optional_import(
             "datasets", extra="hf", purpose="loading BIGOS from the Hugging Face Hub"
@@ -105,7 +162,7 @@ class BigosLoader(ManifestBackedLoader):
 
         count = 0
         for index, record in enumerate(stream):
-            if self._limit is not None and count >= self._limit:
+            if limit is not None and count >= limit:
                 break
             sample = self._record_to_sample(record, index)
             if sample is None:

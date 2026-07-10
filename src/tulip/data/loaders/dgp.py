@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from tulip.data.loaders._base import ManifestBackedLoader
 from tulip.data.registry import DATASETS
 
@@ -26,6 +28,11 @@ class DgpLoader(ManifestBackedLoader):
     """
 
     dataset_name = "dgp"
+    acquisition: ClassVar[str] = (
+        "manual: no bulk download exists; collect sample texts you are licensed "
+        "to use from https://przewodnik.tmjp.pl/dgp-dialekty-i-gwary-polskie-"
+        "kompendium-internetowe/ into data/raw/dgp/manifest.csv (see docs/datasets.md)"
+    )
 
 
 __all__ = ["DgpLoader"]

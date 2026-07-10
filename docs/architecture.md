@@ -103,6 +103,10 @@ docs, and tests refer to them.
 - `reading.py`: `read_samples(path)` — labelled samples back from anything
   tulip writes or documents (split JSONL, manifest file, manifest directory);
   shared by `tulip evaluate` and library callers.
+- `download.py`: `download_datasets(names, root)` — fetches corpora whose
+  loader is `auto_downloadable` (loaders override `DatasetLoader.download`)
+  and returns `MANUAL` reports carrying each remaining corpus's
+  `acquisition` steps; surfaced as `tulip data download`.
 - Loaders subclass `tulip.core.interfaces.DatasetLoader` (`info` property,
   `load(root) -> Iterator[Sample]`). Loaders are generous in what they accept
   (CSV/TSV/JSONL manifests) and strict in what they emit (validated `Sample`s
@@ -124,8 +128,9 @@ docs, and tests refer to them.
 
 ### tulip.features.text
 
-Extractors are sklearn transformers (subclass `BaseEstimator, TransformerMixin`
+Extractors are sklearn transformers (subclass `TransformerMixin, BaseEstimator`
 where sensible) operating on sequences of strings:
+
 - `char_tfidf` / `word_tfidf`: thin, well-defaulted wrappers over
   `TfidfVectorizer` (char_wb 2-5 grams; word 1-2 grams).
 - `stylometry`: dense features — sentence length stats, word length stats,

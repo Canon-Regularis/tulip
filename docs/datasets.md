@@ -1,11 +1,19 @@
 # Datasets: acquisition and local layout
 
-tulip never scrapes remote sources at runtime. Every corpus is acquired
-locally (respecting its licence) and read from a documented directory under
-`data/raw/<name>/`. Most corpora have no bulk download, so the standard
-workflow is: obtain the material, assemble a **manifest** (one row per
-sample), and let the loaders do the rest. `tulip data list` shows what tulip
-can find locally.
+tulip never scrapes web pages at runtime. Every corpus is acquired locally
+(respecting its licence) and read from a documented directory under
+`data/raw/<name>/`. Start with:
+
+```bash
+tulip data download --all
+```
+
+which fetches every corpus that has a licence-clean automatic source (today:
+**BIGOS**, streamed from the Hugging Face Hub into a local manifest) and
+prints the exact manual steps for the rest — most dialect corpora have no
+bulk download, so the standard workflow remains: obtain the material,
+assemble a **manifest** (one row per sample), and let the loaders do the
+rest. `tulip data list` shows what tulip can find locally.
 
 ## The manifest format
 
