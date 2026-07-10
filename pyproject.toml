@@ -41,7 +41,7 @@ dependencies = [
     "pydantic>=2.5",
     "typer>=0.12",
     "rich>=13.0",
-    "PyYAML>=6.0",
+    "PyYAML>=6.0.3",
     "joblib>=1.3",
 ]
 
