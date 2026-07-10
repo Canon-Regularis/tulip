@@ -81,7 +81,10 @@ docs, and tests refer to them.
   `synthetic` (generated in-process; needs no acquisition, so the toolkit runs
   end-to-end on a fresh clone — see `docs/datasets.md`).
 - `tulip.features.TEXT_FEATURES`:
-  `char_tfidf`, `word_tfidf`, `stylometry`, `affix_frequency`, `dialect_keywords`.
+  `char_tfidf`, `word_tfidf`, `stylometry`, `affix_frequency`, `dialect_keywords`,
+  `phonological_markers` (sub-lexical isoglosses the whole-word lexicon cannot
+  encode: soft-labial clusters, and the sibilant-digraph rate that makes
+  mazurzenie legible as a conspicuous *absence*).
 - `tulip.features.AUDIO_FEATURES`:
   `mfcc`, `mel_spectrogram`, `pitch`, `formants`, `energy`, `zero_crossing_rate`,
   `spectral_centroid`, `chroma`, `wav2vec2_embeddings`.
@@ -247,6 +250,46 @@ for machine output. `data validate` exits non-zero on errors so it can gate CI.
   confident pseudo-labels, so label-less corpora (e.g. `bigos`) contribute.
   Knobs live in a module-owned `SelfTrainConfig` — `ExperimentConfig` is frozen
   and forbids extra fields.
+
+### tulip.pipeline (classifier composition)
+
+`protocols.py` defines `SamplePredictor` — one method, `predict_samples(samples)
+-> list[Prediction]`. It exists because the classifiers below **must not**
+subclass `DialectClassifier`: `predict_batch` guarantees every `Prediction` has
+`level == self.target` over a single modality, and each of these violates one of
+those postconditions. Relating them by protocol rather than inheritance is the
+Liskov substitution principle being *obeyed*, not sidestepped. `DialectClassifier`
+satisfies the protocol via a `predict_samples` adapter.
+
+- `hierarchical.py`: `HierarchicalDialectClassifier` composes one
+  `DialectClassifier` per `LabelLevel` (coarse → fine) and returns the finest
+  prediction a `BackoffPolicy` accepts, so `Prediction.level` varies per sample.
+  With `mask_to_coarse`, a dialect row is projected onto the predicted family by
+  the chain rule — rescaled to `P(family) · P(dialect | family)`, *not*
+  renormalised to 1 — so a child can never out-confidence its parent, and a
+  family with no dialects (`standard`) forces a backoff instead of a guess.
+  Policies (`ConfidenceThreshold`, `MarginThreshold`, `NotAbstained`,
+  `AlwaysAccept`, `AllOf`/`AnyOf`) are frozen value objects behind a one-method
+  protocol.
+- `calibrated.py`: `CalibratedClassifier` wraps any classifier with a
+  `ProbabilityCalibrator` fitted on a **held-out** split, and applies
+  `abstain_threshold` to the *calibrated* top probability — an uncalibrated
+  cutoff does not mean what it looks like.
+- `fusion.py`: `MultimodalClassifier` fuses a text and an audio classifier via a
+  `FusionStrategy` (weighted average, maximum, logarithmic pooling), aligning
+  their classes to the sorted union and degrading to whichever modality a sample
+  actually carries. `TaskType` is frozen, so this is composition rather than a
+  `MULTIMODAL` enum member.
+
+### tulip.evaluation (calibration)
+
+- `calibration.py`: `compute_calibration` returns a `CalibrationReport` with
+  top-label ECE, MCE, and the multiclass Brier score (range `[0, 2]`).
+  `EvaluationReport.calibration` is opt-in via `compute_metrics(...,
+  calibration_bins=N)` so existing artifacts stay byte-identical.
+- `tulip.models.calibration`: `TemperatureScaling` (on `log p` as surrogate
+  logits — softmax is invariant to the additive constant), `IsotonicCalibrator`,
+  and `IdentityCalibrator` as a Null Object.
 
 ### tulip.serve (FastAPI)
 
