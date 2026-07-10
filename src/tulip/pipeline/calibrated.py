@@ -30,15 +30,16 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.core.types import ClassProbability, Prediction, TaskType
+from tulip.core.types import TaskType
 from tulip.models.calibration import IdentityCalibrator
+from tulip.pipeline._assembly import predictions_from_proba
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Any, Self
 
-    from tulip.core.types import Sample
+    from tulip.core.types import Prediction, Sample
     from tulip.labels.taxonomy import LabelLevel
     from tulip.models.calibration import ProbabilityCalibrator
     from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
@@ -46,37 +47,6 @@ if TYPE_CHECKING:
 __all__ = ["CalibratedClassifier"]
 
 _logger = get_logger(__name__)
-
-
-def _predictions_from_proba(
-    proba: np.ndarray,
-    classes: tuple[str, ...],
-    level: LabelLevel,
-    abstain_threshold: float | None,
-) -> list[Prediction]:
-    """Assemble :class:`Prediction` records from a probability matrix.
-
-    Mirrors :meth:`DialectClassifier.predict_batch`'s assembly so a calibrated
-    classifier emits identically shaped predictions. Kept local because
-    ``classifier.py`` is owned elsewhere and cannot export this helper.
-    """
-    predictions: list[Prediction] = []
-    for row in proba:
-        ranked = tuple(
-            ClassProbability(label=label, probability=float(p))
-            for label, p in zip(classes, row, strict=True)
-        )
-        top = float(np.max(row))
-        abstained = abstain_threshold is not None and top < abstain_threshold
-        predictions.append(
-            Prediction(
-                label=None if abstained else classes[int(np.argmax(row))],
-                level=level,
-                probabilities=ranked,
-                abstained=abstained,
-            )
-        )
-    return predictions
 
 
 class CalibratedClassifier:
@@ -182,11 +152,11 @@ class CalibratedClassifier:
         This is the deliverable: :attr:`abstain_threshold` is compared against a
         calibrated probability, so the cutoff finally means what it says.
         """
-        return _predictions_from_proba(
+        return predictions_from_proba(
             self.predict_proba(raws),
             self.base.classes_,
             self.base.target,
-            self.abstain_threshold,
+            abstain_threshold=self.abstain_threshold,
         )
 
     def predict_samples(self, samples: Sequence[Sample]) -> list[Prediction]:

@@ -26,14 +26,17 @@ depend on this abstraction instead of on any concrete classifier.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from tulip.core.types import Prediction, Sample
+    import numpy as np
 
-__all__ = ["SamplePredictor"]
+    from tulip.core.types import Prediction, Sample, TaskType
+    from tulip.labels.taxonomy import LabelLevel
+
+__all__ = ["ProbabilisticClassifier", "SamplePredictor"]
 
 
 @runtime_checkable
@@ -51,4 +54,29 @@ class SamplePredictor(Protocol):
         Raises:
             DataError: if a sample lacks the input(s) the implementation needs.
         """
+        ...
+
+
+@runtime_checkable
+class ProbabilisticClassifier(Protocol):
+    """The slice of a classifier that composition needs: aligned probabilities.
+
+    A deliberately narrow structural type (DIP/ISP): a consumer such as
+    :class:`~tulip.pipeline.fusion.MultimodalClassifier` needs a class
+    vocabulary, a shared label level, a modality tag, and a probability matrix,
+    and nothing else. :class:`~tulip.pipeline.classifier.DialectClassifier`
+    satisfies it structurally, so no import of the concrete class is required to
+    depend on this behaviour -- which is what lets a test inject a cheap
+    deterministic probability stub instead of training a real model.
+
+    It lives here, beside :class:`SamplePredictor`, rather than in any one
+    consumer, because it is a general pipeline abstraction, not fusion's alone.
+    """
+
+    classes_: tuple[str, ...]
+    target: LabelLevel
+    task: TaskType
+
+    def predict_proba(self, raws: Sequence[Any]) -> np.ndarray:
+        """Return the probability matrix for ``raws``, columns aligned to ``classes_``."""
         ...
