@@ -192,6 +192,30 @@ class DialectClassifier:
         """Classify one raw input (text or audio path)."""
         return self.predict_batch([raw])[0]
 
+    def predict_samples(self, samples: Sequence[Sample]) -> list[Prediction]:
+        """Classify samples, reading whichever modality this classifier was built for.
+
+        The adapter that satisfies
+        :class:`~tulip.pipeline.protocols.SamplePredictor`, so a plain
+        classifier, a hierarchical one, and a multimodal one are
+        interchangeable to their consumers.
+
+        Unlike :meth:`labelled_batch`, a missing modality is an error rather
+        than a skip: prediction has no labels to fall back on, and silently
+        dropping rows would misalign the caller's own bookkeeping.
+
+        Raises:
+            DataError: if any sample lacks this classifier's input modality.
+        """
+        raws = [self._raw_of(sample) for sample in samples]
+        missing = [sample.id for sample, raw in zip(samples, raws, strict=True) if raw is None]
+        if missing:
+            raise DataError(
+                f"{len(missing)} sample(s) carry no {self.task.value} input and cannot be "
+                f"classified (first: {missing[0]!r})"
+            )
+        return self.predict_batch(raws)
+
     def predict_batch(self, raws: Sequence[Any]) -> list[Prediction]:
         """Classify a batch of raw inputs, one :class:`Prediction` each.
 
