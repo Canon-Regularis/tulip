@@ -10,6 +10,7 @@ from tulip.data.loaders.mackowce import MackowceLoader
 from tulip.data.loaders.manifest_loader import GenericManifestLoader
 from tulip.data.loaders.nkjp import NkjpLoader
 from tulip.data.loaders.spokes import SpokesLoader
+from tulip.data.loaders.synthetic import SyntheticLoader
 
 __all__ = [
     "BigosLoader",
@@ -22,4 +23,5 @@ __all__ = [
     "ManifestBackedLoader",
     "NkjpLoader",
     "SpokesLoader",
+    "SyntheticLoader",
 ]

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
 from tulip.core.exceptions import ConfigurationError, DataError, UnknownComponentError
 from tulip.data import DATASETS, DownloadStatus, catalog, download_datasets
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestBigosDownload:
@@ -185,6 +188,33 @@ class TestCommonVoiceDownload:
             DATASETS.create("common_voice_pl").download(tmp_path / "cv", audio=True)
 
 
+class TestFetchFileSchemeGuard:
+    """`fetch_file` opens only allow-listed URL schemes."""
+
+    @pytest.mark.parametrize("url", ["ftp://example.invalid/x.tsv", "gopher://x/1", "x.tsv"])
+    def test_disallowed_schemes_are_refused(self, url: str, tmp_path: Path) -> None:
+        from tulip.data.download import fetch_file
+
+        with pytest.raises(DataError, match="is not allowed"):
+            fetch_file(url, tmp_path / "out.tsv", description="fixture")
+
+    def test_rejection_happens_before_any_file_is_created(self, tmp_path: Path) -> None:
+        from tulip.data.download import fetch_file
+
+        destination = tmp_path / "nested" / "out.tsv"
+        with pytest.raises(DataError, match="is not allowed"):
+            fetch_file("ftp://example.invalid/x", destination, description="fixture")
+        assert not destination.parent.exists()
+
+    def test_file_urls_remain_supported_for_mirrors_and_fixtures(self, tmp_path: Path) -> None:
+        from tulip.data.download import fetch_file
+
+        source = tmp_path / "src.tsv"
+        source.write_text("hello\n", encoding="utf-8")
+        destination = fetch_file(source.as_uri(), tmp_path / "dst.tsv", description="fixture")
+        assert destination.read_text(encoding="utf-8") == "hello\n"
+
+
 class TestLoaderContract:
     def test_manual_loaders_refuse_download_with_guidance(self, tmp_path: Path) -> None:
         loader = DATASETS.create("dialektarium")
@@ -241,10 +271,15 @@ class TestDownloadDatasets:
         assert [report.name for report in reports] == [info.name for info in catalog()]
         statuses = {report.name: report.status for report in reports}
         automatic = {"bigos", "common_voice_pl", "nkjp"}
+        # `synthetic` is a third kind of corpus: it needs no acquisition at all,
+        # because it is generated in-process. It is always already present.
+        generated = {"synthetic"}
         for name in automatic:
             assert statuses[name] is DownloadStatus.DOWNLOADED, name
+        for name in generated:
+            assert statuses[name] is DownloadStatus.ALREADY_PRESENT, name
         for name, status in statuses.items():
-            if name not in automatic:
+            if name not in automatic | generated:
                 assert status is DownloadStatus.MANUAL, name
 
     def test_unknown_corpus_raises_with_suggestions(self, tmp_path: Path) -> None:

@@ -139,6 +139,37 @@ _CATALOG: dict[str, DatasetInfo] = {
             label_levels=(),
             license="varies per source subset; see the dataset card",
         ),
+        # Tier 4 because the frozen DatasetInfo bound is 1..4, so a dedicated
+        # "generated" tier cannot be expressed. Keep that friction here, in a
+        # comment: `description` is rendered verbatim into user-facing dataset
+        # cards and must describe the corpus, not our type constraints.
+        DatasetInfo(
+            name="synthetic",
+            description=(
+                "Synthetic reference corpus: procedurally generated Polish dialect "
+                "text with injected lexical markers and phonological transforms "
+                "(mazurzenie, asynchronous soft-labials). Generated in-process, so "
+                "the toolkit runs end-to-end with zero data acquisition. It is a "
+                "reproducible benchmark fixture, NOT real speech: scores on it say "
+                "nothing about real-world dialect identification accuracy."
+            ),
+            url="generated in-process; see tulip.data.synthetic and docs/datasets.md",
+            tier=4,
+            tasks=(_TEXT,),
+            contents=(
+                "generated dialect text",
+                "injected lexical markers",
+                "phonological transforms",
+                "region/voivodeship metadata",
+            ),
+            label_levels=(
+                LabelLevel.FAMILY,
+                LabelLevel.DIALECT,
+                LabelLevel.REGION,
+                LabelLevel.VOIVODESHIP,
+            ),
+            license="generated data; no source-corpus restrictions (public domain)",
+        ),
     )
 }
 

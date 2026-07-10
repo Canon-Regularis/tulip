@@ -1,0 +1,55 @@
+# Dialect-level baseline on the generated synthetic reference corpus.
+#
+# This config needs NO data acquisition: the `synthetic` loader generates the
+# corpus in-process (see tulip.data.synthetic), so `tulip train
+# configs/synthetic_text.yaml` runs end to end on a clean checkout. It exists so
+# the benchmark machinery, the splits, and the metrics are exercisable and
+# reproducible without any licensed corpus.
+#
+# `include_standard` is false here: the standard (non-dialectal) class carries no
+# `dialect` label, so at this target level DatasetBuilder would drop it anyway.
+# The standard negative class is exercised by configs/synthetic_family.yaml.
+name: synthetic-text
+seed: 42
+task: text
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: synthetic
+      params:
+        n_speakers_per_dialect: 10
+        samples_per_speaker: 10
+        include_standard: false
+        noise_level: 0.10
+        # Pinned, not defaulted: dropout sets the task's irreducible error floor,
+        # so a drifting default would silently move every benchmark number.
+        marker_dropout: 0.20
+        seed: 7
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features:
+  - name: char_tfidf
+    params:
+      ngram_range: [2, 5]
+  - name: word_tfidf
+  - name: dialect_keywords
+
+model:
+  name: logistic_regression
+  params:
+    C: 1.0
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  group_by: speaker_id
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts
+abstain_threshold: null

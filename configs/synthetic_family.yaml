@@ -1,0 +1,51 @@
+# Family-level baseline on the generated synthetic reference corpus.
+#
+# Coarser than configs/synthetic_text.yaml: it trains at the `family` level, so
+# it exercises (a) the label hierarchy -- families are auto-derived from the
+# regional dialect by DialectLabels -- and (b) the `standard` negative class,
+# which exists only at family level and answers "is this dialectal at all?".
+#
+# Like the dialect-level config, this needs no data acquisition.
+name: synthetic-family
+seed: 42
+task: text
+target: family
+
+data:
+  root: data/raw
+  datasets:
+    - name: synthetic
+      params:
+        n_speakers_per_dialect: 10
+        samples_per_speaker: 10
+        include_standard: true
+        noise_level: 0.10
+        # Pinned, not defaulted: dropout sets the task's irreducible error floor,
+        # so a drifting default would silently move every benchmark number.
+        marker_dropout: 0.20
+        seed: 7
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features:
+  - name: char_tfidf
+    params:
+      ngram_range: [2, 5]
+  - name: stylometry
+
+model:
+  name: logistic_regression
+  params:
+    C: 1.0
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  group_by: speaker_id
+  stratify_by: family
+  seed: 42
+
+output_dir: artifacts
+abstain_threshold: null

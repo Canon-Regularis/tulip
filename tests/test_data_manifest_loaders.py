@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from tulip.core.exceptions import DataError, UnknownComponentError
 from tulip.data import DATASETS, ManifestColumns, catalog, get_dataset_info, read_manifest
 from tulip.data.loaders.common_voice import CommonVoiceLoader
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 EXPECTED_REGISTRY_NAMES = [
     "bigos",
@@ -20,6 +23,7 @@ EXPECTED_REGISTRY_NAMES = [
     "manifest",
     "nkjp",
     "spokes",
+    "synthetic",
 ]
 
 
@@ -29,7 +33,7 @@ class TestCatalogAndRegistry:
 
     def test_catalog_is_tier_sorted_and_complete(self) -> None:
         infos = catalog()
-        assert len(infos) == 8  # the generic manifest loader is not a corpus
+        assert len(infos) == 9  # the generic manifest loader is not a corpus
         assert [info.tier for info in infos] == sorted(info.tier for info in infos)
         assert {info.name for info in infos} == set(EXPECTED_REGISTRY_NAMES) - {"manifest"}
         assert all(info.url for info in infos)
