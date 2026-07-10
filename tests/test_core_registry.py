@@ -73,7 +73,30 @@ class TestMetadata:
     def test_neural_models_declare_training_awareness(self) -> None:
         from tulip.models import MODELS
 
-        assert MODELS.metadata("herbert") == {"training_aware": True}
-        assert MODELS.metadata("wav2vec2") == {"training_aware": True}
+        assert MODELS.metadata("herbert") == {"training_aware": True, "raw_input": True}
+        assert MODELS.metadata("wav2vec2") == {"training_aware": True, "raw_input": True}
         assert MODELS.metadata("logistic_regression") == {}
-        assert MODELS.metadata("ecapa_tdnn") == {}  # frozen encoder + sklearn head
+        # Frozen encoder + sklearn head: not training_aware, but still raw-input.
+        assert MODELS.metadata("ecapa_tdnn") == {"raw_input": True}
+
+    def test_raw_input_capability_partitions_the_model_zoo(self) -> None:
+        """Consumers query this flag instead of hardcoding which models take features.
+
+        `DialectClassifier.fit` uses it to reject an empty feature list for a
+        classical estimator, rather than letting sklearn fail unintelligibly.
+        """
+        from tulip.models import MODELS
+
+        raw = {name for name in MODELS.names() if MODELS.metadata(name).get("raw_input")}
+        assert raw == {
+            "ecapa_tdnn",
+            "fasttext",
+            "herbert",
+            "hubert",
+            "mbert",
+            "polish_roberta",
+            "wav2vec2",
+            "whisper",
+            "xlm_roberta",
+            "xvector",
+        }

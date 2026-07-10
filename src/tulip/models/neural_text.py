@@ -257,7 +257,9 @@ def _register_factories() -> None:
             # training_aware: the constructor accepts the shared TrainingConfig
             # knobs (batch_size/epochs/learning_rate), so the experiment runner
             # may merge them into the model params.
-            metadata={"training_aware": True},
+            # raw_input: tokenises raw texts itself, so it needs no feature
+            # extractors -- DialectClassifier checks this before fitting.
+            metadata={"training_aware": True, "raw_input": True},
         )
 
 

@@ -19,10 +19,11 @@ from sklearn.pipeline import Pipeline
 
 from tulip.config.schemas import ComponentConfig
 from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.core.types import ClassProbability, Explanation, Prediction, Sample, TaskType
+from tulip.core.types import Explanation, Prediction, Sample, TaskType
 from tulip.labels.taxonomy import LabelLevel
 from tulip.models import MODELS
 from tulip.models.persistence import load_model, save_model
+from tulip.pipeline._assembly import predictions_from_proba
 from tulip.pipeline.explaining import PredictionExplainer
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
@@ -139,6 +140,7 @@ class DialectClassifier:
             )
         set_global_seed(self.seed)
         estimator = MODELS.create(self.model_config.name, **self.model_config.params)
+        self._require_raw_capable_model()
         if self.feature_configs:
             self.pipeline_ = Pipeline([("features", self._build_features()), ("model", estimator)])
         else:
@@ -148,6 +150,32 @@ class DialectClassifier:
         self._train_samples = [sample for sample in samples if self._raw_of(sample) is not None]
         self._prediction_explainer = None  # explainer state is rebuilt lazily on demand
         return self
+
+    def _require_raw_capable_model(self) -> None:
+        """Reject an empty feature list unless the model consumes raw input itself.
+
+        Without this, a classical estimator is handed raw strings (or audio
+        paths) and dies deep inside scikit-learn with ``could not convert string
+        to float``, which tells the user nothing. Raw-capable models declare
+        themselves with ``metadata={"raw_input": True}`` at registration, which
+        is the capability mechanism docs/architecture.md prescribes -- consumers
+        query the registry rather than hardcoding a list of model names.
+
+        Raises:
+            ConfigurationError: if ``features`` is empty and the model needs them.
+        """
+        if self.feature_configs:
+            return
+        if MODELS.metadata(self.model_config.name).get("raw_input", False):
+            return
+        raw_capable = sorted(
+            name for name in MODELS.names() if MODELS.metadata(name).get("raw_input", False)
+        )
+        raise ConfigurationError(
+            f"model {self.model_config.name!r} cannot consume raw {self.task.value} input, "
+            f"so at least one feature extractor is required. Either pass features "
+            f"(e.g. char_tfidf), or choose a raw-input model: {', '.join(raw_capable)}"
+        )
 
     def _build_features(self) -> Any:
         """Build the feature union for the configured task's registry."""
@@ -219,30 +247,15 @@ class DialectClassifier:
     def predict_batch(self, raws: Sequence[Any]) -> list[Prediction]:
         """Classify a batch of raw inputs, one :class:`Prediction` each.
 
-        Building rich, validated :class:`Prediction` objects costs ~40% of
-        batch wall time on top of ``predict_proba`` (measured; pydantic's
-        ``model_construct`` fast path bought nothing, so the validated
-        constructor stays). Bulk consumers that only need the probability
-        matrix — evaluation does — should call :meth:`predict_proba`.
+        Assembly is shared with the calibrated and multimodal classifiers via
+        :func:`~tulip.pipeline._assembly.predictions_from_proba` (see there for
+        the ~40% Prediction-construction cost note); bulk consumers that only
+        need the probability matrix should call :meth:`predict_proba` directly.
         """
         probabilities = self.predict_proba(raws)
-        predictions: list[Prediction] = []
-        for row in probabilities:
-            ranked = tuple(
-                ClassProbability(label=label, probability=float(p))
-                for label, p in zip(self.classes_, row, strict=True)
-            )
-            top = float(np.max(row))
-            abstained = self.abstain_threshold is not None and top < self.abstain_threshold
-            predictions.append(
-                Prediction(
-                    label=None if abstained else self.classes_[int(np.argmax(row))],
-                    level=self.target,
-                    probabilities=ranked,
-                    abstained=abstained,
-                )
-            )
-        return predictions
+        return predictions_from_proba(
+            probabilities, self.classes_, self.target, abstain_threshold=self.abstain_threshold
+        )
 
     def predict_proba(self, raws: Sequence[Any]) -> np.ndarray:
         """Return the probability matrix for a batch, columns aligned with ``classes_``.

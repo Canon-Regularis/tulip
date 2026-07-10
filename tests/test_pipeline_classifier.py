@@ -16,6 +16,43 @@ from tulip.pipeline import DialectClassifier
 PODHALE_QUERY = "Hej, baca się pyto, kaj się owce pasą na holi."
 
 
+class TestRawInputCapability:
+    """An empty feature list is only legal for a model that consumes raw input.
+
+    Otherwise a classical estimator receives raw strings and dies inside
+    scikit-learn with `could not convert string to float`, which tells the user
+    nothing about what they did wrong.
+    """
+
+    def test_a_classical_model_without_features_fails_with_guidance(self) -> None:
+        classifier = DialectClassifier(model="logistic_regression", features=())
+        with pytest.raises(ConfigurationError) as excinfo:
+            classifier.fit(make_samples())
+        message = str(excinfo.value)
+        assert "cannot consume raw text input" in message
+        assert "char_tfidf" in message  # tells them what to pass
+        assert "herbert" in message  # ...and which models need nothing
+
+    def test_the_error_arrives_before_scikit_learn_sees_the_strings(self) -> None:
+        """Guard against the regression: sklearn's ValueError must never surface."""
+        with pytest.raises(ConfigurationError):
+            DialectClassifier(model="naive_bayes", features=()).fit(make_samples())
+
+    def test_features_make_a_classical_model_legal_again(self) -> None:
+        fitted = DialectClassifier(model="logistic_regression", features=["char_tfidf"]).fit(
+            make_samples()
+        )
+        assert fitted.classes_
+
+    def test_raw_capable_models_declare_the_capability_in_the_registry(self) -> None:
+        """Capability lives in registration metadata, not a hardcoded name list."""
+        from tulip.models import MODELS
+
+        raw_capable = {n for n in MODELS.names() if MODELS.metadata(n).get("raw_input")}
+        assert {"herbert", "fasttext", "wav2vec2", "xvector"} <= raw_capable
+        assert raw_capable.isdisjoint({"logistic_regression", "naive_bayes", "random_forest"})
+
+
 @pytest.fixture(scope="module")
 def fitted() -> DialectClassifier:
     classifier = DialectClassifier(
