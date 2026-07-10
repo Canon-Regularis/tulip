@@ -12,8 +12,8 @@ and comparable numbers require byte-identical splits.
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
@@ -21,9 +21,7 @@ from pydantic import BaseModel, ConfigDict
 from tulip.config.loader import save_experiment_config
 from tulip.config.schemas import ComponentConfig, ExperimentConfig
 from tulip.core.exceptions import DataError
-from tulip.core.types import Sample
 from tulip.data.builder import DatasetBuilder
-from tulip.data.splitting import DatasetSplits
 from tulip.evaluation.benchmark import BenchmarkResult, save_benchmark, to_markdown_table
 from tulip.evaluation.metrics import compute_metrics
 from tulip.evaluation.report import EvaluationReport
@@ -31,6 +29,12 @@ from tulip.pipeline.classifier import DialectClassifier
 from tulip.utils.io import write_json
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from tulip.core.types import Sample
+    from tulip.data.splitting import DatasetSplits
 
 _logger = get_logger(__name__)
 

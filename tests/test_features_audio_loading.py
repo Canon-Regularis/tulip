@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import wave
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.features.audio.loading import clear_audio_cache, load_audio, resample
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_wav(path: Path, *, seconds: float, framerate: int, channels: int = 1) -> Path:

@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
-from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from tulip.core.types import DatasetInfo, Sample
 from tulip.data.loaders._base import ManifestBackedLoader
 from tulip.data.manifest import ManifestColumns, read_manifest
 from tulip.data.registry import DATASETS
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Mapping
+    from pathlib import Path
 
 
 @DATASETS.register("manifest")

@@ -17,8 +17,7 @@ Design choices worth knowing:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.metrics import (
@@ -31,6 +30,9 @@ from sklearn.metrics import (
 from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation.report import ClassMetrics, EvaluationReport
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = get_logger(__name__)
 

@@ -18,14 +18,16 @@ from __future__ import annotations
 
 import json
 import platform
-from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import joblib
 
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 logger = get_logger(__name__)
 

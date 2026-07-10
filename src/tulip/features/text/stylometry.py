@@ -15,14 +15,16 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from tulip.features.registries import TEXT_FEATURES
 from tulip.features.text._tokenize import word_tokens
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 __all__ = ["StylometryExtractor"]
 

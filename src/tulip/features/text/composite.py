@@ -8,14 +8,17 @@ any mix of TF-IDF, stylometric, affix, and keyword features as one matrix.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sklearn.pipeline import FeatureUnion
-
-from tulip.config.schemas import ComponentConfig
 from tulip.features._composite import build_feature_union
 from tulip.features.registries import TEXT_FEATURES
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from sklearn.pipeline import FeatureUnion
+
+    from tulip.config.schemas import ComponentConfig
 
 __all__ = ["build_text_features"]
 

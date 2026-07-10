@@ -9,9 +9,7 @@ requires them.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -21,6 +19,10 @@ from tulip.features.audio.loading import DEFAULT_SAMPLE_RATE, load_audio
 from tulip.features.registries import AUDIO_FEATURES
 from tulip.utils import optional
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from pathlib import Path
 
 logger = get_logger(__name__)
 

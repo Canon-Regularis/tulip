@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from tulip.core.exceptions import ConfigurationError
-from tulip.core.types import Sample
 from tulip.explain import get_explainer
 from tulip.explain.neighbors import NearestExamplesExplainer
+
+if TYPE_CHECKING:
+    from tulip.core.types import Sample
 
 
 @pytest.fixture

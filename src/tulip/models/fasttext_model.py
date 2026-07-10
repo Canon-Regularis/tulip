@@ -19,9 +19,8 @@ via :func:`tulip.utils.optional.optional_import`.
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, unquote
 
 import numpy as np
@@ -37,6 +36,9 @@ from tulip.models._common import (
 from tulip.models.registry import MODELS
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = get_logger(__name__)
 

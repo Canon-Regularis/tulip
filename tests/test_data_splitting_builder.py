@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,6 +14,9 @@ from tulip.core.types import DialectLabels, Sample
 from tulip.data import DatasetBuilder, load_splits, speaker_disjoint_split
 from tulip.data.builder import BUILD_MANIFEST_NAME
 from tulip.labels.taxonomy import LabelLevel
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _speakers(samples: list[Sample]) -> set[str]:

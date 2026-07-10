@@ -26,11 +26,14 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable, Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from tulip.core.types import Sample
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
+    from tulip.core.types import Sample
 
 _logger = get_logger(__name__)
 

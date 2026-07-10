@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import importlib
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
 from tulip.config.schemas import ComponentConfig, DataConfig, ExperimentConfig, SplitConfig
 from tulip.core.types import DialectLabels, Sample
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 #: Records shaped like the BIGOS Hub schema (see loaders/bigos.py field probes).
 BIGOS_HUB_RECORDS: list[dict[str, str]] = [

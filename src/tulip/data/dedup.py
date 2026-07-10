@@ -32,14 +32,18 @@ import hashlib
 import re
 import unicodedata
 import zlib
-from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from tulip.core.exceptions import ConfigurationError
-from tulip.core.types import Sample
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from tulip.core.types import Sample
 
 _logger = get_logger(__name__)
 

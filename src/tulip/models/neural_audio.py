@@ -32,9 +32,8 @@ module never requires an optional dependency.
 from __future__ import annotations
 
 import importlib
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
@@ -55,6 +54,9 @@ from tulip.models._common import (
 from tulip.models.registry import MODELS
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = get_logger(__name__)
 

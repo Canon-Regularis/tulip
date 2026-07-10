@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterator
-from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.types import Sample
@@ -14,6 +12,10 @@ from tulip.data.manifest import surrogate_speaker_id
 from tulip.data.registry import DATASETS
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
 
 _logger = get_logger(__name__)
 

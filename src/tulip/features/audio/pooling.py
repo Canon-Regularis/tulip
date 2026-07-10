@@ -12,11 +12,14 @@ frames pool to ``0.0`` so downstream models never see NaN or infinity.
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from tulip.core.exceptions import ConfigurationError, DataError
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 #: Statistics applied by default: mean+std concatenation.
 DEFAULT_STATS: tuple[str, ...] = ("mean", "std")

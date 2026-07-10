@@ -14,11 +14,9 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from tulip.config.schemas import DataConfig, SplitConfig
 from tulip.core.exceptions import DataError
-from tulip.core.types import Sample
 from tulip.data.cleaning import TextCleaner
 from tulip.data.dedup import deduplicate_samples
 from tulip.data.registry import DATASETS
@@ -26,6 +24,10 @@ from tulip.data.splitting import DatasetSplits, save_splits, speaker_disjoint_sp
 from tulip.labels.taxonomy import LabelLevel
 from tulip.utils.io import write_json
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from tulip.config.schemas import DataConfig, SplitConfig
+    from tulip.core.types import Sample
 
 _logger = get_logger(__name__)
 

@@ -19,10 +19,9 @@ from dialect key to a list of single-word markers.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Sequence
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import yaml
@@ -33,6 +32,9 @@ from tulip.core.exceptions import ConfigurationError
 from tulip.features.registries import TEXT_FEATURES
 from tulip.features.text._tokenize import word_tokens
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 __all__ = ["DialectKeywordExtractor", "load_lexicon"]
 

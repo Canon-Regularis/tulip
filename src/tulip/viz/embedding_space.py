@@ -13,8 +13,7 @@ reproduce the same layout.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -22,6 +21,9 @@ import pandas as pd
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = get_logger(__name__)
 

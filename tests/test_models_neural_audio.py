@@ -9,7 +9,7 @@ in ``test_features_audio_loading.py``.
 from __future__ import annotations
 
 import wave
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -23,6 +23,9 @@ from tulip.models.neural_audio import (
     SpeechClassifier,
     is_whisper_extractor,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # --- factory / hyperparameter plumbing ----------------------------------------
 

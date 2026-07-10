@@ -9,15 +9,18 @@ and inherit manifest discovery, parsing, and validation.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from tulip.core.exceptions import DataError
 from tulip.core.interfaces import DatasetLoader
-from tulip.core.types import DatasetInfo, Sample
 from tulip.data.catalog import get_dataset_info
 from tulip.data.manifest import ManifestColumns, read_manifest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    from tulip.core.types import DatasetInfo, Sample
 
 #: Manifest file names probed (in order) when none is configured explicitly.
 DEFAULT_MANIFEST_NAMES = ("manifest.csv", "manifest.tsv", "manifest.jsonl")

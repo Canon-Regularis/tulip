@@ -8,9 +8,8 @@ READMEs, and a versioned JSON artifact.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +19,9 @@ from tulip.evaluation._format import format_metric, markdown_table
 from tulip.evaluation.report import EvaluationReport
 from tulip.utils.io import read_json, write_json
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = get_logger(__name__)
 

@@ -10,16 +10,19 @@ safe in headless environments.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.core.types import Prediction
 from tulip.labels.taxonomy import display_name
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from tulip.core.types import Prediction
 
 logger = get_logger(__name__)
 

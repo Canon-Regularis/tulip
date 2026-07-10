@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -10,7 +10,11 @@ import pytest
 from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation.confusion import confusion_from_report, plot_confusion, to_dataframe
 from tulip.evaluation.metrics import compute_metrics
-from tulip.evaluation.report import EvaluationReport
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from tulip.evaluation.report import EvaluationReport
 
 Y_TRUE = ["a", "a", "b", "b"]
 Y_PRED = ["a", "b", "b", "b"]

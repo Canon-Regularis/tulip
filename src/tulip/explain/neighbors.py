@@ -10,8 +10,7 @@ matrices sparse throughout.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from scipy import sparse
@@ -21,6 +20,9 @@ from tulip.core.types import Explanation, NeighborExample, Sample
 from tulip.explain._shared import as_text
 from tulip.explain.registry import EXPLAINERS
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 logger = get_logger(__name__)
 

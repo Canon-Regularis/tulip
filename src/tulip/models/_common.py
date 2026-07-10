@@ -15,13 +15,15 @@ helpers fully testable) without any optional extra installed.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from tulip.core.exceptions import ConfigurationError, DataError, TulipError
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
 
 logger = get_logger(__name__)
 

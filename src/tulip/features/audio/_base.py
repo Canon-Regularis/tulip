@@ -10,9 +10,7 @@ sequence of audio file paths to one pooled float32 row per file.
 from __future__ import annotations
 
 import abc
-from collections.abc import Sequence
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -24,6 +22,10 @@ from tulip.features.audio.pooling import (
     pooled_feature_names,
     validate_stats,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from pathlib import Path
 
 __all__ = ["PooledFrameExtractor"]
 

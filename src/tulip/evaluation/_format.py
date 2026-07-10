@@ -6,7 +6,10 @@ other optional package.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def format_metric(value: float | None, digits: int = 4) -> str:

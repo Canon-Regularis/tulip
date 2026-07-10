@@ -14,8 +14,7 @@ explainer sees which object* lives in one place:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sklearn.pipeline import Pipeline
 
@@ -24,6 +23,9 @@ from tulip.core.types import Explanation, Sample, TaskType
 from tulip.explain import get_explainer
 from tulip.explain.neighbors import NearestExamplesExplainer
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 _logger = get_logger(__name__)
 

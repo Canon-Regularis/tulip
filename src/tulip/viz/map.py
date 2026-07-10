@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tulip.core.exceptions import ConfigurationError
-from tulip.core.types import Prediction
 from tulip.labels.geo import (
     POLAND_BOUNDS,
     POLAND_CENTER,
@@ -41,6 +40,8 @@ from tulip.utils.optional import optional_import
 
 if TYPE_CHECKING:
     import folium
+
+    from tulip.core.types import Prediction
 
 logger = get_logger(__name__)
 

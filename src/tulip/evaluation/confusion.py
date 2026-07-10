@@ -15,12 +15,13 @@ import numpy as np
 import pandas as pd
 
 from tulip.core.exceptions import ConfigurationError
-from tulip.evaluation.report import EvaluationReport
 from tulip.utils.io import ensure_dir
 from tulip.utils.optional import optional_import
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
+
+    from tulip.evaluation.report import EvaluationReport
 
 NORMALIZE_OPTIONS = ("none", "true", "pred")
 _ANNOTATION_LIMIT = 25  # beyond this many classes, cell text becomes unreadable noise

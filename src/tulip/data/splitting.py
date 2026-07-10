@@ -18,17 +18,21 @@ positive-fraction split is left empty while unassigned groups remain.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from tulip.config.schemas import SplitConfig
 from tulip.core.exceptions import DataError
 from tulip.core.types import Sample
 from tulip.utils.io import read_jsonl, write_jsonl
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
+    from tulip.config.schemas import SplitConfig
 
 _logger = get_logger(__name__)
 

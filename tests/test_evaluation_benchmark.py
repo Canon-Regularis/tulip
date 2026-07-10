@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -18,6 +18,9 @@ from tulip.evaluation.benchmark import (
     to_markdown_table,
 )
 from tulip.evaluation.metrics import compute_metrics
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 EXPECTED_COLUMNS = [
     "model",

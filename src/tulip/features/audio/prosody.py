@@ -15,9 +15,7 @@ dependency at all.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from scipy.linalg import solve_toeplitz
@@ -30,6 +28,10 @@ from tulip.features.audio.pooling import DEFAULT_STATS
 from tulip.features.registries import AUDIO_FEATURES
 from tulip.utils import optional
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from pathlib import Path
 
 logger = get_logger(__name__)
 

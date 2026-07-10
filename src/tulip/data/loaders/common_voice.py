@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.interfaces import DatasetLoader
@@ -15,6 +14,9 @@ from tulip.data.download import fetch_file
 from tulip.data.registry import DATASETS
 from tulip.labels.taxonomy import DialectFamily
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Mapping
 
 _logger = get_logger(__name__)
 

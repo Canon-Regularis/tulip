@@ -7,8 +7,12 @@ registry is fully populated as soon as the package is used.
 
 from __future__ import annotations
 
-from tulip.core.interfaces import DatasetLoader
+from typing import TYPE_CHECKING
+
 from tulip.core.registry import Registry
+
+if TYPE_CHECKING:
+    from tulip.core.interfaces import DatasetLoader
 
 #: Dataset loaders, keyed by canonical corpus name (see docs/architecture.md).
 DATASETS: Registry[type[DatasetLoader]] = Registry("dataset")

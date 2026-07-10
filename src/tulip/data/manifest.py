@@ -28,15 +28,17 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
 from tulip.core.exceptions import DataError
 from tulip.core.types import DialectLabels, Sample
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Mapping
 
 _logger = get_logger(__name__)
 

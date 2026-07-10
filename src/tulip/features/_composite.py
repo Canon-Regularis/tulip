@@ -11,14 +11,16 @@ entries).
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sklearn.pipeline import FeatureUnion
 
 from tulip.config.schemas import ComponentConfig
 from tulip.core.exceptions import ConfigurationError
-from tulip.core.registry import Registry
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from tulip.core.registry import Registry
 
 logger = get_logger(__name__)
 
