@@ -1,0 +1,24 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Dev tooling moves fast and rarely breaks the library; batch it into one
+      # PR so the review queue stays about the runtime dependencies.
+      dev-tooling:
+        patterns:
+          - ruff
+          - mypy
+          - pytest*
+          - pre-commit
+          - hypothesis
+          - types-*
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

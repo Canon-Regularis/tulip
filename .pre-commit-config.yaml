@@ -1,8 +1,9 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.10
+    rev: v0.15.20
     hooks:
-      - id: ruff
+      # `ruff-check` is the current id; the old `ruff` id is deprecated.
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -13,3 +14,22 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         args: [--maxkb=1024]
+        # uv.lock is legitimately ~1.3 MB. Excluding it keeps the 1 MB guard
+        # doing its real job: stopping corpora and model weights from being
+        # committed by accident.
+        exclude: ^uv\.lock$
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.1.0
+    hooks:
+      # Types are gated in CI, so catch them before the push rather than after.
+      # `pass_filenames: false` + empty `args` makes mypy read its own
+      # [tool.mypy] config (packages = ["tulip"], mypy_path = "src") instead of
+      # being handed a partial file list, which would resolve imports wrongly.
+      - id: mypy
+        files: ^src/
+        pass_filenames: false
+        args: []
+        additional_dependencies:
+          - pydantic>=2.5
+          - numpy>=1.24
+          - types-PyYAML>=6.0

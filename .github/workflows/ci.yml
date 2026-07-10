@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# A superseded push has nothing useful left to say; cancel it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -24,23 +32,55 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        # tulip is developed on 3.14, so 3.14 is tested here.
+        #
+        # KNOWN GAP: pyproject declares `requires-python = ">=3.10"`, but 3.10 is
+        # not in this matrix -- the declared floor is untested. Do not paper over
+        # it by silently raising requires-python; either add "3.10" below or
+        # raise the floor deliberately, as a decision.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+      # torch-backed extras (transformers/speech) are deliberately absent: their
+      # tests skip via pytest.importorskip, and installing them costs multiple GB.
+      #
+      # If the 3.14 entry ever fails to INSTALL, suspect `serve`: uvicorn[standard]
+      # pulls uvloop on Linux, which historically lags new CPython releases. Drop
+      # `serve` from that entry's extras rather than dropping the Python version.
       - run: pip install -e ".[dev,boosting,viz,explain,serve,hf,audio]"
-      - run: pytest -q -m "not slow" --cov=tulip --cov-report=term
-        # torch-based extras (transformers/speech) are exercised by
-        # importorskip-guarded tests; installing them in CI is not worth the
-        # multi-GB cost, so those tests skip here by design.
+      # The coverage floor lives in [tool.coverage.report] fail_under; pytest-cov
+      # honours it, so a coverage regression fails this job on its own.
+      - run: pytest -q -m "not slow" --cov=tulip --cov-report=term --cov-report=xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          # upload-artifact@v4 errors on duplicate names across matrix jobs.
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: error
+
+  lock:
+    # A lockfile nothing verifies is decoration. This fails when pyproject.toml
+    # changed without re-running `uv lock`, so uv.lock cannot silently go stale.
+    # Installs still use pip; the lock exists for reproducible `uv sync`.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install uv
+      - run: uv lock --check
 
   typecheck:
-    # Informational: mypy findings are reported but do not gate merges yet.
+    # Blocking. mypy reports zero issues across the package today, so gating
+    # costs nothing now and stops a type regression from ever merging.
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,3 +89,23 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: mypy
+
+  build:
+    # Catches packaging regressions that an editable install hides -- a missing
+    # py.typed marker, or the dialect-marker lexicon not shipped as package data.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - name: Install the built wheel into a clean env and smoke it
+        run: |
+          python -m venv /tmp/wheelcheck
+          /tmp/wheelcheck/bin/python -m pip install --quiet dist/*.whl
+          /tmp/wheelcheck/bin/python -c "import importlib.resources as r, tulip; root = r.files('tulip'); assert (root / 'py.typed').is_file(), 'py.typed missing from the wheel'; assert (root / 'features' / 'text' / 'lexicons' / 'dialect_markers.yaml').is_file(), 'dialect lexicon not shipped as package data'; print('wheel ok:', tulip.__version__)"
+          /tmp/wheelcheck/bin/tulip --version
