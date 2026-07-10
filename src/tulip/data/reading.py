@@ -52,22 +52,33 @@ def read_samples(path: Path | str) -> Iterator[Sample]:
     if not path.is_file():
         raise DataError(f"no such file or directory: {path}")
     if path.suffix.lower() in _SPLIT_FILE_SUFFIXES:
-        # Parse fully before yielding: a mid-stream validation failure must
-        # fall back to the manifest format without emitting partial results.
+        # Parse fully before yielding: a mid-stream failure must not emit
+        # partial results.
         records = list(read_jsonl(path))
         if not records:
             return
-        # Shape decides the format, not mere validity. A split file's records
-        # are serialised Samples and always carry a nested "labels" object; a
-        # JSONL *manifest* (a documented input format) has flat label columns
-        # and would still validate as a Sample -- silently discarding every
-        # label. Requiring "labels" keeps that failure from being invisible.
-        if all("labels" in record for record in records):
+        # Shape decides the format, not mere validity. A split file's records are
+        # serialised Samples and always carry a nested "labels" *object*; a JSONL
+        # manifest (a documented input format) has flat label columns and would
+        # still validate as a label-less Sample.
+        looks_like_split = [isinstance(record.get("labels"), dict) for record in records]
+        if all(looks_like_split):
             try:
                 samples = [Sample.model_validate(record) for record in records]
-            except (ValueError, TypeError) as exc:  # not split-file records
-                _logger.debug("%s is not a split file (%s); trying manifest format", path, exc)
-            else:
-                yield from samples
-                return
+            except (ValueError, TypeError) as exc:
+                # The shape says split file, so a bad record is a corrupt split
+                # file -- not a manifest. Falling back here would reparse the
+                # records as flat rows, quietly demoting every nested "labels"
+                # object to metadata and returning wholly unlabelled samples.
+                raise DataError(
+                    f"{path} is a split file (every record carries a nested 'labels' object) "
+                    f"but a record failed validation: {exc}"
+                ) from exc
+            yield from samples
+            return
+        if any(looks_like_split):
+            raise DataError(
+                f"{path} mixes split-file records (nested 'labels' objects) with manifest rows; "
+                "reading it as either format would silently discard labels"
+            )
     yield from read_manifest(path)

@@ -153,19 +153,30 @@ def read_manifest(
     required = cols.required_columns()
 
     checked_header = False
+    seen_columns: set[str] = set()
     for line_number, row in rows:
-        if not checked_header:
-            _check_columns(cols, row.keys(), path)
+        if jsonl:
+            # CSV rows share one header, but JSONL records may be heterogeneous.
+            # Required columns are enforced per record; the content-column check
+            # is deferred to the whole file, because a record may legitimately
+            # omit `text` when that sample's transcript is empty. Judging the
+            # file by its first record alone made acceptance depend on record
+            # order: the same data loaded or raised depending on which record
+            # happened to come first.
+            if not checked_header:
+                _check_required_columns(cols, row.keys(), path)
+                checked_header = True
+            elif required:
+                absent = [column for column in required if column not in row]
+                if absent:
+                    raise DataError(
+                        f"{path}:{line_number}: missing required column(s): {', '.join(absent)}"
+                    )
+            seen_columns.update(row.keys())
+        elif not checked_header:
+            _check_required_columns(cols, row.keys(), path)
+            _check_content_column(cols, row.keys(), path)
             checked_header = True
-        elif jsonl and required:
-            # CSV rows share one header, but JSONL records may be
-            # heterogeneous: enforce explicitly-required columns per record,
-            # not just on the first line.
-            absent = [column for column in required if column not in row]
-            if absent:
-                raise DataError(
-                    f"{path}:{line_number}: missing required column(s): {', '.join(absent)}"
-                )
         sample = _row_to_sample(
             row,
             cols,
@@ -179,6 +190,10 @@ def read_manifest(
             _logger.debug("%s:%d: skipping row with neither text nor audio", path, line_number)
             continue
         yield sample
+
+    if jsonl and seen_columns:
+        # No record anywhere carried text or audio: only now is the file unusable.
+        _check_content_column(cols, seen_columns, path)
 
 
 def _coerce_columns(
@@ -226,8 +241,8 @@ def _iter_jsonl_rows(path: Path) -> Iterator[tuple[int, dict[str, Any]]]:
             yield line_number, record
 
 
-def _check_columns(cols: ManifestColumns, available: Any, path: Path) -> None:
-    """Validate the column mapping against the first row's keys."""
+def _check_required_columns(cols: ManifestColumns, available: Any, path: Path) -> None:
+    """Raise unless every explicitly-required column is present in ``available``."""
     present = set(available)
     missing = [c for c in cols.required_columns() if c not in present]
     if missing:
@@ -235,6 +250,16 @@ def _check_columns(cols: ManifestColumns, available: Any, path: Path) -> None:
             f"manifest {path} is missing required column(s): {', '.join(missing)}; "
             f"available columns: {', '.join(sorted(present))}"
         )
+
+
+def _check_content_column(cols: ManifestColumns, available: Any, path: Path) -> None:
+    """Raise unless ``available`` offers at least one of the text/audio columns.
+
+    For CSV this runs against the shared header; for JSONL it runs once against
+    the union of every record's keys, so a single content-less record cannot
+    condemn the whole file.
+    """
+    present = set(available)
     has_text = cols.text is not None and cols.text in present
     has_audio = cols.audio_path is not None and cols.audio_path in present
     if not has_text and not has_audio:

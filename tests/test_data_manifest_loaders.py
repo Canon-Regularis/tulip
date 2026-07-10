@@ -27,6 +27,94 @@ EXPECTED_REGISTRY_NAMES = [
 ]
 
 
+def _write_jsonl(path: Path, records: list[dict]) -> Path:
+    import json
+
+    path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
+    return path
+
+
+#: A record whose transcript was empty, so the ``text`` key was simply omitted.
+CONTENTLESS = {"id": "a", "dialect": "podhale", "speaker_id": "s1"}
+WITH_TEXT = {"id": "b", "text": "foo bar baz lorem", "speaker_id": "s2"}
+ALSO_TEXT = {"id": "c", "text": "qux quux corge", "speaker_id": "s3"}
+
+#: Two well-formed serialised Samples, as ``save_splits`` writes them.
+SPLIT_RECORDS = [
+    {"id": "a", "text": "foo bar baz", "labels": {"dialect": "podhale"}, "speaker_id": "s1"},
+    {"id": "b", "text": "qux quux corge", "labels": {"dialect": "silesia"}, "speaker_id": "s2"},
+]
+
+
+class TestJsonlHeterogeneity:
+    """A JSONL manifest's records may legitimately differ in which keys they carry."""
+
+    def test_content_column_check_is_order_independent(self, tmp_path: Path) -> None:
+        """The same records must load the same way regardless of which comes first.
+
+        The content-column check used to run against the first record only, so a
+        file whose first sample had an empty (omitted) transcript was rejected
+        wholesale -- while the identical records, reordered, loaded fine.
+        """
+        content_last = _write_jsonl(tmp_path / "a.jsonl", [CONTENTLESS, WITH_TEXT, ALSO_TEXT])
+        content_first = _write_jsonl(tmp_path / "b.jsonl", [WITH_TEXT, CONTENTLESS, ALSO_TEXT])
+        assert [s.id for s in read_manifest(content_last)] == ["b", "c"]
+        assert [s.id for s in read_manifest(content_first)] == ["b", "c"]
+
+    def test_a_file_with_no_content_column_anywhere_still_raises(self, tmp_path: Path) -> None:
+        path = _write_jsonl(tmp_path / "none.jsonl", [CONTENTLESS, {"id": "z", "dialect": "x"}])
+        with pytest.raises(DataError, match="neither a text column"):
+            list(read_manifest(path))
+
+    def test_required_columns_are_still_enforced_per_record(self, tmp_path: Path) -> None:
+        path = _write_jsonl(tmp_path / "req.jsonl", [WITH_TEXT, {"id": "c", "text": "hello"}])
+        with pytest.raises(DataError, match="missing required column"):
+            list(read_manifest(path, columns=ManifestColumns(speaker_id="speaker_id")))
+
+
+class TestReadSamplesNeverLosesLabels:
+    """`read_samples` must not demote a split file to a manifest and drop its labels."""
+
+    def test_a_valid_split_file_round_trips_its_labels(self, tmp_path: Path) -> None:
+        from tulip.data.reading import read_samples
+
+        path = _write_jsonl(tmp_path / "split.jsonl", SPLIT_RECORDS)
+        assert [s.labels.dialect for s in read_samples(path)] == ["podhale", "silesia"]
+
+    def test_a_corrupt_split_file_raises_rather_than_silently_unlabelling(
+        self, tmp_path: Path
+    ) -> None:
+        """One bad record used to send the whole file down the manifest path.
+
+        The nested ``labels`` object then became an unmapped column, so every
+        sample came back with ``dialect=None`` -- gold labels gone, debug log only.
+        """
+        from tulip.data.reading import read_samples
+
+        broken = {"id": "c", "text": None, "audio_path": None, "labels": {"dialect": "kurpie"}}
+        path = _write_jsonl(tmp_path / "corrupt.jsonl", [*SPLIT_RECORDS, broken])
+        with pytest.raises(DataError, match="failed validation"):
+            list(read_samples(path))
+
+    def test_a_file_mixing_split_records_and_manifest_rows_raises(self, tmp_path: Path) -> None:
+        from tulip.data.reading import read_samples
+
+        path = _write_jsonl(
+            tmp_path / "mixed.jsonl",
+            [*SPLIT_RECORDS, {"id": "d", "text": "x y z", "dialect": "kurpie"}],
+        )
+        with pytest.raises(DataError, match="mixes split-file records"):
+            list(read_samples(path))
+
+    def test_a_flat_jsonl_manifest_is_still_read_as_a_manifest(self, tmp_path: Path) -> None:
+        path = _write_jsonl(
+            tmp_path / "flat.jsonl", [{"id": "a", "text": "foo bar baz", "dialect": "podhale"}]
+        )
+        from tulip.data.reading import read_samples
+
+        assert [s.labels.dialect for s in read_samples(path)] == ["podhale"]
+
+
 class TestCatalogAndRegistry:
     def test_all_canonical_loaders_are_registered(self) -> None:
         assert DATASETS.names() == EXPECTED_REGISTRY_NAMES
