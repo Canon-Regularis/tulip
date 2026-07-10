@@ -6,9 +6,8 @@ import csv
 import tarfile
 import tempfile
 import xml.etree.ElementTree as ET
-from collections.abc import Iterator
 from pathlib import Path
-from typing import IO, Any, ClassVar
+from typing import IO, TYPE_CHECKING, Any, ClassVar
 
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.data.download import fetch_file
@@ -16,6 +15,9 @@ from tulip.data.loaders._base import ManifestBackedLoader
 from tulip.data.manifest import ManifestColumns
 from tulip.data.registry import DATASETS
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _logger = get_logger(__name__)
 
@@ -150,7 +152,15 @@ def _iter_tei_paragraphs(source: IO[bytes]) -> Iterator[str]:
     parse for one bad file.
     """
     try:
-        tree = ET.parse(source)
+        # S314 is suppressed below: stdlib ElementTree is used deliberately.
+        # The input is a locally acquired NKJP corpus -- unpacked by hand, or
+        # fetched by this loader from the project's own published archive --
+        # not untrusted data pulled at request time. It is parsed once, offline,
+        # on the operator's own machine, so an entity-expansion attack could
+        # only affect the operator's own run. `defusedxml` would harden this but
+        # is not worth a runtime dependency at this trust boundary; revisit if
+        # NKJP XML is ever parsed from an untrusted or user-supplied source.
+        tree = ET.parse(source)  # noqa: S314
     except ET.ParseError as exc:
         _logger.warning("skipping malformed NKJP document: %s", exc)
         return

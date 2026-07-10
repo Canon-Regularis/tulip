@@ -29,6 +29,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing :: Linguistic",
 ]
@@ -79,10 +80,12 @@ serve = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "python-multipart>=0.0.9"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
-    "ruff>=0.4",
+    # >=0.11 for the modern "TC" rule prefix (formerly "TCH").
+    "ruff>=0.11",
     "mypy>=1.10",
     "types-PyYAML>=6.0",
     "pre-commit>=3.7",
+    "hypothesis>=6.100",
 ]
 
 [project.scripts]
@@ -111,6 +114,10 @@ select = [
     "C4",  # flake8-comprehensions
     "SIM", # flake8-simplify
     "RUF", # ruff-specific rules
+    "S",   # flake8-bandit (security)
+    "PTH", # flake8-use-pathlib
+    "RET", # flake8-return
+    "TC",  # flake8-type-checking (runtime-only imports behind TYPE_CHECKING)
 ]
 ignore = [
     "SIM108", # ternary is not always clearer
@@ -122,9 +129,34 @@ known-first-party = ["tulip"]
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["X"] # scikit-learn fit/transform API convention
 
+# pydantic resolves model annotations at runtime, so an import moved behind
+# TYPE_CHECKING would break model construction. Ruff needs to know which bases
+# are runtime-evaluated before it may rewrite their modules' imports.
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["RUF001", "RUF002", "RUF003"] # allow Polish diacritics lookalikes in fixtures
-"src/tulip/cli/*" = ["B008"] # typer.Option/Argument defaults are the typer idiom
+"tests/*" = [
+    "RUF001",
+    "RUF002",
+    "RUF003", # allow Polish diacritics lookalikes in fixtures
+    "S101",   # assert *is* the pytest API
+    "S301",   # the fastText round-trip test deliberately exercises pickle
+]
+"src/tulip/cli/*" = [
+    "B008", # typer.Option/Argument defaults are the typer idiom
+    # typer resolves command annotations at runtime to build the parser.
+    "TC001",
+    "TC002",
+    "TC003",
+]
+# FastAPI resolves endpoint annotations at runtime to build request models.
+"src/tulip/serve/*" = ["TC001", "TC002", "TC003"]
+# core/ and utils/ are [frozen] per docs/architecture.md: foundation-owned and
+# not to be edited. A lint rule is not a good enough reason to break that
+# contract, so TC is disabled there rather than autofixed into them.
+"src/tulip/core/*" = ["TC001", "TC002", "TC003"]
+"src/tulip/utils/*" = ["TC001", "TC002", "TC003"]
 # The cleaner's quote/dash tables enumerate the exact typographic characters
 # being normalised; the "ambiguous unicode" they contain is the point.
 "src/tulip/data/cleaning.py" = ["RUF001"]
@@ -154,6 +186,10 @@ source = ["tulip"]
 branch = true
 
 [tool.coverage.report]
+# A floor, not a target. The measured baseline is 77%; 75 gates real regressions
+# while tolerating the coverage swing between CI extra sets (torch-backed tests
+# skip when the transformers/speech extras are absent).
+fail_under = 75
 exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",

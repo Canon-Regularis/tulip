@@ -21,10 +21,10 @@ from __future__ import annotations
 import enum
 import shutil
 import urllib.error
+import urllib.parse
 import urllib.request
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -33,9 +33,35 @@ from tulip.data.catalog import catalog
 from tulip.data.registry import DATASETS
 from tulip.utils.logging import get_logger
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 _logger = get_logger(__name__)
 
+#: URL schemes :func:`fetch_file` will open. ``file:`` is kept deliberately --
+#: offline mirrors and the test fixtures rely on it -- but everything outside
+#: this set (``ftp:``, ``data:``, and any custom-registered urllib opener) is
+#: refused. Passing an arbitrary scheme straight to ``urlopen`` is what makes
+#: the call surprising; an explicit allow-list makes the supported set the
+#: contract, and turns a typo'd catalog URL into a clear error.
+_ALLOWED_URL_SCHEMES = frozenset({"http", "https", "file"})
+
 __all__ = ["DownloadReport", "DownloadStatus", "download_datasets", "fetch_file"]
+
+
+def _validate_url_scheme(url: str, *, description: str) -> None:
+    """Reject URL schemes outside :data:`_ALLOWED_URL_SCHEMES`.
+
+    Raises:
+        DataError: if the scheme is missing or not allowed.
+    """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in _ALLOWED_URL_SCHEMES:
+        allowed = ", ".join(sorted(_ALLOWED_URL_SCHEMES))
+        raise DataError(
+            f"refusing to fetch {description}: URL scheme {scheme or '(none)'!r} is not "
+            f"allowed (permitted schemes: {allowed}); offending URL: {url}"
+        )
 
 
 def fetch_file(url: str, destination: Path, *, description: str) -> Path:
@@ -55,14 +81,20 @@ def fetch_file(url: str, destination: Path, *, description: str) -> Path:
         ``destination``.
 
     Raises:
-        DataError: if the transfer fails for any reason.
+        DataError: if the URL scheme is not allowed, or the transfer fails for
+            any reason.
     """
+    # Validated before any filesystem work, and outside the try block below, so
+    # a rejected scheme surfaces as itself rather than as "could not download".
+    _validate_url_scheme(url, description=description)
     destination.parent.mkdir(parents=True, exist_ok=True)
     partial = destination.with_suffix(destination.suffix + ".part")
     _logger.info("downloading %s from %s", description, url)
     try:
         # HTTP(S) redirects and file:// are both handled by urllib openers.
-        with urllib.request.urlopen(url) as response, partial.open("wb") as handle:
+        # S310 is suppressed below because _validate_url_scheme has already
+        # restricted `url` to the allow-listed schemes.
+        with urllib.request.urlopen(url) as response, partial.open("wb") as handle:  # noqa: S310
             shutil.copyfileobj(response, handle, length=1024 * 1024)
         partial.replace(destination)
     except BaseException as exc:

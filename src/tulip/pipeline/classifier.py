@@ -12,8 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.pipeline import Pipeline
@@ -27,6 +26,9 @@ from tulip.models.persistence import load_model, save_model
 from tulip.pipeline.explaining import PredictionExplainer
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _logger = get_logger(__name__)
 
@@ -230,7 +232,10 @@ class DialectClassifier:
             ConfigurationError: if the classifier is not fitted.
         """
         self._require_fitted()
-        assert self.pipeline_ is not None  # narrowed by _require_fitted
+        # Type narrowing for mypy, not a runtime check: _require_fitted() has
+        # already raised if the pipeline is None, so stripping asserts under
+        # `python -O` cannot turn this into a silent failure.
+        assert self.pipeline_ is not None  # noqa: S101
         inputs = list(raws)
         if hasattr(self.pipeline_, "predict_proba"):
             return np.asarray(self.pipeline_.predict_proba(inputs), dtype=np.float64)
