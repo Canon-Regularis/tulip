@@ -10,14 +10,17 @@ containing a manifest. The CLI and evaluation entry points share it so
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tulip.core.exceptions import DataError
 from tulip.core.types import Sample
 from tulip.data.manifest import read_manifest
 from tulip.utils.io import read_jsonl
 from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _logger = get_logger(__name__)
 
@@ -34,7 +37,7 @@ def read_samples(path: Path | str) -> Iterator[Sample]:
     * a directory -- probed for ``manifest.{csv|tsv|jsonl}``;
     * a ``.jsonl``/``.ndjson`` file of serialised :class:`Sample` records
       (as written by :func:`~tulip.data.splitting.save_splits`), falling back
-      to the manifest row format when the records do not validate;
+      to the manifest row format when the records are not that shape;
     * any other file -- parsed as a manifest (CSV/TSV).
 
     Raises:
@@ -51,11 +54,20 @@ def read_samples(path: Path | str) -> Iterator[Sample]:
     if path.suffix.lower() in _SPLIT_FILE_SUFFIXES:
         # Parse fully before yielding: a mid-stream validation failure must
         # fall back to the manifest format without emitting partial results.
-        try:
-            samples = [Sample.model_validate(record) for record in read_jsonl(path)]
-        except (ValueError, TypeError) as exc:  # not split-file records
-            _logger.debug("%s is not a split file (%s); trying manifest format", path, exc)
-        else:
-            yield from samples
+        records = list(read_jsonl(path))
+        if not records:
             return
+        # Shape decides the format, not mere validity. A split file's records
+        # are serialised Samples and always carry a nested "labels" object; a
+        # JSONL *manifest* (a documented input format) has flat label columns
+        # and would still validate as a Sample -- silently discarding every
+        # label. Requiring "labels" keeps that failure from being invisible.
+        if all("labels" in record for record in records):
+            try:
+                samples = [Sample.model_validate(record) for record in records]
+            except (ValueError, TypeError) as exc:  # not split-file records
+                _logger.debug("%s is not a split file (%s); trying manifest format", path, exc)
+            else:
+                yield from samples
+                return
     yield from read_manifest(path)
