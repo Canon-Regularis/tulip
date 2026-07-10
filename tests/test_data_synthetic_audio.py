@@ -220,6 +220,9 @@ def test_loader_raises_when_a_configured_manifest_is_absent(tmp_path: Path) -> N
         {"jitter": 0.5},
         {"jitter": -0.1},
         {"dialects": ()},
+        # Both positive, but their product rounds to zero frames -> used to
+        # crash synthesis with an opaque IndexError instead of a clean error.
+        {"duration_s": 1e-5},
     ],
 )
 def test_spec_rejects_out_of_range_knobs(kwargs: dict) -> None:

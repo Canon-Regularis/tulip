@@ -43,7 +43,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import lfilter
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.core.types import DialectLabels, Sample
@@ -129,6 +128,14 @@ class AudioSyntheticSpec:
             raise ConfigurationError(f"duration_s must be positive, got {self.duration_s}")
         if self.sample_rate <= 0:
             raise ConfigurationError(f"sample_rate must be positive, got {self.sample_rate}")
+        # duration_s and sample_rate can each be positive yet round to zero
+        # frames together (e.g. 1e-5 s at 16 kHz), which crashes synthesis with
+        # an opaque IndexError. Reject the unusable combination up front.
+        if round(self.duration_s * self.sample_rate) < 1:
+            raise ConfigurationError(
+                "duration_s * sample_rate must yield at least one frame, got "
+                f"{self.duration_s} s * {self.sample_rate} Hz"
+            )
         if not 0.0 <= self.jitter < 0.5:
             # A jitter of 0.5 would let adjacent F0 registers (spaced ~30 %)
             # overlap, dissolving the very class signal the corpus exists for.
@@ -303,7 +310,7 @@ def _synthesize_clip(
     voiced = np.zeros(n_samples, dtype=np.float64)
     for freq, bandwidth, weight in zip(formants, FORMANT_BANDWIDTHS, FORMANT_WEIGHTS, strict=True):
         voiced += weight * _bandpass(source, freq, bandwidth, sample_rate)
-    tilted = np.asarray(lfilter([1.0 - tilt], [1.0, -tilt], voiced), dtype=np.float64)
+    tilted = _lfilter([1.0 - tilt], [1.0, -tilt], voiced)
 
     # Aspiration noise at a fixed fraction of the voiced RMS, then normalise so
     # every clip has the same loudness (loudness must not encode class identity).
@@ -314,13 +321,26 @@ def _synthesize_clip(
     return signal
 
 
+def _lfilter(b: object, a: object, x: np.ndarray) -> np.ndarray:
+    """``scipy.signal.lfilter`` imported lazily so ``import tulip.data`` stays light.
+
+    scipy is a core dependency, but it is only needed to *generate* audio; the
+    text synthetic corpus and most of the data layer never touch it. Importing it
+    at call time (Python caches the module after the first call) keeps the cost
+    off the ``import tulip.data`` path, matching ``synthetic.py``.
+    """
+    from scipy.signal import lfilter
+
+    return np.asarray(lfilter(b, a, x), dtype=np.float64)
+
+
 def _bandpass(source: np.ndarray, freq: float, bandwidth: float, sample_rate: int) -> np.ndarray:
     """Apply an RBJ constant-peak-gain bandpass biquad (a formant resonator)."""
     w0 = 2.0 * np.pi * freq / sample_rate
     alpha = np.sin(w0) / (2.0 * (freq / bandwidth))
     b = np.array([alpha, 0.0, -alpha])
     a = np.array([1.0 + alpha, -2.0 * np.cos(w0), 1.0 - alpha])
-    return np.asarray(lfilter(b / a[0], a / a[0], source), dtype=np.float64)
+    return _lfilter(b / a[0], a / a[0], source)
 
 
 def _rms(signal: np.ndarray) -> float:
