@@ -9,8 +9,11 @@ tulip data download --all
 ```
 
 which fetches every corpus that has a licence-clean automatic source (today:
-**BIGOS**, streamed from the Hugging Face Hub into a local manifest) and
-prints the exact manual steps for the rest — most dialect corpora have no
+**BIGOS**, streamed from the Hugging Face Hub into a local manifest — the
+dataset is gated, so accept its conditions on the Hub and authenticate with
+`hf auth login` or `HF_TOKEN` first) and
+prints the exact manual steps for the rest; a failing download never aborts
+the remaining corpora — most dialect corpora have no
 bulk download, so the standard workflow remains: obtain the material,
 assemble a **manifest** (one row per sample), and let the loaders do the
 rest. `tulip data list` shows what tulip can find locally.
@@ -123,9 +126,12 @@ datasets:
 
 ### bigos — <https://huggingface.co/datasets/michaljunczyk/pl-asr-bigos>
 
-Aggregated Polish ASR corpora. Either assemble `data/raw/bigos/manifest.csv`
-locally, or stream transcriptions (text-only) from the Hugging Face Hub with
-the `hf` extra:
+Aggregated Polish ASR corpora. `tulip data download bigos` fetches the
+transcriptions automatically, but the dataset is **gated**: sign in on the
+Hub, accept the access conditions on the dataset page, and authenticate
+locally (`hf auth login`, or set `HF_TOKEN`) before running it.
+Alternatively assemble `data/raw/bigos/manifest.csv` yourself, or stream
+transcriptions (text-only) in configs with the `hf` extra:
 
 ```yaml
 datasets:

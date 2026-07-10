@@ -57,9 +57,11 @@ class BigosLoader(ManifestBackedLoader):
     auto_downloadable: ClassVar[bool] = True
 
     acquisition: ClassVar[str] = (
-        "automatic: `tulip data download bigos` streams the transcriptions from "
-        "the Hugging Face Hub into data/raw/bigos/manifest.csv (text-only; "
-        "requires the `hf` extra)"
+        "automatic with a Hugging Face login (the dataset is gated): accept the "
+        "conditions at https://huggingface.co/datasets/michaljunczyk/pl-asr-bigos, "
+        "authenticate (`hf auth login` or HF_TOKEN), then `tulip data download "
+        "bigos` streams the transcriptions into data/raw/bigos/manifest.csv "
+        "(text-only; requires the `hf` extra)"
     )
 
     def __init__(
@@ -117,21 +119,29 @@ class BigosLoader(ManifestBackedLoader):
         root.mkdir(parents=True, exist_ok=True)
         manifest_path = root / "manifest.csv"
         count = 0
-        with manifest_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(["id", "text", "speaker_id", "subset"])
-            for sample in self._load_from_hub(limit=limit):
-                writer.writerow(
-                    [
-                        sample.id,
-                        sample.text,
-                        sample.speaker_id,
-                        str(sample.metadata.get("dataset", "")),
-                    ]
-                )
-                count += 1
-                if count % 5000 == 0:
-                    _logger.info("bigos download: %d samples written", count)
+        try:
+            with manifest_path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["id", "text", "speaker_id", "subset"])
+                for sample in self._load_from_hub(limit=limit):
+                    writer.writerow(
+                        [
+                            sample.id,
+                            sample.text,
+                            sample.speaker_id,
+                            str(sample.metadata.get("dataset", "")),
+                        ]
+                    )
+                    count += 1
+                    if count % 5000 == 0:
+                        _logger.info("bigos download: %d samples written", count)
+        except BaseException:
+            # _load_from_hub is a generator: even load_dataset only runs on
+            # first iteration, i.e. AFTER the header was written. Any failure
+            # (gated dataset, network drop, Ctrl+C) must not leave a partial
+            # manifest behind — it would masquerade as a present corpus.
+            manifest_path.unlink(missing_ok=True)
+            raise
         if count == 0:
             manifest_path.unlink(missing_ok=True)
             raise DataError(
@@ -156,9 +166,17 @@ class BigosLoader(ManifestBackedLoader):
                 self._hf_dataset, self._hf_config, split=self._split, streaming=True
             )
         except Exception as exc:  # datasets raises many library-specific types
-            raise DataError(
-                f"bigos: could not load {self._hf_dataset!r} from the Hub: {exc}"
-            ) from exc
+            message = f"bigos: could not load {self._hf_dataset!r} from the Hub: {exc}"
+            lowered = str(exc).lower()
+            if "gated" in lowered or "authenticat" in lowered or "401" in lowered:
+                message += (
+                    " — this dataset is gated on the Hugging Face Hub: "
+                    f"(1) sign in at https://huggingface.co/datasets/{self._hf_dataset} "
+                    "and accept the access conditions, (2) authenticate locally with "
+                    "`hf auth login` or by setting the HF_TOKEN environment variable, "
+                    "then (3) re-run `tulip data download bigos`"
+                )
+            raise DataError(message) from exc
 
         count = 0
         for index, record in enumerate(stream):

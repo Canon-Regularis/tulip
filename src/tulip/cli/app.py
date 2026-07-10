@@ -153,6 +153,7 @@ def data_download(
         DownloadStatus.DOWNLOADED: "[green]downloaded[/green]",
         DownloadStatus.ALREADY_PRESENT: "[green]present[/green]",
         DownloadStatus.MANUAL: "[yellow]manual[/yellow]",
+        DownloadStatus.FAILED: "[red]failed[/red]",
     }
     for report in reports:
         table.add_row(report.name, status_styles[report.status], report.detail)
@@ -164,6 +165,13 @@ def data_download(
             f"[yellow]{len(manual)} corpus(es) need manual steps above[/yellow] — "
             "full instructions: docs/datasets.md"
         )
+    failed = [report for report in reports if report.status is DownloadStatus.FAILED]
+    if failed:
+        _console.print(
+            f"[red]{len(failed)} download(s) failed[/red] — remediation steps are "
+            "in the table above"
+        )
+        raise typer.Exit(code=1)
 
 
 @datasets_app.command("prepare")

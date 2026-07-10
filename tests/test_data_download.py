@@ -58,6 +58,22 @@ class TestBigosDownload:
             DATASETS.create("bigos").download(tmp_path / "bigos")
         assert not (tmp_path / "bigos" / "manifest.csv").exists()
 
+    def test_gated_failure_leaves_no_partial_manifest(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # Regression: _load_from_hub is a generator, so load_dataset raises on
+        # FIRST ITERATION — after the CSV header was already written. The
+        # header-only file must not survive to masquerade as a present corpus.
+        def gated(*args, **kwargs):
+            raise RuntimeError("gated dataset on the Hub. You must be authenticated")
+
+        module = ModuleType("datasets")
+        module.load_dataset = gated
+        monkeypatch.setitem(sys.modules, "datasets", module)
+        with pytest.raises(DataError, match="hf auth login"):
+            DATASETS.create("bigos").download(tmp_path / "bigos")
+        assert not (tmp_path / "bigos" / "manifest.csv").exists()
+
 
 class TestLoaderContract:
     def test_manual_loaders_refuse_download_with_guidance(self, tmp_path: Path) -> None:
@@ -109,3 +125,25 @@ class TestDownloadDatasets:
     def test_unknown_corpus_raises_with_suggestions(self, tmp_path: Path) -> None:
         with pytest.raises(UnknownComponentError, match="bigos"):
             download_datasets(["bigoss"], tmp_path)
+
+    def test_gated_hub_failure_reports_failed_and_continues(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # Regression: a gated BIGOS must not abort the rest of an --all run,
+        # and the failure detail must carry the authentication remediation.
+        def gated(*args, **kwargs):
+            raise RuntimeError(
+                "Dataset 'michaljunczyk/pl-asr-bigos' is a gated dataset on the "
+                "Hub. You must be authenticated to access it."
+            )
+
+        module = ModuleType("datasets")
+        module.load_dataset = gated
+        monkeypatch.setitem(sys.modules, "datasets", module)
+
+        reports = download_datasets(["bigos", "dgp"], tmp_path)
+        by_name = {report.name: report for report in reports}
+        assert by_name["bigos"].status is DownloadStatus.FAILED
+        assert "hf auth login" in by_name["bigos"].detail
+        assert "huggingface.co/datasets/michaljunczyk/pl-asr-bigos" in by_name["bigos"].detail
+        assert by_name["dgp"].status is DownloadStatus.MANUAL  # run continued

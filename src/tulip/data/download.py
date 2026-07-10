@@ -25,6 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from tulip.core.exceptions import TulipError
 from tulip.data.catalog import catalog
 from tulip.data.registry import DATASETS
 from tulip.utils.logging import get_logger
@@ -40,6 +41,7 @@ class DownloadStatus(str, enum.Enum):
     DOWNLOADED = "downloaded"
     ALREADY_PRESENT = "already_present"
     MANUAL = "manual"
+    FAILED = "failed"
 
 
 class DownloadReport(BaseModel):
@@ -73,11 +75,14 @@ def download_datasets(
 
     Returns:
         One :class:`DownloadReport` per requested corpus, in request order.
-        ``MANUAL`` reports carry the acquisition steps in ``detail``.
+        ``MANUAL`` reports carry the acquisition steps in ``detail``; a
+        failing automatic download yields a ``FAILED`` report (with the error
+        and any remediation steps in ``detail``) rather than aborting the
+        remaining corpora — one gated dataset must not sink an ``--all`` run.
 
     Raises:
-        UnknownComponentError: if a name is not a registered dataset.
-        DataError: if an automatic download fails.
+        UnknownComponentError: if a name is not a registered dataset (a
+            caller error, unlike a per-corpus download failure).
     """
     root = Path(root)
     requested = list(names) if names is not None else [info.name for info in catalog()]
@@ -97,7 +102,19 @@ def download_datasets(
             continue
         if loader.auto_downloadable:
             _logger.info("downloading %s -> %s", loader.info.name, destination)
-            loader.download(destination, **(options or {}))
+            try:
+                loader.download(destination, **(options or {}))
+            except TulipError as exc:
+                _logger.warning("download of %s failed: %s", loader.info.name, exc)
+                reports.append(
+                    DownloadReport(
+                        name=loader.info.name,
+                        status=DownloadStatus.FAILED,
+                        destination=destination,
+                        detail=str(exc),
+                    )
+                )
+                continue
             reports.append(
                 DownloadReport(
                     name=loader.info.name,

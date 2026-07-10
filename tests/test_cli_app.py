@@ -60,6 +60,24 @@ class TestDatasets:
         assert result.exit_code == 1
         assert "name at least one corpus" in result.output
 
+    def test_download_failure_exits_nonzero_but_still_renders_table(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import sys
+        from types import ModuleType
+
+        def gated(*args, **kwargs):
+            raise RuntimeError("gated dataset on the Hub. You must be authenticated")
+
+        module = ModuleType("datasets")
+        module.load_dataset = gated
+        monkeypatch.setitem(sys.modules, "datasets", module)
+
+        result = runner.invoke(app, ["data", "download", "bigos", "dgp", "--root", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "failed" in result.output
+        assert "manual" in result.output  # dgp's guidance still rendered
+
     def test_prepare_builds_splits(self, mini_config: Path, tmp_path: Path) -> None:
         out = tmp_path / "splits"
         result = runner.invoke(app, ["data", "prepare", str(mini_config), "--output", str(out)])
