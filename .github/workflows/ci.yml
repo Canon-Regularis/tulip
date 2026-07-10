@@ -107,5 +107,5 @@ jobs:
         run: |
           python -m venv /tmp/wheelcheck
           /tmp/wheelcheck/bin/python -m pip install --quiet dist/*.whl
-          /tmp/wheelcheck/bin/python -c "import importlib.resources as r, tulip; root = r.files('tulip'); assert (root / 'py.typed').is_file(), 'py.typed missing from the wheel'; assert (root / 'features' / 'text' / 'lexicons' / 'dialect_markers.yaml').is_file(), 'dialect lexicon not shipped as package data'; print('wheel ok:', tulip.__version__)"
+          /tmp/wheelcheck/bin/python -c "import importlib.resources as r, tulip; root = r.files('tulip'); lex = root / 'features' / 'text' / 'lexicons'; assert (root / 'py.typed').is_file(), 'py.typed missing from the wheel'; assert (lex / 'dialect_markers.yaml').is_file(), 'dialect lexicon not shipped as package data'; assert (lex / 'isoglosses.yaml').is_file(), 'isogloss lexicon not shipped as package data'; print('wheel ok:', tulip.__version__)"
           /tmp/wheelcheck/bin/tulip --version

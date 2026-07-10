@@ -1,0 +1,141 @@
+# Starter isogloss set for the `phonological_markers` feature extractor
+# (tulip.features.text.phonology). Where the whole-word `dialect_markers.yaml`
+# lexicon captures dialect *lexemes*, this file captures sub-lexical *sound
+# changes* -- the sort of markers Polish dialectology treats as primary.
+#
+# Format: a versioned mapping. `version` is an integer schema version; the loader
+# rejects anything it does not recognise. `isoglosses` is a list of entries, each
+# with:
+#   name         column stem, emitted as `phon:<name>` (must be unique)
+#   kind         `pattern` (regex + exclude stoplist) or `digraph` (digraph set)
+#   dialects     lexicon keys the isogloss diagnoses (documentation only)
+#   description   what the isogloss is and why it is operationalised this way
+#   source        dialectological attestation
+#   pattern       (kind: pattern) regex matched inside each lowercased token
+#   exclude       (kind: pattern) lowercased standard words the regex must NOT
+#                 count -- the stoplist is what makes an otherwise-noisy pattern
+#                 usable
+#   digraphs      (kind: digraph) the digraph strings whose rate is measured
+#
+# Matching runs on lowercased letter-only word tokens (see _tokenize.word_tokens),
+# so entries are spelled in lowercase and diacritics matter.
+#
+# Provenance: the two shipped isoglosses are the best-attested phonological
+# markers of the Masovian group, drawn from standard dialectological reference
+# material:
+#   - University of Warsaw dialectology compendium (dialektologia.uw.edu.pl):
+#     mazurzenie and asynchroniczna wymowa spolglosek wargowych miekkich.
+#   - K. Nitsch, "Dialekty jezyka polskiego" (1923) -- mazurzenie as the
+#     defining Masovian/Lesser-Polish isogloss.
+#   - A. Chetnik, "Kurpie" (1924) and Kurpie dialect texts -- soft-labial
+#     respellings (piwo -> psiwo, kobieta -> kobzieta).
+#
+# The set is intentionally small and high-precision: two isoglosses, each with a
+# tight scope. Extend or replace it via the `isogloss_path` parameter of
+# PhonologicalMarkerExtractor.
+
+version: 1
+
+isoglosses:
+  - name: soft_labial_cluster
+    kind: pattern
+    dialects: [kurpie]
+    description: >-
+      Asynchronous soft-labial clusters: dialectal pi/bi/wi/mi realised as
+      psi/bzi/wzi/mni (piwo -> psiwo, kobieta -> kobzieta, bialy -> bzialy).
+      Detected as those clusters inside a token, excluding the common standard
+      words that contain the same letter sequences (mnie, psie, wziac, ...),
+      without which the pattern would fire on ordinary Polish.
+    source: >-
+      Chetnik, "Kurpie" (1924); dialektologia.uw.edu.pl
+      (asynchroniczna wymowa spolglosek wargowych miekkich).
+    pattern: "psi|bzi|wzi|mni"
+    exclude:
+      # psi- : standard 'canine/dog' adjective and its derivations
+      - psi
+      - psia
+      - psie
+      - psią
+      - psiej
+      - psiego
+      - psiemu
+      - psim
+      - psich
+      - psimi
+      - psina
+      - psisko
+      - psiarnia
+      - psikus
+      # bzi- : 'bzik' (a whim) and locative of 'bez' (lilac)
+      - bzik
+      - bzika
+      - bzie
+      # wzi- : forms of 'wziąć' (to take) and 'wziernik' (speculum)
+      - wziąć
+      - wziął
+      - wzięła
+      - wzięło
+      - wzięli
+      - wzięły
+      - wzięty
+      - wzięta
+      - wzięte
+      - wziętą
+      - wzięci
+      - wzięcie
+      - wziąwszy
+      - wziernik
+      # mni- : 'mnie/mniej', monk, monument, remembrance, potato
+      - mnie
+      - mniej
+      - mniejszy
+      - mniejsza
+      - mniejsze
+      - mniejszą
+      - mniejszych
+      - mniejszym
+      - mniejszości
+      - mniejszość
+      - mnich
+      - mnicha
+      - mnisi
+      - mniszka
+      - mniemanie
+      - mniemać
+      - pomnik
+      - pomnika
+      - pomniki
+      - pomników
+      - wspomnienie
+      - wspomnień
+      - wspomnieć
+      - przypomnieć
+      - przypomnienie
+      - upomnienie
+      - zapomnieć
+      - zapomnienie
+      - ziemniak
+      - ziemniaki
+      - ziemniaka
+      - ziemniaków
+      - ziemniakami
+      - ziemniakach
+      - ziemniakiem
+      - ziemniakom
+
+  - name: sibilant_digraph
+    kind: digraph
+    dialects: [kurpie, masovia]
+    description: >-
+      Rate of the standard sibilant digraphs cz/sz/ż/dż. This is the *negative*
+      diagnostic for mazurzenie (the Masovian merger cz/sz/ż/dż -> c/s/z/dz):
+      mazurzenie deletes these digraphs, so a conspicuously LOW rate marks the
+      merger. There is no positive string for mazurzenie -- the merged forms are
+      plain c/s/z, indistinguishable from ordinary standard Polish -- so this
+      measures the digraphs' presence and lets the classifier learn that their
+      absence is the signal. rz is deliberately excluded: it survives mazurzenie
+      and so is not diagnostic of it.
+    source: >-
+      Nitsch, "Dialekty języka polskiego" (1923); dialektologia.uw.edu.pl
+      (mazurzenie).
+    digraphs: [cz, sz, ż, dż]
