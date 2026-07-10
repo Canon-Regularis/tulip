@@ -27,6 +27,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -190,10 +191,20 @@ def create_app(model_path: Path | str) -> Any:
     app.state.metrics = registry
 
     def _set_identity_headers(response: Response) -> None:
-        """Stamp model-identity headers so a client sees the model without /health."""
+        """Stamp model-identity headers so a client sees the model without /health.
+
+        HTTP header values are latin-1 only, but dialect class labels are Polish
+        and routinely carry diacritics (``śląsk``, ``kaszëby``) -- a raw
+        ``",".join`` would raise ``UnicodeEncodeError`` and 500 *every* response.
+        Each label is percent-encoded (RFC 3986), which is ASCII-safe, keeps
+        plain ASCII labels readable, and makes the comma an unambiguous separator
+        even when a label itself contains a comma. Clients unquote per field.
+        """
         response.headers["X-Tulip-Version"] = __version__
         response.headers["X-Model-Target"] = classifier.target.value
-        response.headers["X-Model-Classes"] = ",".join(classifier.classes_)
+        response.headers["X-Model-Classes"] = ",".join(
+            quote(label, safe="") for label in classifier.classes_
+        )
 
     @app.middleware("http")
     async def observability(request: Request, call_next: Any) -> Any:
@@ -268,10 +279,14 @@ def create_app(model_path: Path | str) -> Any:
         "abstention configuration.",
     )
     def health() -> dict[str, Any]:
+        # The server-side model path is NOT returned: on a non-loopback bind it
+        # would disclose the OS account, directory layout, and any confidential
+        # codenames in the path to any unauthenticated client (CWE-200). Model
+        # identity is conveyed by version/task/target/classes; the path is kept
+        # to server-side logs only.
         return {
             "status": "ok",
             "version": __version__,
-            "model": app.state.model_path,
             "task": classifier.task.value,
             "target": classifier.target.value,
             "classes": list(classifier.classes_),

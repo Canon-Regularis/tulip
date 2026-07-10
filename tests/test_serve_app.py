@@ -221,6 +221,41 @@ class TestModelIdentityHeaders:
         assert response.headers["X-Model-Target"] == "dialect"
         assert "podhale" in response.headers["X-Model-Classes"].split(",")
 
+    def test_polish_class_labels_do_not_crash_the_response(self, tmp_path: Path) -> None:
+        """Diacritic class labels used to 500 every /predict via a latin-1 header.
+
+        This is a Polish dialect toolkit, so labels with diacritics (śląsk,
+        kaszëby) are the norm, not an edge case; the identity header must encode
+        them safely instead of raising UnicodeEncodeError.
+        """
+        from urllib.parse import unquote
+
+        from tulip.core.types import DialectLabels, Sample
+        from tulip.pipeline import DialectClassifier
+        from tulip.serve.app import create_app
+
+        samples = [
+            Sample(
+                id=str(i),
+                text=f"godom po naszymu tekst numer {i}",
+                speaker_id=f"spk{i % 4}",
+                labels=DialectLabels(dialect="śląsk" if i % 2 else "kaszëby"),
+                source="t",
+            )
+            for i in range(12)
+        ]
+        model_dir = tmp_path / "m"
+        DialectClassifier(model="logistic_regression", features=["char_tfidf"]).fit(samples).save(
+            model_dir
+        )
+        response = TestClient(create_app(model_dir)).post(
+            "/predict/text", json={"text": "godom po naszymu"}
+        )
+        assert response.status_code == 200
+        header = response.headers["X-Model-Classes"]
+        assert header.isascii()  # latin-1 safe
+        assert {unquote(part) for part in header.split(",")} == {"śląsk", "kaszëby"}
+
 
 class TestBatchPredict:
     def test_three_texts_return_three_predictions(self, client: TestClient) -> None:
@@ -253,6 +288,15 @@ class TestEnrichedHealth:
         assert payload["n_classes"] == 3
         assert payload["abstain_threshold"] is None
         assert payload["abstain_enabled"] is False
+
+    def test_health_does_not_disclose_the_server_filesystem_path(self, client: TestClient) -> None:
+        """/health must not echo the local model path (CWE-200 info disclosure)."""
+        payload = client.get("/health").json()
+        assert "model" not in payload
+        # No value should look like an absolute filesystem path.
+        for value in payload.values():
+            if isinstance(value, str):
+                assert not value.startswith(("/", "C:\\", "\\\\"))
 
 
 class TestOpenAPIAndDemo:
