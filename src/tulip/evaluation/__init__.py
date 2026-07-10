@@ -20,6 +20,12 @@ from tulip.evaluation.benchmark import (
     save_benchmark,
     to_markdown_table,
 )
+from tulip.evaluation.calibration import (
+    CalibrationBin,
+    CalibrationReport,
+    compute_calibration,
+    reliability_curve,
+)
 from tulip.evaluation.cards import dataset_card, dataset_card_from_splits, model_card
 from tulip.evaluation.confusion import (
     NORMALIZE_OPTIONS,
@@ -41,10 +47,13 @@ __all__ = [
     "BENCHMARK_SCHEMA_VERSION",
     "NORMALIZE_OPTIONS",
     "BenchmarkResult",
+    "CalibrationBin",
+    "CalibrationReport",
     "ClassMetrics",
     "EvaluationReport",
     "LeaderboardSuite",
     "comparison_table",
+    "compute_calibration",
     "compute_metrics",
     "confusion_from_report",
     "dataset_card",
@@ -53,6 +62,7 @@ __all__ = [
     "load_suite",
     "model_card",
     "plot_confusion",
+    "reliability_curve",
     "render_leaderboard_markdown",
     "run_leaderboard",
     "save_benchmark",

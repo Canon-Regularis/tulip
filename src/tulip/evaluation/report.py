@@ -14,6 +14,12 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tulip.evaluation._format import format_metric, markdown_table
+
+# Runtime import (not under TYPE_CHECKING): EvaluationReport is a
+# runtime-evaluated pydantic model, so its ``calibration`` annotation must
+# resolve at class-construction time. calibration.py imports nothing from this
+# module, so the dependency is one-way and there is no import cycle.
+from tulip.evaluation.calibration import CalibrationReport
 from tulip.utils.io import read_json, write_json
 
 
@@ -38,6 +44,11 @@ class EvaluationReport(BaseModel):
     ``roc_auc_macro_ovr`` is ``None`` when it cannot be computed honestly
     (no probability estimates, or a class absent from the true labels) rather
     than silently misleading.
+
+    ``calibration`` is ``None`` unless probability estimates were supplied and
+    calibration was explicitly requested (see
+    :func:`~tulip.evaluation.metrics.compute_metrics`'s ``calibration_bins``);
+    it never affects the standard metrics above.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -55,6 +66,7 @@ class EvaluationReport(BaseModel):
     per_class: dict[str, ClassMetrics]
     confusion: tuple[tuple[int, ...], ...]
     n_samples: int = Field(ge=1)
+    calibration: CalibrationReport | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")

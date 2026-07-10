@@ -8,7 +8,11 @@ functions via :func:`tulip.utils.optional.optional_import` (extras ``viz`` and
 
 from __future__ import annotations
 
-from tulip.viz.charts import confusion_matrix_heatmap, probability_bar_chart
+from tulip.viz.charts import (
+    confusion_matrix_heatmap,
+    probability_bar_chart,
+    reliability_diagram,
+)
 from tulip.viz.embedding_space import (
     PROJECTION_COLUMNS,
     plot_embedding_space,
@@ -24,5 +28,6 @@ __all__ = [
     "prediction_map",
     "probability_bar_chart",
     "project_embeddings",
+    "reliability_diagram",
     "save_map",
 ]

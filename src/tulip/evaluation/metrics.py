@@ -28,6 +28,7 @@ from sklearn.metrics import (
 )
 
 from tulip.core.exceptions import ConfigurationError
+from tulip.evaluation.calibration import CalibrationReport, compute_calibration
 from tulip.evaluation.report import ClassMetrics, EvaluationReport
 from tulip.utils.logging import get_logger
 
@@ -43,6 +44,8 @@ def compute_metrics(
     y_proba: Any | None = None,
     labels: Sequence[Any] | None = None,
     metadata: dict[str, Any] | None = None,
+    *,
+    calibration_bins: int | None = None,
 ) -> EvaluationReport:
     """Evaluate predictions against gold labels for binary or multiclass tasks.
 
@@ -57,6 +60,11 @@ def compute_metrics(
             observed label must be included when this is given.
         metadata: Free-form context stored on the report (e.g. model name,
             target level, split name).
+        calibration_bins: When given (and ``y_proba`` is a usable probability
+            matrix), populate ``report.calibration`` with a top-label
+            :class:`~tulip.evaluation.calibration.CalibrationReport` using this
+            many uniform bins. Defaults to ``None``: no calibration is computed
+            and the field stays ``None``, so existing artifacts are unchanged.
 
     Returns:
         A frozen :class:`EvaluationReport` with overall, per-class, and
@@ -106,6 +114,12 @@ def compute_metrics(
         for row in confusion_matrix(true_list, pred_list, labels=label_list)
     )
 
+    calibration = (
+        _guarded_calibration(true_list, y_proba, label_list, calibration_bins)
+        if calibration_bins is not None
+        else None
+    )
+
     return EvaluationReport(
         accuracy=float(accuracy_score(true_list, pred_list)),
         balanced_accuracy=balanced_accuracy,
@@ -120,6 +134,7 @@ def compute_metrics(
         per_class=per_class,
         confusion=confusion,
         n_samples=len(true_list),
+        calibration=calibration,
         metadata=dict(metadata) if metadata else {},
     )
 
@@ -140,6 +155,33 @@ def _resolve_labels(
             f"labels observed in y_true/y_pred are missing from `labels`: {sorted(unknown)}"
         )
     return label_list
+
+
+def _guarded_calibration(
+    true_list: list[str], y_proba: Any | None, label_list: list[str], n_bins: int
+) -> CalibrationReport | None:
+    """Top-label calibration report, or ``None`` when ``y_proba`` is unusable.
+
+    Calibration is opt-in (only when ``calibration_bins`` is passed), so an
+    unusable probability matrix disables it with a debug log rather than failing
+    an otherwise-valid metrics computation. Shape checks mirror those in
+    :func:`_guarded_roc_auc`; a row-count mismatch has already raised there
+    (ROC AUC is always evaluated), so this never masks that caller bug.
+    """
+    if y_proba is None:
+        logger.debug("calibration skipped: y_proba not provided")
+        return None
+    try:
+        proba = np.asarray(y_proba, dtype=float)
+    except (TypeError, ValueError):
+        logger.debug("calibration skipped: y_proba is not a numeric array")
+        return None
+    if proba.ndim != 2 or proba.shape[0] != len(true_list) or proba.shape[1] != len(label_list):
+        logger.debug(
+            "calibration skipped: y_proba shape %s incompatible", getattr(proba, "shape", None)
+        )
+        return None
+    return compute_calibration(true_list, proba, label_list, n_bins=n_bins)
 
 
 def _guarded_roc_auc(
