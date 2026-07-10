@@ -7,7 +7,10 @@ dist/
 .eggs/
 
 # Environments
-.venv/
+# ".venv*/" (not ".venv/") so sibling environments such as .venv-ci/ are also
+# ignored; previously they were excluded only by the virtualenv's own
+# auto-generated nested .gitignore, which is not something to rely on.
+.venv*/
 venv/
 env/
 
@@ -24,6 +27,11 @@ artifacts/
 runs/
 *.joblib
 *.ckpt
+
+# The leaderboard's raw dump carries per-model wall-clock timings, so it is
+# regenerated rather than committed. leaderboard.md and provenance.json are
+# deterministic and ARE committed -- that is the reproducibility guarantee.
+benchmarks/results/**/leaderboard.json
 
 # Raw and processed corpora (acquire locally; see docs/datasets.md).
 # Anchored to the repo root: an unanchored "data/" would also swallow the
