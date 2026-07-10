@@ -29,6 +29,35 @@ from tulip.evaluation.report import EvaluationReport
 if TYPE_CHECKING:
     from pathlib import Path
 
+
+class TestProbabilityValueValidation:
+    """Bad probability VALUES must fail like bad shapes do: one clean error."""
+
+    @pytest.mark.parametrize(
+        ("tag", "proba"),
+        [
+            ("nan", [[float("nan"), 0.5], [0.4, 0.6]]),
+            ("inf", [[float("inf"), 0.0], [0.4, 0.6]]),
+        ],
+    )
+    def test_non_finite_probabilities_raise_configuration_error(
+        self, tag: str, proba: list[list[float]]
+    ) -> None:
+        # A NaN row makes argmax select the NaN slot; the bin's mean confidence
+        # then tripped CalibrationBin's Field(ge=0, le=1) and surfaced as a
+        # cryptic pydantic error about an internal value object.
+        with pytest.raises(ConfigurationError, match="non-finite"):
+            compute_calibration(["0", "1"], proba, ["0", "1"], n_bins=3)
+
+    def test_out_of_range_probabilities_raise_configuration_error(self) -> None:
+        with pytest.raises(ConfigurationError, match=r"\[0, 1\]"):
+            compute_calibration(["0", "1"], [[1.4, 0.1], [0.4, 0.6]], ["0", "1"], n_bins=3)
+
+    def test_a_value_at_the_boundary_is_accepted(self) -> None:
+        report = compute_calibration(["0", "1"], [[1.0, 0.0], [0.0, 1.0]], ["0", "1"], n_bins=3)
+        assert report.ece == pytest.approx(0.0)
+
+
 # Binary micro-case shared with the metrics tests, so calibration wiring is
 # exercised on inputs whose standard metrics are already pinned elsewhere.
 Y_TRUE = ["a", "a", "b", "b"]

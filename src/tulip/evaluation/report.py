@@ -159,10 +159,18 @@ class EvaluationReport(BaseModel):
     def load(cls, path: Path | str) -> EvaluationReport:
         """Read a report previously written by :meth:`save`.
 
+        Every typed field round-trips exactly. The free-form ``metadata`` mapping
+        does not: :meth:`save` serialises it as JSON, so a non-JSON-native
+        container (a ``tuple``, a ``set``) comes back as a ``list`` and the
+        reloaded report is not ``==`` the saved one. Keep ``metadata`` values
+        JSON-native if you rely on equality. (The same applies to
+        :attr:`tulip.core.types.Sample.metadata` across ``save_splits`` /
+        ``load_splits``.)
+
         Args:
             path: JSON file produced by :meth:`save`.
 
         Returns:
-            The reconstructed report; equal (``==``) to the saved instance.
+            The reconstructed report.
         """
         return cls.model_validate(read_json(Path(path)))

@@ -14,6 +14,30 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+class TestMetadataRoundTrip:
+    def test_json_native_metadata_round_trips_exactly(self, tmp_path: Path) -> None:
+        original = compute_metrics(
+            ["a", "b"], ["a", "b"], metadata={"model": "nb", "seeds": [1, 2]}
+        )
+        original.save(tmp_path / "r.json")
+        assert EvaluationReport.load(tmp_path / "r.json") == original
+
+    def test_a_tuple_in_metadata_comes_back_as_a_list(self, tmp_path: Path) -> None:
+        """`metadata` is free-form and serialised as JSON, so containers normalise.
+
+        `load()` used to promise equality with the saved instance unconditionally.
+        It cannot: JSON has no tuple. The docstring now says so; this pins the
+        actual behaviour so nobody re-asserts the false contract.
+        """
+        original = compute_metrics(["a", "b"], ["a", "b"], metadata={"pair": (1, 2)})
+        original.save(tmp_path / "r.json")
+        loaded = EvaluationReport.load(tmp_path / "r.json")
+
+        assert loaded != original
+        assert original.metadata["pair"] == (1, 2)
+        assert loaded.metadata["pair"] == [1, 2]
+
+
 @pytest.fixture
 def report() -> EvaluationReport:
     return compute_metrics(

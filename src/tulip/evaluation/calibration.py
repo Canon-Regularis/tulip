@@ -40,6 +40,10 @@ __all__ = [
     "reliability_curve",
 ]
 
+#: Slack allowed when range-checking probabilities, so a value that is 1.0 only
+#: up to floating-point round-off is not rejected.
+_RANGE_TOL = 1e-9
+
 
 class CalibrationBin(BaseModel):
     """One confidence bin: how sure the model was versus how often it was right.
@@ -263,6 +267,18 @@ def _as_proba_matrix(y_proba: Any, *, n_samples: int, n_labels: int) -> np.ndarr
         raise ConfigurationError(
             f"y_proba has {proba.shape[1]} columns but there are {n_labels} labels"
         )
+    # Validate the VALUES too, not just the shape. A NaN row makes argmax select
+    # the NaN slot, and the bin's mean confidence then fails CalibrationBin's
+    # Field(ge=0, le=1) -- surfacing as a cryptic pydantic error about an
+    # internal value object rather than about the caller's bad probabilities.
+    if not np.all(np.isfinite(proba)):
+        raise ConfigurationError("y_proba contains non-finite values (NaN or inf)")
+    if proba.size:
+        low, high = float(proba.min()), float(proba.max())
+        if low < -_RANGE_TOL or high > 1.0 + _RANGE_TOL:
+            raise ConfigurationError(
+                f"y_proba values must lie in [0, 1]; got range [{low:.6g}, {high:.6g}]"
+            )
     return proba
 
 
