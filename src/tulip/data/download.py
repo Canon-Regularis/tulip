@@ -19,20 +19,59 @@ Adding automatic support for another corpus is one loader change: set
 from __future__ import annotations
 
 import enum
+import shutil
+import urllib.error
+import urllib.request
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from tulip.core.exceptions import TulipError
+from tulip.core.exceptions import DataError, TulipError
 from tulip.data.catalog import catalog
 from tulip.data.registry import DATASETS
 from tulip.utils.logging import get_logger
 
 _logger = get_logger(__name__)
 
-__all__ = ["DownloadReport", "DownloadStatus", "download_datasets"]
+__all__ = ["DownloadReport", "DownloadStatus", "download_datasets", "fetch_file"]
+
+
+def fetch_file(url: str, destination: Path, *, description: str) -> Path:
+    """Stream a URL to ``destination``, never leaving a partial file behind.
+
+    Shared by the corpus downloaders: writes to ``<destination>.part`` and
+    renames only on success, so an interrupted or failed transfer cannot
+    masquerade as an acquired corpus. ``file://`` URLs work too (used by
+    tests and offline mirrors).
+
+    Args:
+        url: Source URL (redirects are followed).
+        destination: Final file path; parent directories are created.
+        description: Human label for logs and error messages.
+
+    Returns:
+        ``destination``.
+
+    Raises:
+        DataError: if the transfer fails for any reason.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_suffix(destination.suffix + ".part")
+    _logger.info("downloading %s from %s", description, url)
+    try:
+        # HTTP(S) redirects and file:// are both handled by urllib openers.
+        with urllib.request.urlopen(url) as response, partial.open("wb") as handle:
+            shutil.copyfileobj(response, handle, length=1024 * 1024)
+        partial.replace(destination)
+    except BaseException as exc:
+        partial.unlink(missing_ok=True)
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        raise DataError(f"could not download {description} from {url}: {exc}") from exc
+    _logger.info("%s downloaded (%.1f MB)", description, destination.stat().st_size / (1024 * 1024))
+    return destination
 
 
 class DownloadStatus(str, enum.Enum):

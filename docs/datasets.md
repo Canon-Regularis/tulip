@@ -8,10 +8,11 @@ tulip never scrapes web pages at runtime. Every corpus is acquired locally
 tulip data download --all
 ```
 
-which fetches every corpus that has a licence-clean automatic source (today:
-**BIGOS**, streamed from the Hugging Face Hub into a local manifest — the
-dataset is gated, so accept its conditions on the Hub and authenticate with
-`hf auth login` or `HF_TOKEN` first) and
+which fetches every corpus that has a licence-clean automatic source —
+today **NKJP** (GPL tarball, parsed to a manifest), **Common Voice PL**
+(text/metadata TSV from a mirror of the CC0 release), and **BIGOS**
+(Hugging Face Hub; gated, so accept its conditions and authenticate with
+`hf auth login` or `HF_TOKEN` first) — and
 prints the exact manual steps for the rest; a failing download never aborts
 the remaining corpora — most dialect corpora have no
 bulk download, so the standard workflow remains: obtain the material,
@@ -91,9 +92,13 @@ rows default to `dialect=podolia`.
 
 ### nkjp — Narodowy Korpus Języka Polskiego — <https://nkjp.pl/>
 
-Standard-Polish negatives for dialect-vs-standard classification. Export
-sentences/paragraphs into `data/raw/nkjp/manifest.csv` with a `text` column;
-rows are labelled `family=standard` automatically.
+Standard-Polish negatives for dialect-vs-standard classification.
+**Automatic**: `tulip data download nkjp` streams the NKJP-1M balanced
+subcorpus tarball (~163 MB, GNU GPL, from `clip.ipipan.waw.pl`), parses its
+TEI `text.xml` documents in memory, and writes ~40k paragraphs to
+`data/raw/nkjp/manifest.csv` — one surrogate speaker per source document, so
+splits stay leakage-free. Rows are labelled `family=standard` automatically.
+Manual assembly with the same layout (a `text` column) also works.
 
 ### spokes — <https://spokes.clarin-pl.eu/>
 
@@ -109,6 +114,13 @@ data/raw/common_voice_pl/
     validated.tsv       # or pass tsv="train.tsv" etc. in the dataset params
     clips/*.mp3
 ```
+
+**Automatic (text only)**: `tulip data download common_voice_pl` fetches
+`validated.tsv` (sentences + speaker/accent metadata, CC0) from a community
+mirror of the release — Mozilla's portal is email-gated and the official
+Hub repo is a script-era dataset modern `datasets` cannot load. Audio clips
+are deliberately not fetched (tens of GB); for audio experiments download
+the official release from Mozilla and drop `clips/` next to the TSV.
 
 `client_id` becomes the speaker ID. Rows default to standard Polish;
 self-reported accent strings are kept in metadata and can be promoted to
