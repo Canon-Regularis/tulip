@@ -87,7 +87,7 @@ dev = [
     "mypy>=2.2.0",
     "types-PyYAML>=6.0.12.20260518",
     "pre-commit>=4.6.0",
-    "hypothesis>=6.156.5",
+    "hypothesis>=6.156.6",
 ]
 
 [project.scripts]
