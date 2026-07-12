@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.21
     hooks:
       # `ruff-check` is the current id; the old `ruff` id is deprecated.
       - id: ruff-check
@@ -19,7 +19,7 @@ repos:
         # committed by accident.
         exclude: ^uv\.lock$
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.1.0
+    rev: v2.2.0
     hooks:
       # Types are gated in CI, so catch them before the push rather than after.
       # `pass_filenames: false` + empty `args` makes mypy read its own
@@ -32,4 +32,4 @@ repos:
         additional_dependencies:
           - pydantic>=2.5
           - numpy>=1.24
-          - types-PyYAML>=6.0
+          - types-PyYAML>=6.0.12.20260518
