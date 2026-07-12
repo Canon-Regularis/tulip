@@ -1,0 +1,70 @@
+name: Sync uv.lock on Dependabot PRs
+
+# Dependabot bumps dependency floors in pyproject.toml but never regenerates
+# uv.lock, so the `lock` job in ci.yml (`uv lock --check`) fails on every pip PR.
+# This workflow re-locks and pushes the refreshed uv.lock back to the PR branch,
+# so those PRs go green automatically with no manual adoption.
+#
+# WHY pull_request_target + a PAT (and not the default GITHUB_TOKEN):
+#   * `pull_request` runs triggered by Dependabot get a READ-ONLY token, so they
+#     cannot push. `pull_request_target` runs in the base-branch context and can.
+#   * A commit pushed with the default GITHUB_TOKEN does NOT re-trigger CI, so the
+#     `lock` check would stay red even after the lock is fixed. A PAT (or GitHub
+#     App token) push re-runs ci.yml, turning the check green.
+#
+# SECURITY: this is hardened against the usual pull_request_target risks --
+#   * the job runs ONLY for the `dependabot[bot]` actor (the `if` guard skips it
+#     for every human/fork PR before any step or the PAT is touched);
+#   * Dependabot branches are in this repo, so only same-repo branches are ever
+#     checked out;
+#   * it does nothing but `uv lock` + commit the lockfile -- it never builds,
+#     installs, tests, or otherwise executes untrusted PR code. `uv lock` only
+#     resolves dependency metadata; it does not run package build backends.
+#
+# ONE-TIME SETUP (required, else the checkout step fails with an empty token):
+#   Create a fine-grained Personal Access Token scoped to THIS repository with
+#   "Contents: Read and write", and add it as an Actions secret named
+#   DEPENDABOT_UV_LOCK_TOKEN. (A GitHub App installation token works too -- swap
+#   the checkout `token` for one minted by actions/create-github-app-token.)
+
+on:
+  pull_request_target:
+    # Only the pip PRs touch pyproject.toml; github-actions PRs never need a re-lock.
+    paths:
+      - pyproject.toml
+
+# Keep the default token minimal; the scoped PAT does the write.
+permissions:
+  contents: read
+
+concurrency:
+  group: uv-lock-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync-lock:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check out (and push back to) the PR's own branch.
+          ref: ${{ github.event.pull_request.head.ref }}
+          # A PAT, not GITHUB_TOKEN, so the pushed commit re-triggers ci.yml.
+          token: ${{ secrets.DEPENDABOT_UV_LOCK_TOKEN }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install uv
+      - run: uv lock
+      - name: Commit and push the refreshed lockfile if it changed
+        run: |
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock already in sync; nothing to do."
+            exit 0
+          fi
+          git config user.name "dependabot[bot]"
+          git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "chore(deps): sync uv.lock with the updated pyproject.toml"
+          git push
