@@ -29,10 +29,9 @@ subset into a single `FeatureUnion`.
 
 ## Phonological rule engine
 
-Bidirectional rewrite rules for the group-defining isoglosses: a per-document
-`applicable`/`fired` feature, a dialect -> standard normaliser, and the shared
-core the dialect-intensity feature and the dialect-evidence explainer compose
-over.
+Bidirectional rewrite rules for the group-defining isoglosses. A per-document
+`applicable`/`fired` feature, plus a dialect-to-standard normaliser. The
+dialect-intensity feature and the dialect-evidence explainer build on this core.
 
 ::: tulip.features.text.PhonologicalRuleExtractor
 

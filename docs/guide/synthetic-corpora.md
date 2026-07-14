@@ -1,47 +1,46 @@
 # Synthetic corpora
 
 Every real corpus tulip supports needs a licence and a download. The `synthetic`
-corpus needs neither: it is **generated in-process**, so a fresh clone can run
-the whole toolkit — generate, split, train, evaluate, benchmark, serve — end to
-end with no acquisition.
+corpus needs neither. It is generated in memory. A fresh clone can run the whole
+toolkit offline: generate, split, train, evaluate, benchmark, serve.
 
 !!! danger "A benchmark fixture, not real speech or text"
-    Scores on the synthetic corpus say **nothing** about real-world Polish
-    dialect identification. It exists to make the machinery runnable and its
-    outputs reproducible, not to estimate accuracy. Never quote a synthetic
-    score as a dialect-ID result.
+    Scores on the synthetic corpus say nothing about real Polish dialect
+    identification. The corpus exists to make the machinery runnable and its
+    outputs reproducible. Never quote a synthetic score as a dialect-ID result.
 
 ## What it is for
 
-The synthetic corpus provides a *reproducible, learnable* task grounded in
-tulip's own linguistic resources, so that:
+The synthetic corpus gives you a reproducible, learnable task. It is grounded in
+tulip's own linguistic resources. It lets you:
 
-- the pipeline can be exercised end to end on any machine, offline;
-- CI and examples produce byte-identical artifacts for a fixed seed;
-- speaker-disjoint splitting is genuinely tested rather than trivially satisfied.
+- run the pipeline end to end on any machine, offline;
+- produce byte-identical artifacts for a fixed seed, in CI and examples;
+- exercise speaker-disjoint splitting for real, not trivially.
 
 ## What signal it contains
 
-The generator layers three kinds of signal, each mirroring something a real
-model must cope with:
+The generator layers three kinds of signal. Each mirrors something a real model
+must handle.
 
-- **Lexical** — genuine marker lexemes drawn from the project's own lexicon
-  (`src/tulip/features/text/lexicons/dialect_markers.yaml`): Podhale *baca*,
-  Silesian *gryfny*, Kashubian *chëcz*, and so on.
-- **Phonological** — real sound changes applied as deterministic string
-  transforms: *mazurzenie* (cz/sz/ż → c/s/z) for the Masovian group, and
-  asynchronous soft-labials (pi → psi, bi → bzi) for Kurpie. These are exactly
-  what character n-grams can see and a whole-word lexicon cannot.
-- **Speaker idiolect** — each speaker gets a personal filler vocabulary, so a
-  model can partly re-identify the speaker. That is precisely the leakage that
-  speaker-disjoint splitting must defend against.
+- **Lexical.** Real marker lexemes from the project lexicon
+  (`src/tulip/features/text/lexicons/dialect_markers.yaml`). For example: Podhale
+  *baca*, Silesian *gryfny*, Kashubian *chëcz*.
+- **Phonological.** Real sound changes applied as deterministic string
+  transforms. *Mazurzenie* (cz/sz/ż to c/s/z) for the Masovian group.
+  Asynchronous soft labials (pi to psi, bi to bzi) for Kurpie. Character n-grams
+  can see these; a whole-word lexicon cannot.
+- **Speaker idiolect.** Each speaker gets a personal filler vocabulary. A model
+  can partly re-identify the speaker. This is the leakage that speaker-disjoint
+  splitting must defend against.
 
 ## The knob that matters: `marker_dropout`
 
-`marker_dropout` (default `0.20`) is the fraction of samples carrying **no**
-lexical marker at all, mirroring the fact that plenty of real dialect utterances
-contain no diagnostic lexeme. It gives the task an irreducible error floor. Set
-it to `0.0` and every linear model scores a perfect `1.000` — a benchmark that
+`marker_dropout` (default `0.20`) is the fraction of samples with no lexical
+marker. Real dialect utterances often carry no diagnostic lexeme. This knob
+mirrors that. It gives the task an error floor.
+
+Set it to `0.0` and every linear model scores `1.000`. That is a benchmark that
 cannot rank anything.
 
 Generator parameters flow through `params:` like any other loader:
@@ -62,11 +61,11 @@ data:
 
 ```bash
 tulip train configs/synthetic_text.yaml     # dialect level
-tulip train configs/synthetic_family.yaml   # family level, incl. the `standard` class
+tulip train configs/synthetic_family.yaml   # family level, incl. the standard class
 ```
 
-To materialise an auditable copy on disk (a JSONL manifest, byte-identical for a
-given seed):
+To write an auditable copy to disk (a JSONL manifest, byte-identical for a given
+seed):
 
 ```bash
 tulip data synthesize --out data/raw/synthetic --seed 7
@@ -74,18 +73,17 @@ tulip data synthesize --out data/raw/synthetic --seed 7
 
 ## Audio parity
 
-The synthetic path is not text-only: an audio fixture mirrors the same generate →
-split → train → evaluate flow so audio pipelines are exercised offline as well.
-Its scores carry the same caveat — a fixture, not real speech.
+The synthetic path is not text-only. An audio fixture mirrors the same flow, so
+audio pipelines run offline too. Its scores carry the same caveat: a fixture,
+not real speech.
 
 ## Under the hood
 
-The generator is part of the public data API: `generate_corpus` and
-`SyntheticSpec` produce the samples, and `write_synthetic_manifest` persists
-them. See the [data reference](../reference/data.md).
+The generator is part of the public data API. `generate_corpus` and
+`SyntheticSpec` produce the samples. `write_synthetic_manifest` writes them to
+disk. See the [data reference](../reference/data.md).
 
 ## Learn more
 
-For the full dataset story — acquisition of the *real* corpora, the manifest
-format, speaker-ID surrogates, and the reproducible-split machinery — see
-[Datasets](../datasets.md).
+For the real corpora, the manifest format, speaker-ID surrogates, and the
+reproducible-split machinery, see [Datasets](../datasets.md).

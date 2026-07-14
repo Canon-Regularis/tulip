@@ -1,9 +1,9 @@
 # Data
 
-The dataset subsystem: the catalog, the `DatasetBuilder` that orchestrates
-load → clean → dedup → speaker-disjoint split → persist, manifest and validation
-helpers, and the synthetic-corpus generator. See [Datasets](../datasets.md) for
-acquisition and the manifest format.
+The dataset subsystem. The catalog, the `DatasetBuilder` (load, clean, dedup,
+speaker-disjoint split, persist), manifest and validation helpers, and the
+synthetic-corpus generator. See [Datasets](../datasets.md) for acquisition and
+the manifest format.
 
 ## Building splits
 
@@ -41,9 +41,9 @@ acquisition and the manifest format.
 
 ## Reproducibility
 
-A content fingerprint over a produced split, so its byte-for-byte reproducibility
-is verifiable — not just its sizes. `DatasetBuilder.build` writes one as
-`split_lock.json` next to the splits.
+A content fingerprint over a produced split. It makes byte-for-byte
+reproducibility verifiable, not just the sizes. `DatasetBuilder.build` writes one
+as `split_lock.json` next to the splits.
 
 ::: tulip.data.fingerprint_splits
 

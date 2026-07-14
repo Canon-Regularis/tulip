@@ -1,10 +1,9 @@
 # Evaluation
 
-Metrics, reports, confusion matrices, calibration, and the reproducible-benchmark
-surface. The typical flow: `compute_metrics` turns predictions into a frozen
-`EvaluationReport`; `BenchmarkResult` collects per-split reports for one model so
-several models can be compared and persisted; leaderboards and cards render
-byte-stable markdown from committed artifacts.
+Metrics, reports, confusion matrices, calibration, and the benchmark surface.
+`compute_metrics` turns predictions into a frozen `EvaluationReport`.
+`BenchmarkResult` collects per-split reports for one model, so several models can
+be compared and saved. Leaderboards and cards render byte-stable markdown.
 
 ## Metrics and reports
 
@@ -54,9 +53,9 @@ byte-stable markdown from committed artifacts.
 
 ## Per-sample predictions
 
-The substrate the rigor analyses below share: `collect_predictions` (in the
-pipeline) turns a fitted classifier into a `SplitPredictions`, whose records
-carry each sample's gold label, prediction, probability row, and slice keys.
+The rigor analyses below share this substrate. `collect_predictions` (in the
+pipeline) turns a fitted classifier into a `SplitPredictions`. Each record holds
+the gold label, the prediction, the probability row, and slice keys.
 
 ::: tulip.evaluation.SplitPredictions
 
@@ -64,9 +63,9 @@ carry each sample's gold label, prediction, probability row, and slice keys.
 
 ## Significance
 
-Turns a ranking into claims: bootstrap confidence intervals per metric, exact
-paired McNemar tests between models on the identical frozen split, Holm
-correction, and a "tied with best" grouping.
+Turns a ranking into claims. Bootstrap confidence intervals per metric. Exact
+paired McNemar tests between models on the same split. Holm correction. A "tied
+with best" grouping.
 
 ::: tulip.evaluation.paired_significance
 
@@ -76,8 +75,8 @@ correction, and a "tied with best" grouping.
 
 ## Selective prediction
 
-Scores the abstention trade-off the classifier already ships: a risk-coverage
-curve, AURC, accuracy at a target coverage, and coverage at a target error.
+Scores the abstention trade-off. A risk-coverage curve, AURC, accuracy at a
+target coverage, and coverage at a target error.
 
 ::: tulip.evaluation.selective_report
 
@@ -87,8 +86,8 @@ curve, AURC, accuracy at a target coverage, and coverage at a target error.
 
 ## Error analysis
 
-Derives what the confusion matrix cannot: most-confused pairs, hard exemplars,
-and per-slice fairness/robustness metrics.
+Goes beyond the confusion matrix. Most-confused pairs, hard exemplars, and
+per-slice fairness metrics.
 
 ::: tulip.evaluation.error_report
 

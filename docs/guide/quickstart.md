@@ -1,16 +1,16 @@
 # Quickstart
 
 This guide takes a fresh clone to a trained model, a prediction, and a running
-inference service — **with no data acquisition**. The `synthetic` corpus is
-generated in-process, so every command below works today.
+service. It needs no data. The `synthetic` corpus is generated in memory, so
+every command below works today.
 
 !!! warning "The synthetic corpus is a fixture, not real speech"
-    The numbers you get here measure whether the machinery works, not real
-    dialect-identification accuracy. See [Synthetic corpora](synthetic-corpora.md).
+    These numbers show that the machinery works. They are not real dialect
+    accuracy. See [Synthetic corpora](synthetic-corpora.md).
 
 ## Install
 
-Requires Python 3.10+. The core install is deliberately light; heavy stacks are
+You need Python 3.10 or newer. The core install is light. Heavy stacks are
 opt-in extras.
 
 ```bash
@@ -19,36 +19,34 @@ python -m venv .venv
 pip install -e ".[dev]"           # core + tooling
 ```
 
-Add extras only for the stacks you use, for example `pip install -e ".[boosting]"`
-(XGBoost/LightGBM), `.[transformers]` (HerBERT/RoBERTa), `.[audio]`, `.[speech]`,
-`.[explain]`, `.[viz]`, or `.[serve]`.
+Add extras only for the stacks you use. For example: `.[boosting]`,
+`.[transformers]`, `.[audio]`, `.[speech]`, `.[explain]`, `.[viz]`, `.[serve]`.
 
 ## 1. Train
 
-Train an end-to-end text pipeline on the synthetic dialect corpus. This one
-command generates the corpus, cleans and deduplicates it, builds a
-speaker-disjoint split, trains, evaluates on validation and test, and persists
-the model with its config and metrics.
+Train a text pipeline on the synthetic corpus. One command does it all. It
+generates the corpus, cleans and deduplicates it, builds a speaker-disjoint
+split, trains, evaluates on validation and test, and saves the model.
 
 ```bash
 tulip train configs/synthetic_text.yaml
 ```
 
-The trained artifact lands under the experiment's `output_dir`, alongside the
-resolved config, `build_manifest.json`, and per-split evaluation reports.
+The artifact lands under the experiment's `output_dir`. Next to it sit the
+resolved config, `build_manifest.json`, and per-split reports.
 
 !!! note "Audio parity"
-    An audio path mirrors this exactly — `tulip train configs/synthetic_audio.yaml`
-    trains on synthetic audio features with the same generate → split → train →
-    evaluate flow. Everything below applies to audio models too.
+    Audio works the same way. `tulip train configs/synthetic_audio.yaml` trains
+    on synthetic audio features with the same flow. Everything below applies to
+    audio models too.
 
-You can also train at the family level (which includes the `standard` negative
-class) with `tulip train configs/synthetic_family.yaml`.
+To train at the family level (which adds the `standard` class), use
+`configs/synthetic_family.yaml`.
 
 ## 2. Predict
 
-Point `tulip predict` at the saved model directory and pass text to classify.
-Add `--explain` for evidence and `--map` to render an interactive map of Poland.
+Point `tulip predict` at the saved model directory and pass some text. Add
+`--explain` for evidence. Add `--map` to render a map of Poland.
 
 ```bash
 tulip predict artifacts/synthetic-text/model \
@@ -56,13 +54,13 @@ tulip predict artifacts/synthetic-text/model \
   --explain top_tfidf --map prediction.html
 ```
 
-Use `--json` for machine-readable output, or `--audio path/to/clip.wav` (with an
-audio-trained model) instead of a text argument.
+Use `--json` for machine-readable output. Use `--audio path/to/clip.wav` with an
+audio model instead of text.
 
 ### From Python
 
-The same flow is available as a library. The `DialectClassifier` facade composes
-feature configs and a model into one trainable object:
+The same flow is available as a library. `DialectClassifier` composes features
+and a model into one object.
 
 ```python
 from tulip import DialectClassifier
@@ -84,7 +82,7 @@ See the [pipeline reference](../reference/pipeline.md) for the full API.
 
 ## 3. Serve
 
-Expose the saved model over HTTP (needs the `serve` extra):
+Expose the saved model over HTTP. This needs the `serve` extra.
 
 ```bash
 pip install -e ".[serve]"
@@ -99,13 +97,13 @@ curl -X POST localhost:8000/predict/text \
   -d '{"text": "Jo żech je z Katowic i godom po naszymu."}'
 ```
 
-The service also exposes a browser demo UI at `/`, a `/health` probe, batch and
+The service also serves a browser demo at `/`, a `/health` probe, batch and
 audio endpoints, and Prometheus `/metrics`. See [Serving](serving.md).
 
 ## 4. Benchmark and leaderboard
 
-Evaluate several models against one frozen split, then regenerate the committed,
-byte-stable leaderboard:
+Compare several models on one frozen split. Then regenerate the committed,
+byte-stable leaderboard.
 
 ```bash
 tulip benchmark configs/synthetic_text.yaml \
@@ -113,15 +111,20 @@ tulip benchmark configs/synthetic_text.yaml \
 tulip leaderboard benchmarks/suite.yaml
 ```
 
-Deduplication runs before splitting and grouping guarantees speaker disjointness,
-so results are comparable across runs. The details are in
+Deduplication runs before splitting. Grouping keeps speakers disjoint. Results
+are comparable across runs. The details are in
 [Datasets](../datasets.md#building-a-reproducible-benchmark-split).
 
 ## Working with real corpora
 
-Real dialect corpora are acquired locally (tulip never scrapes at runtime). The
-typical loop is `tulip data download --all` (fetches the licence-clean automatic
-sources, prints manual steps for the rest), assemble a manifest, then
-`tulip data validate`, `tulip data prepare`, and `tulip train`. See
-[Datasets](../datasets.md) for acquisition, the manifest format, and per-corpus
-layouts.
+Real dialect corpora are acquired locally. tulip never scrapes at runtime. The
+usual loop:
+
+1. `tulip data download --all` fetches the licence-clean sources and prints
+   manual steps for the rest.
+2. Assemble a manifest.
+3. `tulip data validate` checks it.
+4. `tulip data prepare`, then `tulip train`.
+
+See [Datasets](../datasets.md) for acquisition, the manifest format, and
+per-corpus layouts.

@@ -58,6 +58,7 @@ nav:
       - Data: reference/data.md
       - Features: reference/features.md
       - Evaluation: reference/evaluation.md
+      - Deployment &amp; serving: reference/deploy.md
   - Project:
       - Architecture: architecture.md
       - Datasets: datasets.md

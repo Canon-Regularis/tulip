@@ -2,36 +2,33 @@
 
 Polish Dialect Typology and Regional Speech Classification Analysis System
 
-**tulip** detects Polish dialects from written text, transcribed speech, and raw
-audio. It ships classical ML baselines and deep-learning models behind one
-API, explains every prediction, draws it on a map of Poland, and builds
-reproducible, speaker-disjoint benchmark splits - because there is currently
-no widely adopted benchmark for Polish dialect identification.
+**tulip** detects Polish dialects. It works on written text, transcribed speech,
+and raw audio. It gives you classical and deep-learning models behind one API. It
+explains each prediction and can draw it on a map of Poland. It also builds
+reproducible, speaker-disjoint benchmark splits. There is no widely adopted
+benchmark for Polish dialect identification, so tulip provides one.
 
 ## What it does
 
-- **Text classification** - char/word TF-IDF, stylometry, affix frequencies,
-  and a dialect-keyword lexicon into Naive Bayes, logistic regression,
-  calibrated linear SVM, random forest, XGBoost, or LightGBM; or fine-tuned
-  HerBERT / Polish RoBERTa / mBERT / XLM-R and fastText.
-- **Speech classification** - MFCC, mel spectrogram, pitch, formants, energy,
-  ZCR, spectral centroid, chroma, and wav2vec2 embeddings; or wav2vec2 /
-  HuBERT / Whisper fine-tuning and ECAPA-TDNN / x-vector embedding models.
-- **Explainability** - signed TF-IDF evidence, LIME, SHAP, transformer
-  attention maps, and nearest training examples.
-- **Visualisation** - interactive folium maps highlighting the predicted
-  region, confidence heatmaps over all regions, probability charts, and
-  t-SNE/UMAP dialect embedding spaces.
-- **Reproducible benchmarks** - frozen speaker-disjoint splits (no speaker in
-  both train and test), audited build manifests, and multi-model comparison
-  tables from identical data.
-- **Uncertainty** - every prediction carries the full probability
-  distribution, top-k, and optional abstention below a confidence threshold.
+- **Text classification.** TF-IDF, stylometry, affixes, a dialect-keyword
+  lexicon, and phonological features. Classical models (Naive Bayes, logistic
+  regression, SVM, random forest, boosting) and transformers (HerBERT, RoBERTa,
+  mBERT, XLM-R, fastText).
+- **Speech classification.** MFCC, mel spectrogram, pitch, formants, and wav2vec2
+  features. Neural models (wav2vec2, HuBERT, Whisper, ECAPA-TDNN, x-vectors).
+- **Explainability.** TF-IDF evidence, LIME, SHAP, attention maps, nearest
+  examples, and named dialect phenomena.
+- **Visualisation.** Interactive maps, confidence heatmaps, probability charts,
+  and embedding plots.
+- **Reproducible benchmarks.** Frozen speaker-disjoint splits, audited manifests,
+  and a committed leaderboard.
+- **Uncertainty.** Every prediction carries the full probability distribution,
+  top-k, and optional abstention.
 
 ## Install
 
-Requires Python 3.10+. The core install is deliberately light; heavy stacks
-are opt-in extras:
+You need Python 3.10 or newer. The core install is light. Heavy stacks are
+opt-in extras.
 
 ```bash
 pip install -e .                  # core: sklearn pipelines, CLI, benchmarks
@@ -47,24 +44,23 @@ pip install -e ".[dev]"           # tests, ruff, mypy, pre-commit
 
 ## Quickstart
 
-No data acquisition required — the `synthetic` corpus is generated in-process,
-so a fresh clone runs end to end:
+No data is needed. The `synthetic` corpus is generated in memory, so a fresh
+clone runs end to end.
 
 ```bash
 tulip train configs/synthetic_text.yaml      # generate, split, train, evaluate, persist
-tulip train configs/synthetic_audio.yaml     # the same, end-to-end on synthesised audio
+tulip train configs/synthetic_audio.yaml     # the same, end to end on synthesised audio
 tulip leaderboard benchmarks/suite.yaml      # regenerate the reproducible leaderboard
-tulip serve artifacts/synthetic-text/model   # HTTP API + a demo UI at http://127.0.0.1:8000/
+tulip serve artifacts/synthetic-text/model   # HTTP API + demo UI at http://127.0.0.1:8000/
 ```
 
-Both are benchmark fixtures, not real speech (see
-[docs/datasets.md](docs/datasets.md)). For real corpora — acquired locally,
-since tulip never scrapes at runtime:
+Both are test fixtures, not real speech (see
+[docs/datasets.md](docs/datasets.md)). For real corpora, which you acquire
+locally because tulip never scrapes at runtime:
 
 ```bash
 tulip data list                              # catalog, tiers, local availability
-tulip data download --all                    # fetch what has an automatic source;
-                                             # prints exact manual steps for the rest
+tulip data download --all                    # fetch automatic sources; print manual steps
 tulip data validate data/raw/dgp/manifest.csv  # check a manifest before trusting it
 tulip data prepare configs/text_baseline.yaml  # build speaker-disjoint splits
 tulip train configs/text_baseline.yaml       # train + evaluate + persist
@@ -101,8 +97,8 @@ print(clf.explain(text, method="top_tfidf").top_attributions(5))
 
 ## Label taxonomy
 
-Labels are hierarchical - village → region → regional dialect → dialect
-family (plus voivodeship) - and models can train at any level:
+Labels are hierarchical: village, region, regional dialect, dialect family, plus
+voivodeship. Models can train at any level.
 
 | Family | Regional dialects (gwary) |
 | --- | --- |
@@ -111,14 +107,14 @@ family (plus voivodeship) - and models can train at any level:
 | Masovian (mazowiecki) | Mazovia, Kurpie, Warmia, Masuria, Podlasie |
 | Silesian (śląski) | Silesia, Cieszyn Silesia |
 | Kashubian | Kashubia |
-| Standard Polish | — (negative class for dialect-vs-standard) |
+| Standard Polish | none (negative class for dialect-vs-standard) |
 
 ## Architecture
 
-Everything is registry-driven: datasets, feature extractors, models, and
-explainers register under canonical names, and experiments reference them by
-name + params in YAML. Adding a component never touches core code. The full
-contract lives in [docs/architecture.md](docs/architecture.md).
+tulip is registry-driven. Datasets, features, models, and explainers register
+under names. Experiments reference them by name in YAML. Adding a component does
+not touch core code. The full contract is in
+[docs/architecture.md](docs/architecture.md).
 
 ```text
 src/tulip/
@@ -132,6 +128,7 @@ src/tulip/
   viz/         prediction maps, confidence heatmaps, charts, embedding space
   pipeline/    DialectClassifier facade + experiment/benchmark runners
   cli/  serve/ typer CLI and FastAPI service
+  deploy/      content-addressed model registry
 ```
 
 ## Datasets
@@ -146,23 +143,23 @@ src/tulip/
 | Spokes | 3 | conversational spoken Polish | <https://spokes.clarin-pl.eu/> |
 | Common Voice PL | 3 | read speech + accent metadata | <https://commonvoice.mozilla.org/> |
 | BIGOS | 4 | aggregated Polish ASR corpora | <https://huggingface.co/datasets/michaljunczyk/pl-asr-bigos> |
-| `synthetic` | — | generated dialect text (benchmark fixture, not real speech) | generated in-process |
-| `synthetic_audio` | — | generated dialect audio clips (benchmark fixture, not real speech) | generated in-process |
+| `synthetic` | n/a | generated dialect text (fixture, not real speech) | generated in memory |
+| `synthetic_audio` | n/a | generated dialect audio (fixture, not real speech) | generated in memory |
 
-Acquisition steps, the manifest format, and the synthetic corpora are documented
-in [docs/datasets.md](docs/datasets.md). Full API docs build with
-`mkdocs serve` (install the `docs` extra).
+Acquisition steps, the manifest format, and the synthetic corpora are in
+[docs/datasets.md](docs/datasets.md). Full API docs build with `mkdocs serve`
+(install the `docs` extra).
 
 ## Project status
 
-Alpha. The toolkit, tests, and benchmark machinery are complete, and the
-`synthetic` corpus makes them runnable end to end with no downloads — but it is
-a fixture, so its scores say nothing about real-world accuracy. The **real**
-corpora still require local acquisition (most sources have no bulk download and
-unclear redistribution rights), and trained-model quality depends on the data
-you assemble. There are as yet no published benchmark numbers on real dialect
-data. Contributions welcome — see [docs/development.md](docs/development.md).
+Alpha. The toolkit, tests, and benchmark machinery are complete. The `synthetic`
+corpus runs them end to end with no downloads, but it is a fixture, so its scores
+say nothing about real accuracy. The real corpora need local acquisition. Most
+sources have no bulk download and unclear redistribution rights. Model quality
+depends on the data you assemble. There are no published benchmark numbers on
+real dialect data yet. Contributions are welcome (see
+[docs/development.md](docs/development.md)).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

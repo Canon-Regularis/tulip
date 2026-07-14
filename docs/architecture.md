@@ -13,10 +13,10 @@ component names, shared conventions, and public API expectations.
    name + params. Adding a component never requires touching core code.
    Components declare capabilities as registration `metadata` (e.g. models
    whose constructors accept the shared TrainingConfig knobs register with
-   `metadata={"training_aware": True}`); consumers query `Registry.metadata`
+   `metadata={"training_aware": True}`). Consumers query `Registry.metadata`
    instead of hardcoding per-component knowledge.
 2. **scikit-learn conventions as the lingua franca.** Feature extractors
-   implement `fit`/`transform`; classifiers implement `fit`/`predict`/
+   implement `fit`/`transform`. Classifiers implement `fit`/`predict`/
    `predict_proba` and expose `classes_`. Neural models wrap themselves in this
    API so classical and deep components are interchangeable in pipelines.
 3. **Lazy heavy imports.** Core install stays light. torch, transformers,
@@ -24,14 +24,14 @@ component names, shared conventions, and public API expectations.
    xgboost, lightgbm, datasets MUST be imported only inside functions/methods
    via `tulip.utils.optional.optional_import(module, extra=..., purpose=...)`.
    Module import and registration must never require an optional dependency.
-4. **Canonical data types.** Loaders produce `tulip.core.types.Sample`;
-   classifiers produce `Prediction`; explainers produce `Explanation`. No
+4. **Canonical data types.** Loaders produce `tulip.core.types.Sample`.
+   Classifiers produce `Prediction`. Explainers produce `Explanation`. No
    subsystem invents parallel record types.
-5. **Reproducibility.** Splits are speaker-disjoint and seeded; experiments are
-   fully declared in YAML; artifacts are saved with their config and metrics.
+5. **Reproducibility.** Splits are speaker-disjoint and seeded. Experiments are
+   fully declared in YAML. Artifacts are saved with their config and metrics.
    This is what makes tulip usable as a public benchmark.
 6. **No runtime scraping.** Dataset loaders read documented local directory
-   layouts under `data/raw/<dataset>/`; acquisition is documented per corpus in
+   layouts under `data/raw/<dataset>/`. Acquisition is documented per corpus in
    `docs/datasets.md`. Hugging Face-hosted corpora may use the `datasets`
    library (optional extra `hf`).
 
@@ -66,8 +66,16 @@ src/tulip/
   viz/           # folium region map + confidence heatmap, charts, embedding space
   pipeline/      # DialectClassifier facade + experiment runner
   cli/           # typer app (entry point: tulip.cli.app:main)
-  serve/         # FastAPI single interface for text + audio upload
+  serve/         # FastAPI interface for text + audio upload; settings + guards
+  deploy/        # content-addressed model registry (versioning, promotion)
 ```
+
+`_serialize.py` at the package root is the one deterministic JSON writer
+(`write_sorted_json`, sorted keys, no timestamps). Every byte-identical
+artifact shares it: leaderboard provenance, prediction/significance dumps, split
+locks, model sidecars, and the registry index. It sits at the root, not in the frozen
+`utils/`, so `data`, `models`, `evaluation`, and `deploy` can all share it
+without a dependency cycle.
 
 Files marked `[frozen]` are foundation-owned: do not modify them. If a frozen
 API blocks you, code around it and report the friction in your summary instead
@@ -82,7 +90,7 @@ docs, and tests refer to them.
   `dialektarium`, `dgp`, `korpus_spiski`, `mackowce`, `nkjp`, `spokes`,
   `common_voice_pl`, `bigos`, `manifest` (generic CSV/JSONL manifest loader),
   `synthetic` (generated in-process; needs no acquisition, so the toolkit runs
-  end-to-end on a fresh clone — see `docs/datasets.md`),
+  end-to-end on a fresh clone. See `docs/datasets.md`),
   `synthetic_audio` (the audio analogue: writes deterministic 16 kHz WAV clips
   whose per-class pitch/formants/spectral tilt make the classical audio features
   separable, so the audio path is exercised end-to-end too).
@@ -111,31 +119,31 @@ docs, and tests refer to them.
 - `manifest.py`: the generic manifest reader (`read_manifest`,
   `ManifestColumns`, `surrogate_speaker_id`) every manifest-backed loader
   delegates to.
-- `reading.py`: `read_samples(path)` — labelled samples back from anything
-  tulip writes or documents (split JSONL, manifest file, manifest directory);
-  shared by `tulip evaluate` and library callers.
-- `download.py`: `download_datasets(names, root)` — fetches corpora whose
-  loader is `auto_downloadable` (loaders override `DatasetLoader.download`)
-  and returns `MANUAL` reports carrying each remaining corpus's
-  `acquisition` steps; surfaced as `tulip data download`.
+- `reading.py`: `read_samples(path)` reads labelled samples back from anything
+  tulip writes or documents (split JSONL, manifest file, manifest directory).
+  Shared by `tulip evaluate` and library callers.
+- `download.py`: `download_datasets(names, root)` fetches corpora whose
+  loader is `auto_downloadable` (loaders override `DatasetLoader.download`).
+  It returns `MANUAL` reports carrying each remaining corpus's
+  `acquisition` steps. Surfaced as `tulip data download`.
 - Loaders subclass `tulip.core.interfaces.DatasetLoader` (`info` property,
   `load(root) -> Iterator[Sample]`). Loaders are generous in what they accept
   (CSV/TSV/JSONL manifests) and strict in what they emit (validated `Sample`s
-  with `speaker_id` filled — synthesise a stable surrogate from available
+  with `speaker_id` filled. Synthesise a stable surrogate from available
   metadata when the corpus lacks explicit speaker IDs).
 - `cleaning.py`: composable text normalisation (`TextCleaner`): unicode NFC,
   whitespace collapse, quote/dash normalisation, transcription-artifact removal
   (e.g. `[śmiech]`, `...`, annotation markup), optional lowercasing. Preserve
-  dialectal orthography — never strip diacritics or "correct" spelling.
+  dialectal orthography. Never strip diacritics or "correct" spelling.
 - `dedup.py`: exact dedup on normalised-text hash + near-duplicate detection
   via character-shingle Jaccard similarity. Pure stdlib/numpy.
 - `splitting.py`: `speaker_disjoint_split(samples, config: SplitConfig) ->
   DatasetSplits` (named train/validation/test lists). Guarantees zero speaker
-  overlap across splits (group-aware), attempts stratification by the
-  configured label level, deterministic under a fixed seed. Must raise
+  overlap across splits (group-aware). Attempts stratification by the
+  configured label level. Deterministic under a fixed seed. Must raise
   `DataError` when a split would be empty.
-- `builder.py`: `DatasetBuilder` orchestrating load -> clean -> dedup -> split
-  -> persist (JSONL per split + a manifest with counts and config hash).
+- `builder.py`: `DatasetBuilder` orchestrating load, clean, dedup, split,
+  persist (JSONL per split + a manifest with counts and config hash).
 
 ### tulip.features.text
 
@@ -144,15 +152,15 @@ where sensible) operating on sequences of strings:
 
 - `char_tfidf` / `word_tfidf`: thin, well-defaulted wrappers over
   `TfidfVectorizer` (char_wb 2-5 grams; word 1-2 grams).
-- `stylometry`: dense features — sentence length stats, word length stats,
-  punctuation frequencies, type-token ratio, hapax ratio, uppercase ratio.
+- `stylometry`: dense features (sentence length stats, word length stats,
+  punctuation frequencies, type-token ratio, hapax ratio, uppercase ratio).
   Expose `get_feature_names_out()`.
 - `affix_frequency`: frequencies of word-initial prefixes and word-final
   suffixes (configurable lengths), hashed or vocabulary-based.
-- `dialect_keywords`: lexicon-based counts of known dialect marker words; ship
+- `dialect_keywords`: lexicon-based counts of known dialect marker words. Ship
   a starter lexicon (well-attested markers per dialect, e.g. Podhale "ka/kaj",
   archaic aorist "-ch", Silesian "godać", mazurzenie respellings) as package
-  data with provenance comments; lexicon must be user-extensible via a path
+  data with provenance comments. Lexicon must be user-extensible via a path
   param.
 - `build_text_features(configs: list[ComponentConfig]) -> FeatureUnion` helper.
 
@@ -160,7 +168,7 @@ where sensible) operating on sequences of strings:
 
 Extractors take sequences of audio file paths and return fixed-size row
 vectors (frame-level features pooled with mean+std by a shared `pooling.py`).
-librosa/soundfile/parselmouth imported lazily; formants fall back to an
+librosa/soundfile/parselmouth imported lazily. Formants fall back to an
 LPC-based estimate (scipy) when parselmouth is unavailable. A shared
 `loading.py` handles decoding + resampling to 16 kHz mono.
 
@@ -172,11 +180,11 @@ LPC-based estimate (scipy) when parselmouth is unavailable. A shared
   guard their imports and encode string labels internally.
 - `neural_text.py`: `TransformerTextClassifier` (sklearn-style wrapper around
   HF `AutoModelForSequenceClassification`): registered names map to
-  checkpoints — herbert `allegro/herbert-base-cased`, polish_roberta
+  checkpoints: herbert `allegro/herbert-base-cased`, polish_roberta
   `sdadas/polish-roberta-base-v2`, mbert `bert-base-multilingual-cased`,
   xlm_roberta `xlm-roberta-base`. Accepts raw texts in `fit(X, y)`.
-- `neural_audio.py`: `SpeechClassifier` wrappers — wav2vec2
-  `facebook/wav2vec2-xls-r-300m`, hubert, whisper encoder; `ecapa_tdnn` /
+- `neural_audio.py`: `SpeechClassifier` wrappers: wav2vec2
+  `facebook/wav2vec2-xls-r-300m`, hubert, whisper encoder. `ecapa_tdnn` /
   `xvector` via speechbrain embeddings + a light classification head. Accept
   audio paths in `fit(X, y)`.
 - `persistence.py`: `save_model(pipeline, path, metadata)` /
@@ -186,45 +194,45 @@ LPC-based estimate (scipy) when parselmouth is unavailable. A shared
 ### tulip.evaluation
 
 - `metrics.py`: `compute_metrics(y_true, y_pred, y_proba=None, labels=None) ->
-  EvaluationReport` — accuracy, macro/weighted precision/recall/F1, per-class
+  EvaluationReport`: accuracy, macro/weighted precision/recall/F1, per-class
   breakdown, macro one-vs-rest ROC AUC (guarded: omit when y_proba is absent
   or a class is missing), confusion matrix.
 - `report.py`: `EvaluationReport` pydantic model with `to_markdown()`,
   `save(path)`.
 - `benchmark.py`: the benchmark result schema (`BenchmarkResult`), comparison
-  tables, and JSON persistence — the reporting half of the
+  tables, and JSON persistence. This is the reporting half of the
   reproducible-benchmark deliverable. The orchestration half (`run_benchmark`,
   training several models over identical frozen splits) lives in
   `tulip.pipeline.experiment`, which layers *above* evaluation.
 
 ### tulip.explain
 
-`EXPLAINERS` registry; implementations satisfy `tulip.core.interfaces.Explainer`
+`EXPLAINERS` registry. Implementations satisfy `tulip.core.interfaces.Explainer`
 and return `tulip.core.types.Explanation`. `top_tfidf` reads linear-model
-coefficients through a fitted sklearn Pipeline; `nearest_examples` retrieves
-cosine-similar training samples; `lime`/`shap`/`attention` guard their imports;
+coefficients through a fitted sklearn Pipeline. `nearest_examples` retrieves
+cosine-similar training samples. `lime`/`shap`/`attention` guard their imports.
 `dialect_evidence` attributes the prediction to named linguistic phenomena
 (which marker lexemes matched, which isoglosses fired), composed over the shared
 lexicon and phonological rule engine.
 
 The `phonological_rules` engine (`features/text/phonological_rules.py`) is the
-domain core those dialectology surfaces share: a single `PhonologicalRule` value
-object models each group-defining isogloss as a reversible rewrite, reporting an
-`applicable` rate (standard environment present) and, for a positively
-identifiable change, a `fired` rate (dialectal reflex present) -- the distinction
-between "standard" and "dialectal" a merger's rate alone cannot make. Running the
-detectable rules in reverse is the `normalize_to_standard` dialect->standard
-normaliser. The `dialect_intensity` feature and the `dialect_evidence` explainer
-compose over this engine and the marker lexicon; the lexicon-key -> family
-reconciliation lives once in `features/text/keywords.py`, shared with the
-synthetic generator.
+domain core those dialectology surfaces share. A single `PhonologicalRule` value
+object models each group-defining isogloss as a reversible rewrite. It reports an
+`applicable` rate (standard environment present). For a positively
+identifiable change, it also reports a `fired` rate (dialectal reflex present).
+That is the distinction between "standard" and "dialectal" that a merger's rate
+alone cannot make. Running the detectable rules in reverse is the
+`normalize_to_standard` dialect-to-standard normaliser. The `dialect_intensity`
+feature and the `dialect_evidence` explainer compose over this engine and the
+marker lexicon. The lexicon-key to family reconciliation lives once in
+`features/text/keywords.py`, shared with the synthetic generator.
 
 ### tulip.viz
 
-- `map.py`: folium map builders — `prediction_map(prediction)` highlighting the
-  predicted region (top-3 shown with graded opacity) and
-  `confidence_heatmap(prediction)` shading all regions by probability, using
-  `tulip.labels.geo` centroids. Return the folium `Map`; provide `save(path)`.
+- `map.py`: folium map builders. `prediction_map(prediction)` highlights the
+  predicted region (top-3 shown with graded opacity). `confidence_heatmap(prediction)`
+  shades all regions by probability, using `tulip.labels.geo` centroids. Both
+  return the folium `Map` and provide `save(path)`.
 - `charts.py`: probability bar chart, confusion-matrix heatmap (matplotlib or
   plotly, lazy).
 - `embedding_space.py`: 2-D projection (t-SNE core, UMAP optional) of sample or
@@ -232,16 +240,16 @@ synthetic generator.
 
 ### tulip.pipeline
 
-- `classifier.py`: `DialectClassifier` — the user-facing facade. Composes
+- `classifier.py`: `DialectClassifier` is the user-facing facade. It composes
   feature configs + model config into one trainable object (`task`, `target`,
-  and `abstain_threshold` are constructor arguments); `fit(samples)`,
+  and `abstain_threshold` are constructor arguments). Methods: `fit(samples)`,
   `predict(raw) -> Prediction` (top-k probabilities, abstention below
   `abstain_threshold`), `predict_batch`, `predict_proba`,
   `labelled_batch(samples) -> LabelledBatch` (the public raw-input/label
   pairing used by training and evaluation), `explain(raw, method=...)`
   (routing in `explaining.py`), `save`/`load` via `models.persistence`.
-- `experiment.py`: `run_experiment(config: ExperimentConfig) -> ExperimentResult`
-  — seed, load+prepare data, split, train, evaluate on validation+test, persist
+- `experiment.py`: `run_experiment(config: ExperimentConfig) -> ExperimentResult`:
+  seed, load+prepare data, split, train, evaluate on validation+test, persist
   model, metrics, splits, and the resolved config under
   `output_dir/<experiment-name>/`. Also `evaluate_samples(classifier, samples)`,
   `collect_predictions(classifier, samples) -> SplitPredictions` (the per-sample
@@ -251,7 +259,7 @@ synthetic generator.
 
 ### tulip.cli (typer)
 
-`tulip.cli.app:main` — command groups: `data`
+`tulip.cli.app:main`. Command groups: `data`
 (list/download/prepare/synthesize/synthesize-audio/validate), `train`,
 `evaluate`, `predict` (text arg or `--audio` path; `--json`; map export via
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
@@ -259,31 +267,31 @@ synthetic generator.
 (also emits significance), `analyze` (selective + error report from a saved
 `predictions_<split>.json`), `repro verify` (regenerate a suite and fail on
 drift from the committed board), `card` (dataset/model), `selftrain`, `serve`.
-Rich tables for human output; `--json` for machine output. `data validate` and
+Rich tables for human output. `--json` for machine output. `data validate` and
 `repro verify` exit non-zero on failure so they can gate CI.
 
 ### tulip.evaluation (benchmark surface)
 
 - `leaderboard.py`: `LeaderboardSuite` + `run_leaderboard`/`write_leaderboard`
   over the untouched `run_benchmark`. `leaderboard.md` and `provenance.json` are
-  deterministic — no timestamps, no `wall_seconds` — so a committed leaderboard
+  deterministic (no timestamps, no `wall_seconds`), so a committed leaderboard
   regenerates byte-identically. Rows are keyed by `(experiment, model)`. The
   board carries ECE/Brier columns when the suite sets `calibration_bins`, and
   `write_significance` emits per-experiment paired-significance artifacts.
-- `_provenance_env.py`: the deterministic `environment` block for provenance —
+- `_provenance_env.py`: the deterministic `environment` block for provenance:
   Python floor + key dependency versions read from the committed `uv.lock` (not
   the live interpreter) + content digests of the configs and lexicons.
-- `predictions.py`: `SplitPredictions` / `PredictionRecord` — the per-sample
+- `predictions.py`: `SplitPredictions` / `PredictionRecord`: the per-sample
   substrate (gold, prediction, probability row, self-describing slice keys) the
   three rigor analyses below share. Built by
   `tulip.pipeline.experiment.collect_predictions`.
-- `significance.py`: `paired_significance` — bootstrap CIs per metric, exact
+- `significance.py`: `paired_significance`: bootstrap CIs per metric, exact
   Holm-corrected McNemar between models on the identical paired split, and a
   "tied with best" grouping. SciPy-free (`math.comb`), seeded, deterministic.
-- `selective.py`: `selective_report` — risk-coverage curve, AURC, accuracy at a
+- `selective.py`: `selective_report`: risk-coverage curve, AURC, accuracy at a
   target coverage, coverage at a target error, over the abstention the
   classifier already ships.
-- `error_analysis.py`: `error_report` — most-confused pairs, hard exemplars, and
+- `error_analysis.py`: `error_report`: most-confused pairs, hard exemplars, and
   per-slice (source/speaker/length/modality) fairness metrics.
 - `cards.py`: `dataset_card` / `model_card` render byte-stable markdown from
   artifacts the toolkit already writes (`build_manifest.json`, `metadata.json`,
@@ -293,37 +301,37 @@ Rich tables for human output; `--json` for machine output. `data validate` and
 
 - `selftrain.py`: `self_train` grows a classifier from a labelled seed set using
   confident pseudo-labels, so label-less corpora (e.g. `bigos`) contribute.
-  Knobs live in a module-owned `SelfTrainConfig` — `ExperimentConfig` is frozen
+  Knobs live in a module-owned `SelfTrainConfig`. `ExperimentConfig` is frozen
   and forbids extra fields.
 
 ### tulip.pipeline (classifier composition)
 
-`protocols.py` defines `SamplePredictor` — one method, `predict_samples(samples)
+`protocols.py` defines `SamplePredictor`: one method, `predict_samples(samples)
 -> list[Prediction]`. It exists because the classifiers below **must not**
-subclass `DialectClassifier`: `predict_batch` guarantees every `Prediction` has
-`level == self.target` over a single modality, and each of these violates one of
-those postconditions. Relating them by protocol rather than inheritance is the
-Liskov substitution principle being *obeyed*, not sidestepped. `DialectClassifier`
+subclass `DialectClassifier`. `predict_batch` guarantees every `Prediction` has
+`level == self.target` over a single modality. Each of these violates one of
+those postconditions. Relating them by protocol instead of inheritance obeys the
+Liskov substitution principle. `DialectClassifier`
 satisfies the protocol via a `predict_samples` adapter.
 
 - `hierarchical/`: `HierarchicalDialectClassifier` composes one
-  `DialectClassifier` per `LabelLevel` (coarse → fine) and returns the finest
+  `DialectClassifier` per `LabelLevel` (coarse to fine). It returns the finest
   prediction a `BackoffPolicy` accepts, so `Prediction.level` varies per sample.
   With `mask_to_coarse`, a dialect row is projected onto the predicted family by
-  the chain rule — rescaled to `P(family) · P(dialect | family)`, *not*
-  renormalised to 1 — so a child can never out-confidence its parent, and a
+  the chain rule. It is rescaled to `P(family) · P(dialect | family)`, not
+  renormalised to 1. So a child can never out-confidence its parent. A
   family with no dialects (`standard`) forces a backoff instead of a guess.
   Policies (`ConfidenceThreshold`, `MarginThreshold`, `NotAbstained`,
   `AlwaysAccept`, `AllOf`/`AnyOf`) are frozen value objects behind a one-method
   protocol.
 - `calibrated.py`: `CalibratedClassifier` wraps any classifier with a
-  `ProbabilityCalibrator` fitted on a **held-out** split, and applies
-  `abstain_threshold` to the *calibrated* top probability — an uncalibrated
+  `ProbabilityCalibrator` fitted on a **held-out** split. It applies
+  `abstain_threshold` to the *calibrated* top probability. An uncalibrated
   cutoff does not mean what it looks like.
 - `fusion/`: `MultimodalClassifier` fuses a text and an audio classifier via a
-  `FusionStrategy` (weighted average, maximum, logarithmic pooling), aligning
-  their classes to the sorted union and degrading to whichever modality a sample
-  actually carries. `TaskType` is frozen, so this is composition rather than a
+  `FusionStrategy` (weighted average, maximum, logarithmic pooling). It aligns
+  their classes to the sorted union and degrades to whichever modality a sample
+  carries. `TaskType` is frozen, so this is composition, not a
   `MULTIMODAL` enum member. (Both `hierarchical/` and `fusion/` are packages: a
   leaf `policies`/`strategies` module plus the classifier, so the value-object
   families are testable without the classifier stack.)
@@ -335,40 +343,62 @@ satisfies the protocol via a `predict_samples` adapter.
   `EvaluationReport.calibration` is opt-in via `compute_metrics(...,
   calibration_bins=N)` so existing artifacts stay byte-identical.
 - `tulip.models.calibration`: `TemperatureScaling` (on `log p` as surrogate
-  logits — softmax is invariant to the additive constant), `IsotonicCalibrator`,
+  logits: softmax is invariant to the additive constant), `IsotonicCalibrator`,
   and `IdentityCalibrator` as a Null Object.
 
 ### tulip.serve (FastAPI)
 
 `create_app(model_path) -> FastAPI`. Endpoints: `POST /predict/text` (JSON
-body), `POST /predict/text/batch` (a list of texts), `POST /predict/audio`
-(multipart upload) — all returning pydantic-native `Prediction` JSON (with the
+body), `POST /predict/text/batch` (a list of texts), and `POST /predict/audio`
+(multipart upload). All three return pydantic-native `Prediction` JSON (with the
 `abstained` flag) plus `X-Tulip-Version`/`X-Model-Target`/`X-Model-Classes`
-headers; `GET /health` (model identity, class count, abstention config);
-`GET /metrics` (Prometheus text exposition, dependency-free); and `GET /`, a
+headers. `GET /health` returns model identity, class count, and abstention config.
+`GET /metrics` returns Prometheus text exposition (dependency-free). `GET /` is a
 self-contained demo UI (inline SVG Poland map + probability bars). One HTTP
 middleware assigns/echoes an `X-Request-ID`, times each request
 (`X-Process-Time-Ms`), records the metrics, and emits one structured log line
 per request.
 
+`create_app` also takes optional `model_version`/`model_digest` (stamped as
+`X-Model-Version`/`X-Model-Digest`) and installs the guards from
+`ServeSettings.from_env()`. `serve/settings.py` reads `TULIP_SERVE_*` into a
+frozen model. `serve/_guards.py` provides one small ASGI middleware per concern
+(bearer auth, token-bucket rate limit, concurrency cap, a pre-buffer body-size
+ceiling that fixes the `/predict/audio` memory-exhaustion DoS, security headers)
+plus Starlette's reused `CORSMiddleware`. `install_guards` adds them *inside* the
+observability middleware, so a guard-rejected request is still timed, counted,
+logged, and carries the security/CORS headers.
+
+### tulip.deploy
+
+`ModelRegistry(root)` is a content-addressed store *above* `save_model`/
+`load_model` (it reuses the persisted format verbatim). `add` copies an artifact
+into `<root>/artifacts/<sha256>/` (deduplicating on digest) and appends an
+immutable `RegistryEntry` read from the sidecar. `promote`/`rollback` move a
+version through `staging -> production -> archived` via a per-name promotion
+stack (so "previous production" is unambiguous). `resolve("name@production")`
+returns the entry the serving layer binds to. The index (`registry.json`) uses
+the shared deterministic JSON writer, so the same operation sequence reproduces
+byte-identical bytes.
+
 ## Conventions (enforced)
 
-- Python >= 3.10; `from __future__ import annotations` in every module; full
-  type hints on public APIs; PEP 604 unions (`str | None`).
+- Python >= 3.10. `from __future__ import annotations` in every module. Full
+  type hints on public APIs. PEP 604 unions (`str | None`).
 - Ruff: line length 100, rule set in `pyproject.toml`. Run
   `ruff format` + `ruff check` on your files before finishing.
-- Google-style docstrings on every public module/class/function; explain
-  *why* where non-obvious, not narration of the code.
-- Logging via `tulip.utils.logging.get_logger(__name__)`; never `print` in
+- Google-style docstrings on every public module/class/function. Explain
+  *why* where non-obvious. Do not narrate the code.
+- Logging via `tulip.utils.logging.get_logger(__name__)`. Never `print` in
   library code (CLI/serve output via rich/typer is fine).
 - Errors: raise subclasses of `TulipError` (`DataError`,
   `ConfigurationError`, `MissingDependencyError` via `optional_import`).
-- Randomness always flows from an explicit seed; use
+- Randomness always flows from an explicit seed. Use
   `numpy.random.default_rng(seed)`, never module-level global state.
-- Paths are `pathlib.Path`; IO is UTF-8; keep everything Windows-safe (no
+- Paths are `pathlib.Path`. IO is UTF-8. Keep everything Windows-safe (no
   `/tmp`, no POSIX-only calls, no filenames differing only by case).
 - Tests: pytest, files flat under `tests/` with area-prefixed unique names
   (`test_data_*.py`, `test_features_text_*.py`, ...). Tests requiring optional
   deps guard with `pytest.importorskip`. Every module ships tests for its
-  pure-Python logic; heavy-model tests are construction/config tests plus
+  pure-Python logic. Heavy-model tests are construction/config tests plus
   `slow`-marked smoke tests.

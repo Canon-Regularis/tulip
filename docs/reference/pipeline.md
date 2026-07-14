@@ -1,8 +1,8 @@
 # Pipeline
 
-The high-level entry point: the `DialectClassifier` facade, the composed
-classifiers (hierarchical, calibrated, multimodal), and the experiment and
-benchmark runners. These are the objects most users touch directly.
+The entry point. The `DialectClassifier` facade, the composed classifiers
+(hierarchical, calibrated, multimodal), and the experiment and benchmark runners.
+These are the objects most users touch.
 
 ## Classifiers
 
