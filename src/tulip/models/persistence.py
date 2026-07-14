@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 import joblib
 
+from tulip._serialize import sorted_json_text
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.utils.logging import get_logger
 
@@ -119,9 +120,7 @@ def save_model(model: Any, path: Path | str, metadata: Mapping[str, Any] | None 
         "metadata": dict(metadata or {}),
     }
     try:
-        payload = json.dumps(
-            sidecar, ensure_ascii=False, indent=2, sort_keys=True, default=_json_default
-        )
+        payload = sorted_json_text(sidecar, default=_json_default)
     except (TypeError, ValueError) as exc:
         raise ConfigurationError(f"model metadata is not JSON-serialisable: {exc}") from exc
 

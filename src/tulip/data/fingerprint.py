@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tulip._serialize import write_sorted_json
 from tulip.core.exceptions import DataError
 from tulip.utils.io import read_json
 
@@ -75,12 +76,7 @@ class SplitFingerprint(BaseModel):
 
     def save(self, path: Path | str) -> None:
         """Write the fingerprint as deterministic JSON (sorted keys)."""
-        target = Path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        text = json.dumps(
-            self.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
-        )
-        target.write_text(text + "\n", encoding="utf-8", newline="\n")
+        write_sorted_json(Path(path), self.model_dump(mode="json"))
 
     @classmethod
     def load(cls, path: Path | str) -> SplitFingerprint:

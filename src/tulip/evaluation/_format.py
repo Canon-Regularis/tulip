@@ -1,20 +1,23 @@
-"""Shared formatting/serialisation helpers for evaluation artifacts.
+"""Shared markdown formatting helpers for evaluation artifacts.
 
 Markdown rendering is kept dependency-free so it never requires ``tabulate`` or
-any other optional package. :func:`write_sorted_json` is the one deterministic
-JSON writer every committed evaluation artifact (leaderboard provenance,
-prediction dumps, significance/selective reports) shares, so "byte-identical on
-re-run" is guaranteed in exactly one place.
+any other optional package. The deterministic JSON writer that every committed
+evaluation artifact shares (leaderboard provenance, prediction dumps,
+significance/selective reports) lives at the package root in
+:mod:`tulip._serialize` -- so ``data`` and ``models`` can share the one writer
+too -- and is re-exported here for the evaluation callers that already import it.
 """
 
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+from tulip._serialize import write_sorted_json
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
+
+__all__ = ["format_metric", "markdown_table", "write_sorted_json"]
 
 
 def format_metric(value: float | None, digits: int = 4) -> str:
@@ -53,19 +56,3 @@ def markdown_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str
     ]
     lines.extend("| " + " | ".join(str(cell) for cell in row) + " |" for row in rows)
     return "\n".join(lines)
-
-
-def write_sorted_json(path: Path, payload: Any) -> None:
-    """Write ``payload`` as deterministic JSON (sorted keys, trailing newline).
-
-    Sorted keys at every level and no timestamps mean re-serialising identical
-    content is byte-identical, which is what makes a committed artifact
-    regenerable and diffable. Mirrors the model-metadata sidecar contract.
-
-    Args:
-        path: Destination file; parent directories are created.
-        payload: Any JSON-serialisable object.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
-    path.write_text(text + "\n", encoding="utf-8", newline="\n")
