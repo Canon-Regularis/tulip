@@ -33,15 +33,40 @@ from tulip.evaluation.confusion import (
     plot_confusion,
     to_dataframe,
 )
+from tulip.evaluation.error_analysis import (
+    ConfusedPair,
+    ErrorReport,
+    Exemplar,
+    SliceMetric,
+    error_report,
+    slice_metrics,
+    top_confused_pairs,
+)
 from tulip.evaluation.leaderboard import (
     LeaderboardSuite,
     load_suite,
     render_leaderboard_markdown,
     run_leaderboard,
     write_leaderboard,
+    write_significance,
 )
 from tulip.evaluation.metrics import compute_metrics
+from tulip.evaluation.predictions import PredictionRecord, SplitPredictions
 from tulip.evaluation.report import ClassMetrics, EvaluationReport
+from tulip.evaluation.selective import (
+    SelectivePoint,
+    SelectiveReport,
+    risk_coverage_curve,
+    selective_report,
+)
+from tulip.evaluation.significance import (
+    MetricCI,
+    ModelSignificance,
+    PairwiseTest,
+    SignificanceReport,
+    mcnemar_exact,
+    paired_significance,
+)
 
 __all__ = [
     "BENCHMARK_SCHEMA_VERSION",
@@ -50,23 +75,43 @@ __all__ = [
     "CalibrationBin",
     "CalibrationReport",
     "ClassMetrics",
+    "ConfusedPair",
+    "ErrorReport",
     "EvaluationReport",
+    "Exemplar",
     "LeaderboardSuite",
+    "MetricCI",
+    "ModelSignificance",
+    "PairwiseTest",
+    "PredictionRecord",
+    "SelectivePoint",
+    "SelectiveReport",
+    "SignificanceReport",
+    "SliceMetric",
+    "SplitPredictions",
     "comparison_table",
     "compute_calibration",
     "compute_metrics",
     "confusion_from_report",
     "dataset_card",
     "dataset_card_from_splits",
+    "error_report",
     "load_benchmark",
     "load_suite",
+    "mcnemar_exact",
     "model_card",
+    "paired_significance",
     "plot_confusion",
     "reliability_curve",
     "render_leaderboard_markdown",
+    "risk_coverage_curve",
     "run_leaderboard",
     "save_benchmark",
+    "selective_report",
+    "slice_metrics",
     "to_dataframe",
     "to_markdown_table",
+    "top_confused_pairs",
     "write_leaderboard",
+    "write_significance",
 ]

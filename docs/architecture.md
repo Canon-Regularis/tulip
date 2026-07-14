@@ -43,7 +43,8 @@ src/tulip/
   labels/        # taxonomy (families, dialects), geo centroids   [frozen]
   utils/         # optional imports, io, logging, seeding         [frozen]
   config/        # pydantic experiment schemas + YAML loader      [frozen]
-  data/          # dataset catalog, loaders, cleaning, dedup, splitting, builder
+  data/          # dataset catalog, loaders, cleaning, dedup, splitting, builder,
+                 # split fingerprint (reproducibility)
   features/
     registries.py  # TEXT_FEATURES / AUDIO_FEATURES registries    [frozen]
     text/          # char/word n-grams, stylometry, affixes, keyword lexicon
@@ -58,7 +59,8 @@ src/tulip/
     neural_audio.py# wav2vec2, HuBERT, Whisper-encoder, ECAPA-TDNN, x-vectors
     fasttext_model.py
     persistence.py # save/load trained pipelines with metadata
-  evaluation/    # metrics, EvaluationReport, confusion matrix, benchmark runner
+  evaluation/    # metrics, EvaluationReport, confusion, calibration, leaderboard,
+                 # significance/selective/error-analysis, dataset/model cards
   explain/       # top TF-IDF, LIME, SHAP, attention, nearest examples
   viz/           # folium region map + confidence heatmap, charts, embedding space
   pipeline/      # DialectClassifier facade + experiment runner
@@ -225,8 +227,11 @@ cosine-similar training samples; `lime`/`shap`/`attention` guard their imports.
 - `experiment.py`: `run_experiment(config: ExperimentConfig) -> ExperimentResult`
   — seed, load+prepare data, split, train, evaluate on validation+test, persist
   model, metrics, splits, and the resolved config under
-  `output_dir/<experiment-name>/`. Also `evaluate_samples(classifier, samples)`
-  and `run_benchmark(config, models)` (several models, one frozen split).
+  `output_dir/<experiment-name>/`. Also `evaluate_samples(classifier, samples)`,
+  `collect_predictions(classifier, samples) -> SplitPredictions` (the per-sample
+  substrate, sharing one inference pass), and `run_benchmark(config, models)`
+  (several models, one frozen split). All three accept an optional
+  `calibration_bins` to populate the report's ECE/MCE/Brier block.
 
 ### tulip.cli (typer)
 
@@ -234,17 +239,36 @@ cosine-similar training samples; `lime`/`shap`/`attention` guard their imports.
 (list/download/prepare/synthesize/synthesize-audio/validate), `train`,
 `evaluate`, `predict` (text arg or `--audio` path; `--json`; map export via
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
-(standalone; the command group the contract lists), `benchmark`, `leaderboard`,
-`card` (dataset/model), `selftrain`, `serve`. Rich tables for human output;
-`--json` for machine output. `data validate` exits non-zero on errors so it can
-gate CI.
+(standalone; the command group the contract lists), `benchmark`, `leaderboard`
+(also emits significance), `analyze` (selective + error report from a saved
+`predictions_<split>.json`), `repro verify` (regenerate a suite and fail on
+drift from the committed board), `card` (dataset/model), `selftrain`, `serve`.
+Rich tables for human output; `--json` for machine output. `data validate` and
+`repro verify` exit non-zero on failure so they can gate CI.
 
 ### tulip.evaluation (benchmark surface)
 
 - `leaderboard.py`: `LeaderboardSuite` + `run_leaderboard`/`write_leaderboard`
   over the untouched `run_benchmark`. `leaderboard.md` and `provenance.json` are
   deterministic — no timestamps, no `wall_seconds` — so a committed leaderboard
-  regenerates byte-identically. Rows are keyed by `(experiment, model)`.
+  regenerates byte-identically. Rows are keyed by `(experiment, model)`. The
+  board carries ECE/Brier columns when the suite sets `calibration_bins`, and
+  `write_significance` emits per-experiment paired-significance artifacts.
+- `_provenance_env.py`: the deterministic `environment` block for provenance —
+  Python floor + key dependency versions read from the committed `uv.lock` (not
+  the live interpreter) + content digests of the configs and lexicons.
+- `predictions.py`: `SplitPredictions` / `PredictionRecord` — the per-sample
+  substrate (gold, prediction, probability row, self-describing slice keys) the
+  three rigor analyses below share. Built by
+  `tulip.pipeline.experiment.collect_predictions`.
+- `significance.py`: `paired_significance` — bootstrap CIs per metric, exact
+  Holm-corrected McNemar between models on the identical paired split, and a
+  "tied with best" grouping. SciPy-free (`math.comb`), seeded, deterministic.
+- `selective.py`: `selective_report` — risk-coverage curve, AURC, accuracy at a
+  target coverage, coverage at a target error, over the abstention the
+  classifier already ships.
+- `error_analysis.py`: `error_report` — most-confused pairs, hard exemplars, and
+  per-slice (source/speaker/length/modality) fairness metrics.
 - `cards.py`: `dataset_card` / `model_card` render byte-stable markdown from
   artifacts the toolkit already writes (`build_manifest.json`, `metadata.json`,
   `report_<split>.json`).

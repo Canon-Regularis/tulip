@@ -24,7 +24,6 @@ and ``provenance.json`` are byte-identical across re-runs.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,9 +31,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from tulip.config.loader import load_experiment_config
 from tulip.core.exceptions import ConfigurationError
-from tulip.evaluation._format import format_metric, markdown_table
+from tulip.evaluation._format import format_metric, markdown_table, write_sorted_json
+from tulip.evaluation._provenance_env import environment_provenance
 from tulip.evaluation.benchmark import BenchmarkResult, save_benchmark
-from tulip.utils.io import ensure_dir, read_json, read_yaml
+from tulip.utils.io import read_json, read_yaml
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -65,6 +65,8 @@ _LEADERBOARD_HEADERS = (
     "F1 (macro)",
     "F1 (weighted)",
     "ROC AUC",
+    "ECE",
+    "Brier",
     "Train",
 )
 
@@ -78,6 +80,7 @@ __all__ = [
     "render_leaderboard_markdown",
     "run_leaderboard",
     "write_leaderboard",
+    "write_significance",
 ]
 
 
@@ -97,6 +100,10 @@ class LeaderboardSuite(BaseModel):
             root, as documented in ``benchmarks/README.md``).
         models: Competitor model registry names applied to *every* config. When
             empty, each config's own ``model`` entry is the sole competitor.
+        calibration_bins: When set, every model's report gains a top-label
+            calibration block (ECE/MCE/Brier) with this many uniform bins, and
+            the leaderboard shows ECE and Brier columns. ``None`` (the default)
+            leaves calibration off and those columns render ``n/a``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -104,6 +111,7 @@ class LeaderboardSuite(BaseModel):
     name: str
     configs: list[Path]
     models: list[str] = Field(default_factory=list)
+    calibration_bins: int | None = Field(default=None, ge=1)
 
 
 def load_suite(path: Path | str) -> LeaderboardSuite:
@@ -158,7 +166,7 @@ def run_leaderboard(suite: LeaderboardSuite) -> list[BenchmarkResult]:
     for config_path in suite.configs:
         config = load_experiment_config(config_path)
         _logger.info("leaderboard %r: benchmarking config %r", suite.name, config.name)
-        results.extend(run_benchmark(config, models))
+        results.extend(run_benchmark(config, models, calibration_bins=suite.calibration_bins))
     _logger.info("leaderboard %r: produced %d result(s)", suite.name, len(results))
     return results
 
@@ -200,6 +208,7 @@ def render_leaderboard_markdown(
     rows = []
     for result in ranked:
         report = result.report_for(split)
+        calibration = report.calibration
         rows.append(
             (
                 result.experiment,
@@ -208,6 +217,8 @@ def render_leaderboard_markdown(
                 format_metric(report.f1_macro),
                 format_metric(report.f1_weighted),
                 format_metric(report.roc_auc_macro_ovr),
+                format_metric(None if calibration is None else calibration.ece),
+                format_metric(None if calibration is None else calibration.brier),
                 str(result.n_train),
             )
         )
@@ -230,8 +241,10 @@ def write_leaderboard(
       timestamps and no timings: ``tulip_version``, per-config seed and split
       seed, the competitor model list, per-config split sizes and class
       distribution read from each run's ``build_manifest.json`` (``null`` when
-      the manifest is absent), and fixed-precision per-result metrics tagged
-      with their experiment.
+      the manifest is absent), fixed-precision per-result metrics (including
+      ECE/Brier when calibration is enabled) tagged with their experiment, and
+      an ``environment`` block (Python floor, key dependency versions from
+      ``uv.lock``, and content digests of the configs and shipped lexicons).
 
     Args:
         results: The benchmark results to publish.
@@ -248,8 +261,58 @@ def write_leaderboard(
     save_benchmark(results, out_dir / LEADERBOARD_JSON)
 
     provenance = _build_provenance(results, suite)
-    _write_sorted_json(out_dir / PROVENANCE_JSON, provenance)
+    write_sorted_json(out_dir / PROVENANCE_JSON, provenance)
     _logger.info("wrote leaderboard artifacts to %s", out_dir)
+
+
+def write_significance(
+    results: Sequence[BenchmarkResult],
+    out_dir: Path | str,
+    *,
+    split: str = DEFAULT_SPLIT,
+    seed: int = 0,
+) -> list[str]:
+    """Write per-experiment significance artifacts from the in-memory predictions.
+
+    Models within one experiment are trained on the identical frozen split, so
+    their per-sample predictions are paired: this groups results by experiment
+    and, for any experiment with at least two models carrying predictions, writes
+    ``significance-<experiment>.md`` and ``significance-<experiment>.json`` (both
+    deterministic). Experiments with predictions absent (e.g. a reloaded
+    ``leaderboard.json``, whose predictions are excluded) are skipped.
+
+    Args:
+        results: The benchmark results, with ``predictions`` populated.
+        out_dir: Directory to write into.
+        split: Which split's predictions to test.
+        seed: Bootstrap seed for the confidence intervals.
+
+    Returns:
+        The experiment names for which a report was written, in sorted order.
+    """
+    from tulip.evaluation.significance import paired_significance
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    by_experiment: dict[str, list[Any]] = {}
+    for result in results:
+        predictions = result.predictions.get(split)
+        if predictions is not None:
+            by_experiment.setdefault(result.experiment, []).append(predictions)
+
+    written: list[str] = []
+    for experiment, experiment_predictions in sorted(by_experiment.items()):
+        if len(experiment_predictions) < 2:
+            continue
+        report = paired_significance(experiment_predictions, seed=seed)
+        report.save(out_dir / f"significance-{experiment}.json")
+        (out_dir / f"significance-{experiment}.md").write_text(
+            report.to_markdown() + "\n", encoding="utf-8", newline="\n"
+        )
+        written.append(experiment)
+    if written:
+        _logger.info("wrote significance for %d experiment(s) to %s", len(written), out_dir)
+    return written
 
 
 def _build_provenance(
@@ -269,6 +332,7 @@ def _build_provenance(
     result_entries.sort(key=lambda e: (e["experiment"], -e["f1_macro"], e["model"]))
     return {
         "configs": config_entries,
+        "environment": environment_provenance(suite.configs),
         "float_precision": PROVENANCE_FLOAT_DIGITS,
         "models": sorted(suite.models),
         "results": result_entries,
@@ -298,8 +362,11 @@ def _result_provenance(result: BenchmarkResult, split: str) -> dict[str, Any] | 
         _logger.debug("result %r has no %r split; omitted from provenance", result.model, split)
         return None
     auc = report.roc_auc_macro_ovr
+    calibration = report.calibration
     return {
         "accuracy": round(report.accuracy, PROVENANCE_FLOAT_DIGITS),
+        "brier": None if calibration is None else round(calibration.brier, PROVENANCE_FLOAT_DIGITS),
+        "ece": None if calibration is None else round(calibration.ece, PROVENANCE_FLOAT_DIGITS),
         "experiment": result.experiment,
         "f1_macro": round(report.f1_macro, PROVENANCE_FLOAT_DIGITS),
         "f1_weighted": round(report.f1_weighted, PROVENANCE_FLOAT_DIGITS),
@@ -324,17 +391,6 @@ def _read_manifest(config: ExperimentConfig) -> dict[str, Any] | None:
         return None
     manifest = read_json(path)
     return manifest if isinstance(manifest, dict) else None
-
-
-def _write_sorted_json(path: Path, payload: Any) -> None:
-    """Write ``payload`` as deterministic JSON (sorted keys, trailing newline).
-
-    Mirrors the model-metadata sidecar contract: no timestamps and sorted keys
-    at every level, so re-serialising identical content is byte-identical.
-    """
-    ensure_dir(path.parent)
-    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
-    path.write_text(text + "\n", encoding="utf-8", newline="\n")
 
 
 def _tulip_version() -> str:

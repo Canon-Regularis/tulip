@@ -39,6 +39,18 @@ acquisition and the manifest format.
 
 ::: tulip.data.validate_manifest
 
+## Reproducibility
+
+A content fingerprint over a produced split, so its byte-for-byte reproducibility
+is verifiable — not just its sizes. `DatasetBuilder.build` writes one as
+`split_lock.json` next to the splits.
+
+::: tulip.data.fingerprint_splits
+
+::: tulip.data.SplitFingerprint
+
+::: tulip.data.verify_splits
+
 ## Synthetic corpus
 
 ::: tulip.data.generate_corpus

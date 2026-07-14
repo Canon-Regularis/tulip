@@ -40,9 +40,15 @@ This trains every `(config, model)` pair on its frozen split and writes into
 
 | File | Contents | Deterministic? | Committed? |
 | :--- | :--- | :--- | :--- |
-| `leaderboard.md` | The ranking table (sorted by macro-F1). | **Yes** | Yes |
-| `provenance.json` | Audit record: tulip version, per-config seeds, split sizes and class distribution, fixed-precision per-result metrics. | **Yes** | Yes |
+| `leaderboard.md` | The ranking table (sorted by macro-F1), with per-model **ECE** and **Brier** calibration columns. | **Yes** | Yes |
+| `provenance.json` | Audit record: tulip version, per-config seeds, split sizes and class distribution, fixed-precision per-result metrics (incl. ECE/Brier), and an `environment` block (Python floor, key dependency versions from `uv.lock`, and content digests of the configs and lexicons). | **Yes** | Yes |
+| `significance-<experiment>.{md,json}` | Per-experiment paired significance: bootstrap CIs per metric, exact Holm-corrected McNemar between every model pair, and a "tied with best" grouping. | **Yes** | Yes |
 | `leaderboard.json` | The full raw benchmark dump (round-trips via `load_benchmark`). | No — carries wall-clock timings. | No (gitignored) |
+
+The **ECE/Brier** columns come from the suite's `calibration_bins` (10 uniform
+bins): two models can share an accuracy yet differ sharply in how honest their
+confidence is. The **significance** files are what let you read the ranking
+correctly — on a small split, the top few models are often statistically tied.
 
 Trained models, frozen splits, and per-split reports go to each config's
 `output_dir` (`artifacts/benchmarks/`, gitignored) rather than into this
@@ -51,12 +57,21 @@ directory, so only the deterministic artifacts are ever committed.
 ## The reproducibility guarantee
 
 For a **fixed seed and environment**, re-running the suite produces
-**byte-identical `leaderboard.md` and `provenance.json`**. Verify with:
+**byte-identical** `leaderboard.md`, `provenance.json`, and the
+`significance-*` artifacts. Verify with the built-in gate, which regenerates the
+suite into a scratch directory and byte-compares every guaranteed artifact
+against the committed ones (exit non-zero on any drift):
 
 ```bash
-tulip leaderboard benchmarks/suite.yaml --out /tmp/lb
-diff benchmarks/results/synthetic-leaderboard/leaderboard.md /tmp/lb/synthetic-leaderboard/leaderboard.md
+tulip repro verify benchmarks/suite.yaml
 ```
+
+CI runs the same suite twice and diffs the outputs, so a hidden nondeterminism —
+an unseeded RNG, a dict-ordering leak, a moved generator default — fails the
+build. (CI checks same-run determinism rather than a match against the committed
+board, because BLAS differences across operating systems can perturb the last
+ULP of a probability-derived metric; `tulip repro verify` performs the stricter
+match on the platform that produced the board.)
 
 It holds by construction:
 
@@ -70,8 +85,13 @@ It holds by construction:
   never the nondeterministic `wall_seconds` the raw benchmark table carries.
 - **Total, stable ordering.** Rows sort by descending macro-F1, ties broken by
   `(experiment, model)`, so reordering the inputs never changes the table.
-- **Deterministic serialisation.** `provenance.json` is written with sorted
-  keys, no timestamps, no timings, and every float at a fixed precision.
+- **Deterministic serialisation.** `provenance.json` and the significance
+  artifacts are written with sorted keys, no timestamps, no timings, and every
+  float at a fixed precision.
+- **Environment pinned from the lockfile.** The `environment` block reads its
+  dependency versions from the committed `uv.lock` (not the live interpreter),
+  so it is identical across machines; a bump to numpy/scipy/scikit-learn/pandas
+  changes it — and the gate flags it, because those versions can move a metric.
 
 `leaderboard.json` is intentionally excluded from the guarantee — it preserves
 raw per-model timings for reference, and is gitignored for exactly that reason.
@@ -105,4 +125,6 @@ tulip benchmark benchmarks/configs/char_baseline.yaml -m naive_bayes -m logistic
   keep `data.datasets` on `synthetic` and pin its `params`) and list it under
   `suite.yaml`'s `configs`.
 
-Then regenerate and commit the updated `leaderboard.md` and `provenance.json`.
+Then regenerate and commit the updated `leaderboard.md`, `provenance.json`, and
+`significance-*` files. Run `tulip repro verify benchmarks/suite.yaml` first to
+confirm the board still reproduces.
