@@ -1,0 +1,187 @@
+# Ordered phonological rewrite rules for the tulip rule engine
+# (tulip.features.text.phonological_rules). Where `isoglosses.yaml` encodes the
+# same sound changes as *rate* detectors for the `phonological_markers` feature,
+# this file encodes them as bidirectional *rewrite* rules: each maps standard
+# Polish graphemes to their dialectal reflex (forward) and, when the reflex is
+# positively identifiable, back again (reverse = the dialect->standard
+# normaliser).
+#
+# Format: a versioned mapping. `version` is an integer schema version. `rules`
+# is a list of entries, each with:
+#   name         stable identifier; emitted as `rule:<name>:applicable` and, for
+#                detectable rules, `rule:<name>:fired`
+#   families     dialect families (taxonomy DialectFamily values) the rule
+#                diagnoses -- used by dialect_intensity's per-family breakdown
+#   dialects     regional dialects the rule is attested in (documentation)
+#   detectable   true  -> the dialectal reflex is positively identifiable, so
+#                        `fired` is measurable and the reverse normaliser works;
+#                false -> a MERGER whose reflex collides with ordinary standard
+#                        Polish (mazurzenie's c/s/z, kaszubienie's s/z/c), so it
+#                        cannot be positively detected and the diagnostic is the
+#                        RATE of the standard forms (their absence marks the
+#                        change); reverse is a no-op (the merger is lossy)
+#   where        `anywhere`, `initial`, or `final` -- token position the rule
+#                applies at
+#   map          ordered standard -> dialectal grapheme substitutions (applied
+#                longest-source-first, so `dż` is consumed before the bare `ż`)
+#   exclude      lowercased whole-token stoplist of standard words whose letters
+#                collide with the rule's clusters; the rule never fires on them
+#   description  what the change is and how it is operationalised
+#   source       dialectological attestation
+#
+# Matching runs on lowercased letter-only word tokens (see word_tokens), so
+# entries are lowercase and diacritics matter. Adding a rule is a new entry
+# here; the engine needs no code change.
+#
+# Provenance: University of Warsaw dialectology compendium
+# (dialektologia.uw.edu.pl); K. Nitsch, "Dialekty języka polskiego" (1923);
+# A. Chętnik, "Kurpie" (1924); F. Lorentz on Kashubian.
+
+version: 1
+
+rules:
+  - name: mazurzenie
+    families: [masovian, lesser_polish]
+    dialects: [kurpie, mazovia_proper, warmia, masuria, podlasie, podhale]
+    detectable: false
+    where: anywhere
+    description: >-
+      The Masovian and Lesser-Polish merger of the hushing sibilants cz/sz/ż/dż
+      into the hissing c/s/z/dz (jeszcze -> jesce, czego -> cego). A merger: the
+      reflex is plain c/s/z, indistinguishable from ordinary standard Polish, so
+      mazurzenie cannot be positively detected. The diagnostic is the rate of the
+      standard digraphs -- their conspicuous absence marks the merger. rz is not
+      included: it survives mazurzenie and is not diagnostic of it.
+    source: >-
+      Nitsch, "Dialekty języka polskiego" (1923); dialektologia.uw.edu.pl
+      (mazurzenie).
+    map:
+      dż: dz
+      cz: c
+      sz: s
+      ż: z
+    exclude: []
+
+  - name: soft_labials
+    families: [masovian]
+    dialects: [kurpie]
+    detectable: true
+    where: anywhere
+    description: >-
+      Asynchronous soft labials: pi/bi/wi/mi realised as psi/bzi/wzi/mni
+      (piwo -> psiwo, kobieta -> kobzieta, biały -> bziały). Positively
+      detectable, but the target clusters also occur in common standard words
+      (mnie, psie, wziąć, ziemniak, ...), so the exclude stoplist is what turns
+      the pattern into real signal.
+    source: >-
+      Chętnik, "Kurpie" (1924); dialektologia.uw.edu.pl (asynchroniczna wymowa
+      spółgłosek wargowych miękkich).
+    map:
+      pi: psi
+      bi: bzi
+      wi: wzi
+      mi: mni
+    exclude:
+      - psi
+      - psia
+      - psie
+      - psią
+      - psiej
+      - psiego
+      - psiemu
+      - psim
+      - psich
+      - psimi
+      - psina
+      - psisko
+      - psiarnia
+      - psikus
+      - bzik
+      - bzika
+      - bzie
+      - wziąć
+      - wziął
+      - wzięła
+      - wzięło
+      - wzięli
+      - wzięły
+      - wzięty
+      - wzięta
+      - wzięte
+      - wziętą
+      - wzięci
+      - wzięcie
+      - wziąwszy
+      - wziernik
+      - mnie
+      - mniej
+      - mniejszy
+      - mniejsza
+      - mniejsze
+      - mniejszą
+      - mniejszych
+      - mniejszym
+      - mniejszości
+      - mniejszość
+      - mnich
+      - mnicha
+      - mnisi
+      - mniszka
+      - mniemanie
+      - mniemać
+      - pomnik
+      - pomnika
+      - pomniki
+      - pomników
+      - wspomnienie
+      - wspomnień
+      - wspomnieć
+      - przypomnieć
+      - przypomnienie
+      - upomnienie
+      - zapomnieć
+      - zapomnienie
+      - ziemniak
+      - ziemniaki
+      - ziemniaka
+      - ziemniaków
+      - ziemniakami
+      - ziemniakach
+      - ziemniakiem
+      - ziemniakom
+
+  - name: silesian_final_ch
+    families: [silesian]
+    dialects: [silesia, cieszyn_silesia]
+    detectable: false
+    where: final
+    description: >-
+      Silesian word-final -ch hardened to -k (na nogach -> na nogak, dach ->
+      dak). Not positively detectable: standard Polish is full of legitimate
+      word-final -k (rok, bok), so a final -k cannot confirm the shift. The
+      diagnostic is the rate of standard word-final -ch; a low rate alongside
+      Silesian markers indicates the change.
+    source: >-
+      dialektologia.uw.edu.pl (dialekt śląski).
+    map:
+      ch: k
+    exclude: []
+
+  - name: kaszubienie
+    families: [kashubian]
+    dialects: [kashubia]
+    detectable: false
+    where: anywhere
+    description: >-
+      Kashubian "kaszubienie": the soft sibilants ś/ź/ć/dź hardened to plain
+      s/z/c/dz. Like mazurzenie a merger whose reflex collides with standard
+      s/z/c, so it cannot be positively detected; the diagnostic is the rate of
+      the standard soft sibilants.
+    source: >-
+      Lorentz, "Gramatyka pomorska"; dialektologia.uw.edu.pl (kaszubszczyzna).
+    map:
+      dź: dz
+      ć: c
+      ś: s
+      ź: z
+    exclude: []
