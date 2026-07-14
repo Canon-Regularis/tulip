@@ -2,6 +2,19 @@
 
 from tulip.pipeline.calibrated import CalibratedClassifier
 from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
+from tulip.pipeline.conformal import (
+    ConformalClassifier,
+    ConformalPrediction,
+    ConformalReport,
+)
+from tulip.pipeline.crossval import (
+    CVConfig,
+    CVFoldResult,
+    CVReport,
+    MetricSummary,
+    grouped_stratified_kfold,
+    run_cross_validation,
+)
 from tulip.pipeline.experiment import (
     ExperimentResult,
     evaluate_samples,
@@ -35,8 +48,14 @@ __all__ = [
     "AlwaysAccept",
     "AnyOf",
     "BackoffPolicy",
+    "CVConfig",
+    "CVFoldResult",
+    "CVReport",
     "CalibratedClassifier",
     "ConfidenceThreshold",
+    "ConformalClassifier",
+    "ConformalPrediction",
+    "ConformalReport",
     "DialectClassifier",
     "ExperimentResult",
     "FusionStrategy",
@@ -46,6 +65,7 @@ __all__ = [
     "LogarithmicPoolingFusion",
     "MarginThreshold",
     "MaximumFusion",
+    "MetricSummary",
     "MultimodalClassifier",
     "NotAbstained",
     "ProbabilisticClassifier",
@@ -54,7 +74,9 @@ __all__ = [
     "SelfTrainResult",
     "WeightedAverageFusion",
     "evaluate_samples",
+    "grouped_stratified_kfold",
     "run_benchmark",
+    "run_cross_validation",
     "run_experiment",
     "self_train",
 ]
