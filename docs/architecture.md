@@ -104,10 +104,12 @@ docs, and tests refer to them.
   `spectral_centroid`, `chroma`, `wav2vec2_embeddings`.
 - `tulip.models.MODELS`:
   `naive_bayes`, `logistic_regression`, `linear_svm`, `random_forest`,
-  `xgboost`, `lightgbm`, `herbert`, `polish_roberta`, `mbert`, `xlm_roberta`,
-  `fasttext`, `wav2vec2`, `hubert`, `whisper`, `ecapa_tdnn`, `xvector`.
+  `xgboost`, `lightgbm`, `voting`, `stacking`, `herbert`, `polish_roberta`,
+  `mbert`, `xlm_roberta`, `fasttext`, `wav2vec2`, `hubert`, `whisper`,
+  `ecapa_tdnn`, `xvector`.
 - `tulip.explain.EXPLAINERS`:
-  `top_tfidf`, `lime`, `shap`, `attention`, `nearest_examples`.
+  `top_tfidf`, `lime`, `shap`, `attention`, `nearest_examples`,
+  `dialect_evidence`.
 
 ## Module contracts
 
@@ -178,6 +180,10 @@ LPC-based estimate (scipy) when parselmouth is unavailable. A shared
   classifiers. `linear_svm` must wrap `LinearSVC` in
   `CalibratedClassifierCV` so `predict_proba` exists. `xgboost`/`lightgbm`
   guard their imports and encode string labels internally.
+- `ensemble.py`: `voting` and `stacking` factories. Each combines several
+  registered feature-based models into one estimator. They reuse sklearn's
+  `VotingClassifier` and `StackingClassifier` and build the bases through
+  `MODELS.create`, so the ensembling logic is not reimplemented.
 - `neural_text.py`: `TransformerTextClassifier` (sklearn-style wrapper around
   HF `AutoModelForSequenceClassification`): registered names map to
   checkpoints: herbert `allegro/herbert-base-cased`, polish_roberta
@@ -293,6 +299,10 @@ Rich tables for human output. `--json` for machine output. `data validate` and
   classifier already ships.
 - `error_analysis.py`: `error_report`: most-confused pairs, hard exemplars, and
   per-slice (source/speaker/length/modality) fairness metrics.
+- `cross_corpus.py`: `run_loco` (leave-one-corpus-out) and `transfer_matrix`
+  (full train-by-test grid), partitioned by `Sample.source`. This measures
+  whether a model learned dialect or corpus artifacts. The pipeline imports are
+  lazy, so there is no import cycle.
 - `cards.py`: `dataset_card` / `model_card` render byte-stable markdown from
   artifacts the toolkit already writes (`build_manifest.json`, `metadata.json`,
   `report_<split>.json`).
@@ -328,6 +338,15 @@ satisfies the protocol via a `predict_samples` adapter.
   `ProbabilityCalibrator` fitted on a **held-out** split. It applies
   `abstain_threshold` to the *calibrated* top probability. An uncalibrated
   cutoff does not mean what it looks like.
+- `conformal.py`: `ConformalClassifier` wraps a fitted classifier by
+  composition, like `calibrated.py`. It fits a split-conformal threshold on a
+  held-out split and emits a `ConformalPrediction` label set that covers the
+  truth at least `1 - alpha` of the time. `mondrian=True` uses a per-class
+  threshold for class-conditional coverage.
+- `crossval.py`: `run_cross_validation` runs grouped, stratified K-fold CV over
+  several seeds and aggregates each metric to a mean and a confidence interval.
+  Folds are speaker-disjoint. The folding reuses sklearn's
+  `StratifiedGroupKFold`.
 - `fusion/`: `MultimodalClassifier` fuses a text and an audio classifier via a
   `FusionStrategy` (weighted average, maximum, logarithmic pooling). It aligns
   their classes to the sorted union and degrades to whichever modality a sample

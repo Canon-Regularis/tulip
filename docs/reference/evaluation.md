@@ -96,3 +96,17 @@ per-slice fairness metrics.
 ::: tulip.evaluation.top_confused_pairs
 
 ::: tulip.evaluation.slice_metrics
+
+## Cross-corpus transfer
+
+Train on some corpora, test on another. This shows whether the model learned
+dialect or corpus artifacts. Leave-one-corpus-out plus the full transfer matrix,
+partitioned by sample source.
+
+::: tulip.evaluation.run_loco
+
+::: tulip.evaluation.CrossCorpusReport
+
+::: tulip.evaluation.transfer_matrix
+
+::: tulip.evaluation.TransferMatrix

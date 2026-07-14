@@ -31,3 +31,27 @@ These are the objects most users touch.
 ::: tulip.pipeline.self_train
 
 ::: tulip.pipeline.SelfTrainConfig
+
+## Cross-validation
+
+Grouped, stratified K-fold cross-validation. Folds are speaker-disjoint. Each
+metric gets a mean and a 95% confidence interval across all folds and seeds.
+
+::: tulip.pipeline.run_cross_validation
+
+::: tulip.pipeline.CVConfig
+
+::: tulip.pipeline.CVReport
+
+::: tulip.pipeline.grouped_stratified_kfold
+
+## Conformal prediction
+
+Distribution-free prediction sets. The set covers the true label at least
+`1 - alpha` of the time. `mondrian=True` gives per-class coverage.
+
+::: tulip.pipeline.ConformalClassifier
+
+::: tulip.pipeline.ConformalPrediction
+
+::: tulip.pipeline.ConformalReport

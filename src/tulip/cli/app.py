@@ -640,6 +640,93 @@ def selftrain(
 
 @app.command()
 @_tulip_errors
+def crossval(
+    config_path: Path = typer.Argument(..., help="Experiment config YAML."),
+    k: int = typer.Option(5, "--k", min=2, help="Number of folds."),
+    seeds: str = typer.Option("0", "--seeds", help="Comma-separated fold seeds (e.g. 0,1,2)."),
+) -> None:
+    """Grouped, stratified K-fold cross-validation with multi-seed aggregation.
+
+    Reports each metric's mean and 95% confidence interval across all folds, so a
+    single lucky split cannot flatter the model. Folds are speaker-disjoint.
+    """
+    from tulip.config import load_experiment_config
+    from tulip.pipeline import CVConfig, run_cross_validation
+
+    config = load_experiment_config(config_path)
+    seed_tuple = tuple(int(part) for part in seeds.split(",") if part.strip())
+    report = run_cross_validation(config, CVConfig(k=k, seeds=seed_tuple))
+
+    table = Table(title=f"cross-validation {config.model.name!r} ({report.target})")
+    for column in ("metric", "mean", "std", "95% CI"):
+        table.add_column(column)
+    for metric in report.metrics:
+        table.add_row(
+            metric.metric,
+            f"{metric.mean:.4f}",
+            f"{metric.std:.4f}",
+            f"[{metric.low:.4f}, {metric.high:.4f}]",
+        )
+    _console.print(table)
+    _console.print(
+        f"[dim]{len(report.folds)} fold runs ({k}-fold x {len(seed_tuple)} seed(s))[/dim]"
+    )
+
+
+@app.command()
+@_tulip_errors
+def transfer(
+    config_path: Path = typer.Argument(..., help="Experiment config YAML (multi-corpus data)."),
+    matrix: bool = typer.Option(
+        False, "--matrix", help="Full train-by-test transfer matrix instead of leave-one-out."
+    ),
+) -> None:
+    """Cross-corpus transfer: does the model learn dialect or corpus artifacts?
+
+    Partitions the data by source corpus. By default runs leave-one-corpus-out
+    (train on the rest, test on the held-out corpus). With ``--matrix`` fills the
+    full train-corpus by test-corpus grid.
+    """
+    from tulip.config import load_experiment_config
+    from tulip.evaluation import run_loco, transfer_matrix
+
+    config = load_experiment_config(config_path)
+    report = transfer_matrix(config) if matrix else run_loco(config)
+    _console.print(report.to_markdown())
+
+
+@app.command()
+@_tulip_errors
+def conformal(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    calibration: Path = typer.Argument(..., help="Held-out calibration samples."),
+    test: Path = typer.Argument(..., help="Test samples to measure coverage on."),
+    alpha: float = typer.Option(0.1, "--alpha", min=0.0, max=1.0, help="Miscoverage rate."),
+    mondrian: bool = typer.Option(False, "--mondrian", help="Per-class (class-conditional) sets."),
+) -> None:
+    """Calibrate prediction sets and report their coverage.
+
+    Fits split conformal on the calibration split, then measures empirical
+    coverage and mean set size on the test split. Coverage should meet the
+    ``1 - alpha`` target.
+    """
+    from tulip.data import read_samples
+    from tulip.pipeline import ConformalClassifier, DialectClassifier
+
+    classifier = DialectClassifier.load(model_path)
+    conformal_classifier = ConformalClassifier(classifier, alpha=alpha, mondrian=mondrian)
+    conformal_classifier.fit_conformal(list(read_samples(calibration)))
+    report = conformal_classifier.evaluate_coverage(list(read_samples(test)))
+    kind = "Mondrian" if mondrian else "marginal"
+    _console.print(
+        f"{kind} conformal (alpha={alpha}): coverage "
+        f"[bold]{report.coverage:.3f}[/bold] (target {report.target_coverage:.2f}), "
+        f"mean set size {report.mean_set_size:.2f} over {report.n_samples} samples"
+    )
+
+
+@app.command()
+@_tulip_errors
 def evaluate(
     model_path: Path = typer.Argument(..., help="Saved model directory."),
     data: Path = typer.Argument(
