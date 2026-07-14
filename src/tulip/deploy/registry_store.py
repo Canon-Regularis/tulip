@@ -1,0 +1,356 @@
+"""Content-addressed model registry with a staging -> production promotion flow.
+
+A trained model is a directory artifact (``model.joblib`` + ``metadata.json``,
+see :mod:`tulip.models.persistence`) but nothing above it records *identity*: no
+version, no integrity digest, and no notion of which artifact is the one in
+production. This module adds that thin layer -- and only that layer, reusing the
+persistence format verbatim rather than re-implementing it:
+
+* **Content addressing.** Every artifact is stored under
+  ``<root>/artifacts/<sha256>/`` keyed by a SHA-256 over its bytes, so identical
+  models deduplicate and bit-rot is caught as a digest mismatch rather than an
+  opaque unpickle error.
+* **Versioned entries.** Each ``(name, version)`` is an immutable
+  :class:`RegistryEntry` recording the digest, the model class, and the labels --
+  read straight from the persisted sidecar.
+* **Promotion & rollback.** ``promote`` moves a version to ``production`` (the
+  previous production is archived); ``rollback`` restores it in one call, using a
+  per-name promotion stack so "the previous production" is unambiguous.
+* **Resolution.** ``resolve("name@production")`` (or ``name@<version>``, or bare
+  ``name`` for production) returns the entry, so the serving layer can bind to a
+  moving target and report ``X-Model-Version`` / ``X-Model-Digest``.
+
+The index (``<root>/registry.json``) is written with the shared deterministic
+JSON writer -- sorted keys, no timestamps -- so the same operation sequence
+reproduces byte-identical bytes, like the leaderboard provenance.
+"""
+
+from __future__ import annotations
+
+import enum
+import hashlib
+import shutil
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from tulip._serialize import write_sorted_json
+from tulip.core.exceptions import ConfigurationError, DataError
+from tulip.models.persistence import METADATA_FILENAME, MODEL_FILENAME
+from tulip.utils.io import read_json
+from tulip.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+__all__ = [
+    "REGISTRY_INDEX_NAME",
+    "ModelRegistry",
+    "RegistryEntry",
+    "Stage",
+    "artifact_digest",
+]
+
+logger = get_logger(__name__)
+
+#: Index file name written under the registry root.
+REGISTRY_INDEX_NAME = "registry.json"
+#: Sub-directory holding the content-addressed artifacts.
+_ARTIFACTS_DIR = "artifacts"
+#: Schema version of the on-disk index; bump on a breaking change.
+_INDEX_SCHEMA_VERSION = 1
+#: The two files that make up a persisted artifact, hashed in this fixed order.
+_ARTIFACT_FILES = (MODEL_FILENAME, METADATA_FILENAME)
+
+
+class Stage(str, enum.Enum):
+    """Lifecycle stage of a registered model version."""
+
+    STAGING = "staging"
+    PRODUCTION = "production"
+    ARCHIVED = "archived"
+
+
+class RegistryEntry(BaseModel):
+    """One immutable registered ``(name, version)`` model version.
+
+    ``digest`` is the content address; ``model_class``/``classes``/``target``/
+    ``task`` are read from the persisted sidecar so the entry is self-describing
+    without loading the model.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    version: str
+    digest: str
+    stage: Stage
+    model_class: str
+    tulip_version: str
+    target: str | None = None
+    task: str | None = None
+    classes: tuple[str, ...] = ()
+    metrics: dict[str, float] | None = None
+
+
+def artifact_digest(model_dir: Path | str) -> str:
+    """Return the SHA-256 content digest of a persisted model artifact.
+
+    Hashes ``model.joblib`` and ``metadata.json`` in a fixed order, each
+    length-prefixed so no rearrangement of bytes across the two files can collide.
+
+    Raises:
+        DataError: if either artifact file is missing or unreadable.
+    """
+    directory = Path(model_dir)
+    hasher = hashlib.sha256()
+    for name in _ARTIFACT_FILES:
+        try:
+            data = (directory / name).read_bytes()
+        except OSError as exc:
+            raise DataError(f"cannot digest artifact at {directory}: {exc}") from exc
+        hasher.update(f"{name}:{len(data)}\0".encode())
+        hasher.update(data)
+    return hasher.hexdigest()
+
+
+class ModelRegistry:
+    """A content-addressed store of versioned models with a promotion flow.
+
+    Args:
+        root: Directory holding the index and the content-addressed artifacts;
+            created on first write.
+    """
+
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
+
+    # ---------------------------------------------------------------- public
+
+    def add(
+        self,
+        model_dir: Path | str,
+        *,
+        name: str,
+        version: str,
+        stage: Stage = Stage.STAGING,
+        metrics: dict[str, float] | None = None,
+    ) -> RegistryEntry:
+        """Register a persisted model artifact under ``(name, version)``.
+
+        Copies the artifact into content-addressed storage (deduplicating on
+        digest) and appends an entry. Re-adding the identical artifact under the
+        same ``(name, version)`` is idempotent.
+
+        Raises:
+            DataError: if ``model_dir`` is not a valid artifact.
+            ConfigurationError: if ``(name, version)`` already exists with a
+                *different* digest.
+        """
+        digest = artifact_digest(model_dir)
+        sidecar = self._read_sidecar(model_dir)
+        index = self._load_index()
+        existing = _find(index.entries, name, version)
+        if existing is not None:
+            if existing.digest != digest:
+                raise ConfigurationError(
+                    f"{name}@{version} already exists with digest {existing.digest[:12]}; "
+                    f"refusing to overwrite with {digest[:12]}"
+                )
+            return existing
+
+        self._store_artifact(model_dir, digest)
+        entry = RegistryEntry(
+            name=name,
+            version=version,
+            digest=digest,
+            stage=stage,
+            model_class=str(sidecar.get("model_class", "unknown")),
+            tulip_version=str(sidecar.get("tulip_version", "unknown")),
+            target=_meta(sidecar, "target"),
+            task=_meta(sidecar, "task"),
+            classes=tuple(str(label) for label in sidecar.get("classes") or ()),
+            metrics=metrics,
+        )
+        index.entries.append(entry)
+        if stage is Stage.PRODUCTION:
+            index = self._apply_promotion(index, name, version)
+        self._save_index(index)
+        logger.info("registered %s@%s (%s) digest=%s", name, version, stage.value, digest[:12])
+        return _find(index.entries, name, version)  # type: ignore[return-value]  # just added
+
+    def promote(self, name: str, version: str, *, stage: Stage = Stage.PRODUCTION) -> RegistryEntry:
+        """Move ``(name, version)`` to ``stage``.
+
+        Promoting to ``production`` archives the current production version of
+        ``name`` and records the move on the promotion stack (so it can be rolled
+        back). Promoting to ``staging``/``archived`` just relabels the entry.
+
+        Raises:
+            DataError: if ``(name, version)`` is not registered.
+        """
+        index = self._load_index()
+        if _find(index.entries, name, version) is None:
+            raise DataError(f"{name}@{version} is not registered")
+        if stage is Stage.PRODUCTION:
+            index = self._apply_promotion(index, name, version)
+        else:
+            index.entries = [
+                entry.model_copy(update={"stage": stage})
+                if entry.name == name and entry.version == version
+                else entry
+                for entry in index.entries
+            ]
+        self._save_index(index)
+        logger.info("promoted %s@%s to %s", name, version, stage.value)
+        return _find(index.entries, name, version)  # type: ignore[return-value]
+
+    def rollback(self, name: str) -> RegistryEntry:
+        """Restore the previous production version of ``name`` in one step.
+
+        Archives the current production version and re-promotes the one below it
+        on the promotion stack.
+
+        Raises:
+            DataError: if ``name`` has no earlier production version to restore.
+        """
+        index = self._load_index()
+        stack = index.history.get(name, [])
+        if len(stack) < 2:
+            raise DataError(f"{name} has no previous production version to roll back to")
+        current = stack.pop()  # archive the version currently in production
+        previous = stack[-1]
+        index.entries = [
+            _restage(entry, name, current=current, previous=previous) for entry in index.entries
+        ]
+        self._save_index(index)
+        logger.info("rolled %s back to %s", name, previous)
+        return _find(index.entries, name, previous)  # type: ignore[return-value]
+
+    def resolve(self, reference: str) -> RegistryEntry:
+        """Resolve a reference to a registered entry.
+
+        Accepts ``name`` (the production version), ``name@production`` /
+        ``name@staging`` / ``name@archived`` (a stage; staging/archived pick the
+        most recently added), or ``name@<version>`` (an exact version).
+
+        Raises:
+            DataError: if nothing matches the reference.
+        """
+        name, _, qualifier = reference.partition("@")
+        entries = [entry for entry in self._load_index().entries if entry.name == name]
+        if not entries:
+            raise DataError(f"no registered model named {name!r}")
+        if not qualifier or qualifier == Stage.PRODUCTION.value:
+            return _by_stage(entries, Stage.PRODUCTION, reference)
+        if qualifier in (Stage.STAGING.value, Stage.ARCHIVED.value):
+            return _by_stage(entries, Stage(qualifier), reference)
+        exact = _find(entries, name, qualifier)
+        if exact is None:
+            raise DataError(f"{reference} does not match any registered version")
+        return exact
+
+    def path_for(self, entry: RegistryEntry) -> Path:
+        """Return the content-addressed artifact directory for ``entry``."""
+        return self.root / _ARTIFACTS_DIR / entry.digest
+
+    def entries(self) -> list[RegistryEntry]:
+        """Every registered entry, in registration order."""
+        return list(self._load_index().entries)
+
+    def versions_of(self, name: str) -> list[RegistryEntry]:
+        """Every registered version of ``name``, in registration order."""
+        return [entry for entry in self._load_index().entries if entry.name == name]
+
+    # --------------------------------------------------------------- internal
+
+    def _apply_promotion(self, index: _Index, name: str, version: str) -> _Index:
+        """Archive the current production of ``name`` and promote ``version``."""
+        stack = index.history.setdefault(name, [])
+        current = stack[-1] if stack else None
+        if current == version:
+            return index  # already in production; nothing to do
+        index.entries = [
+            _restage(entry, name, current=current, previous=version) for entry in index.entries
+        ]
+        stack.append(version)
+        return index
+
+    def _store_artifact(self, model_dir: Path | str, digest: str) -> None:
+        """Copy the artifact into ``<root>/artifacts/<digest>/`` if not present."""
+        destination = self.root / _ARTIFACTS_DIR / digest
+        if destination.is_dir():
+            return  # content-addressed: same digest means same bytes already stored
+        destination.mkdir(parents=True, exist_ok=True)
+        source = Path(model_dir)
+        for name in _ARTIFACT_FILES:
+            shutil.copy2(source / name, destination / name)
+
+    def _read_sidecar(self, model_dir: Path | str) -> dict[str, Any]:
+        """Read a persisted artifact's ``metadata.json`` as a dict."""
+        path = Path(model_dir) / METADATA_FILENAME
+        if not path.is_file():
+            raise DataError(f"{Path(model_dir)} is not a model artifact (no {METADATA_FILENAME})")
+        data = read_json(path)
+        if not isinstance(data, dict):
+            raise DataError(f"corrupt sidecar at {path}: expected a JSON object")
+        return data
+
+    def _index_path(self) -> Path:
+        return self.root / REGISTRY_INDEX_NAME
+
+    def _load_index(self) -> _Index:
+        path = self._index_path()
+        if not path.is_file():
+            return _Index()
+        data = read_json(path)
+        if not isinstance(data, dict) or "entries" not in data:
+            raise DataError(f"{path} is not a tulip registry index")
+        return _Index.model_validate(data)
+
+    def _save_index(self, index: _Index) -> None:
+        write_sorted_json(self._index_path(), index.model_dump(mode="json"))
+
+
+class _Index(BaseModel):
+    """On-disk registry index (entries in registration order + promotion stacks)."""
+
+    schema_version: int = _INDEX_SCHEMA_VERSION
+    entries: list[RegistryEntry] = Field(default_factory=list)
+    history: dict[str, list[str]] = Field(default_factory=dict)
+
+
+def _restage(
+    entry: RegistryEntry, name: str, *, current: str | None, previous: str
+) -> RegistryEntry:
+    """Archive ``name``'s current production and set ``previous`` to production."""
+    if entry.name != name:
+        return entry
+    if current is not None and entry.version == current:
+        return entry.model_copy(update={"stage": Stage.ARCHIVED})
+    if entry.version == previous:
+        return entry.model_copy(update={"stage": Stage.PRODUCTION})
+    return entry
+
+
+def _find(entries: Sequence[RegistryEntry], name: str, version: str) -> RegistryEntry | None:
+    """The entry for ``(name, version)``, or ``None``."""
+    return next(
+        (entry for entry in entries if entry.name == name and entry.version == version), None
+    )
+
+
+def _meta(sidecar: dict[str, Any], key: str) -> str | None:
+    """A value from the sidecar's user ``metadata`` block, coerced to ``str``."""
+    metadata = sidecar.get("metadata")
+    value = metadata.get(key) if isinstance(metadata, dict) else None
+    return str(value) if value is not None else None
+
+
+def _by_stage(entries: Sequence[RegistryEntry], stage: Stage, reference: str) -> RegistryEntry:
+    """The most recently added entry of ``name`` at ``stage`` (production is unique)."""
+    matches = [entry for entry in entries if entry.stage is stage]
+    if not matches:
+        raise DataError(f"{reference}: no version is in {stage.value}")
+    return matches[-1]
