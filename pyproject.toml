@@ -143,6 +143,8 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
     "RUF002",
     "RUF003", # allow Polish diacritics lookalikes in fixtures
     "S101",   # assert *is* the pytest API
+    "S105",   # dummy bearer tokens in serve-guard tests are not real secrets
+    "S106",   # (same, passed as a keyword argument)
     "S301",   # the fastText round-trip test deliberately exercises pickle
 ]
 "src/tulip/cli/*" = [

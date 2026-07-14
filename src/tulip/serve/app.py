@@ -36,7 +36,9 @@ from tulip import __version__
 from tulip.core.exceptions import DataError
 from tulip.core.types import Prediction, TaskType
 from tulip.serve._demo import demo_page
+from tulip.serve._guards import install_guards
 from tulip.serve._metrics import CONTENT_TYPE, MetricsRegistry
+from tulip.serve.settings import ServeSettings
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
 
@@ -146,11 +148,30 @@ def _metric_method(method: str) -> str:
     return method if method in _KNOWN_METHODS else "OTHER"
 
 
-def create_app(model_path: Path | str) -> Any:
+def create_app(
+    model_path: Path | str,
+    *,
+    model_version: str | None = None,
+    model_digest: str | None = None,
+    settings: ServeSettings | None = None,
+) -> Any:
     """Build the FastAPI application around one saved model artifact.
+
+    Guards (auth, rate limit, concurrency cap, request-body ceiling, CORS,
+    security headers) are configured from ``TULIP_SERVE_*`` environment variables
+    (see :class:`~tulip.serve.settings.ServeSettings`) and installed *inside* the
+    observability middleware, so a guard-rejected request is still timed, counted,
+    and logged.
 
     Args:
         model_path: Directory written by :meth:`DialectClassifier.save`.
+        model_version: Registry version of the model, surfaced as
+            ``X-Model-Version`` when set (the serving layer resolves it).
+        model_digest: Content digest of the artifact, surfaced as
+            ``X-Model-Digest`` when set.
+        settings: Guard settings; defaults to
+            :meth:`ServeSettings.from_env`. Pass explicitly to configure the
+            guards in-process (e.g. in tests).
 
     Returns:
         A configured :class:`fastapi.FastAPI` instance.
@@ -190,6 +211,13 @@ def create_app(model_path: Path | str) -> Any:
     registry = MetricsRegistry()
     app.state.metrics = registry
 
+    settings = settings if settings is not None else ServeSettings.from_env()
+    app.state.serve_settings = settings
+    # Install guards BEFORE the observability middleware below, so that
+    # observability (added last) stays the outermost layer and still times,
+    # counts, and logs any guard-rejected request. See serve._guards.
+    install_guards(app, settings)
+
     def _set_identity_headers(response: Response) -> None:
         """Stamp model-identity headers so a client sees the model without /health.
 
@@ -199,12 +227,20 @@ def create_app(model_path: Path | str) -> Any:
         Each label is percent-encoded (RFC 3986), which is ASCII-safe, keeps
         plain ASCII labels readable, and makes the comma an unambiguous separator
         even when a label itself contains a comma. Clients unquote per field.
+
+        ``X-Model-Version`` / ``X-Model-Digest`` identify the exact registered
+        artifact when the model was resolved from the registry (both omitted
+        otherwise).
         """
         response.headers["X-Tulip-Version"] = __version__
         response.headers["X-Model-Target"] = classifier.target.value
         response.headers["X-Model-Classes"] = ",".join(
             quote(label, safe="") for label in classifier.classes_
         )
+        if model_version is not None:
+            response.headers["X-Model-Version"] = quote(model_version, safe="")
+        if model_digest is not None:
+            response.headers["X-Model-Digest"] = model_digest
 
     @app.middleware("http")
     async def observability(request: Request, call_next: Any) -> Any:
@@ -287,6 +323,8 @@ def create_app(model_path: Path | str) -> Any:
         return {
             "status": "ok",
             "version": __version__,
+            "model_version": model_version,
+            "model_digest": model_digest,
             "task": classifier.task.value,
             "target": classifier.target.value,
             "classes": list(classifier.classes_),
@@ -340,6 +378,11 @@ def create_app(model_path: Path | str) -> Any:
             )
         if not request.texts:
             raise fastapi.HTTPException(status_code=400, detail="texts must not be empty")
+        if len(request.texts) > settings.max_batch:
+            raise fastapi.HTTPException(
+                status_code=400,
+                detail=f"at most {settings.max_batch} texts per batch (configured limit)",
+            )
         if any(not text.strip() for text in request.texts):
             raise fastapi.HTTPException(status_code=400, detail="every text must be non-blank")
         predictions = classifier.predict_batch(list(request.texts))
