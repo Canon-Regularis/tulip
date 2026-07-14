@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation._format import format_metric, markdown_table
+from tulip.evaluation.predictions import SplitPredictions
 from tulip.evaluation.report import EvaluationReport
 from tulip.utils.io import read_json, write_json
 from tulip.utils.logging import get_logger
@@ -46,6 +47,13 @@ class BenchmarkResult(BaseModel):
 
     ``reports`` maps split names (e.g. ``"validation"``, ``"test"``) to the
     :class:`EvaluationReport` computed on that split.
+
+    ``predictions`` carries the optional per-sample
+    :class:`~tulip.evaluation.predictions.SplitPredictions` for each split. It is
+    the substrate for paired significance testing and selective-prediction
+    analysis, kept in memory only: ``exclude=True`` keeps it out of
+    :func:`save_benchmark`'s JSON so ``benchmark.json`` / ``leaderboard.json``
+    stay byte-identical, and it defaults to empty when a result is reloaded.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -54,6 +62,7 @@ class BenchmarkResult(BaseModel):
     model: str
     target_level: str = "dialect"
     reports: dict[str, EvaluationReport] = Field(default_factory=dict)
+    predictions: dict[str, SplitPredictions] = Field(default_factory=dict, exclude=True, repr=False)
     wall_seconds: float = Field(default=0.0, ge=0.0)
     n_train: int = Field(default=0, ge=0)
     n_test: int = Field(default=0, ge=0)

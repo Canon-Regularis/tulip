@@ -11,7 +11,7 @@ top-k, optional abstention) instead of bare labels. Explanations delegate to
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -51,11 +51,18 @@ class LabelledBatch:
 
     Produced by :meth:`DialectClassifier.labelled_batch`; consumed by training
     and by evaluation (:func:`tulip.pipeline.experiment.evaluate_samples`).
+
+    ``samples`` holds the surviving :class:`~tulip.core.types.Sample` objects
+    positionally aligned with ``raws``/``labels`` (skipped samples are absent).
+    Training ignores it; per-sample evaluation
+    (:func:`tulip.pipeline.experiment.collect_predictions`) uses it to attach
+    each record's slice keys (id, source, speaker, length) without re-filtering.
     """
 
     raws: list[Any]
     labels: list[str]
     n_skipped: int
+    samples: list[Sample] = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.raws)
@@ -203,6 +210,7 @@ class DialectClassifier:
         """
         raws: list[Any] = []
         labels: list[str] = []
+        kept: list[Sample] = []
         skipped = 0
         for sample in samples:
             raw = self._raw_of(sample)
@@ -212,7 +220,8 @@ class DialectClassifier:
                 continue
             raws.append(raw)
             labels.append(str(label))
-        return LabelledBatch(raws=raws, labels=labels, n_skipped=skipped)
+            kept.append(sample)
+        return LabelledBatch(raws=raws, labels=labels, n_skipped=skipped, samples=kept)
 
     # -------------------------------------------------------------- predict
 
