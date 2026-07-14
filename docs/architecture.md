@@ -47,7 +47,8 @@ src/tulip/
                  # split fingerprint (reproducibility)
   features/
     registries.py  # TEXT_FEATURES / AUDIO_FEATURES registries    [frozen]
-    text/          # char/word n-grams, stylometry, affixes, keyword lexicon
+    text/          # char/word n-grams, stylometry, affixes, keyword lexicon,
+                   # phonological markers + rule engine, dialect intensity
     audio/         # MFCC, mel, pitch, formants, ZCR, centroid, chroma, wav2vec2
   models/
     registry.py    # MODELS registry                              [frozen]
@@ -201,7 +202,22 @@ LPC-based estimate (scipy) when parselmouth is unavailable. A shared
 `EXPLAINERS` registry; implementations satisfy `tulip.core.interfaces.Explainer`
 and return `tulip.core.types.Explanation`. `top_tfidf` reads linear-model
 coefficients through a fitted sklearn Pipeline; `nearest_examples` retrieves
-cosine-similar training samples; `lime`/`shap`/`attention` guard their imports.
+cosine-similar training samples; `lime`/`shap`/`attention` guard their imports;
+`dialect_evidence` attributes the prediction to named linguistic phenomena
+(which marker lexemes matched, which isoglosses fired), composed over the shared
+lexicon and phonological rule engine.
+
+The `phonological_rules` engine (`features/text/phonological_rules.py`) is the
+domain core those dialectology surfaces share: a single `PhonologicalRule` value
+object models each group-defining isogloss as a reversible rewrite, reporting an
+`applicable` rate (standard environment present) and, for a positively
+identifiable change, a `fired` rate (dialectal reflex present) -- the distinction
+between "standard" and "dialectal" a merger's rate alone cannot make. Running the
+detectable rules in reverse is the `normalize_to_standard` dialect->standard
+normaliser. The `dialect_intensity` feature and the `dialect_evidence` explainer
+compose over this engine and the marker lexicon; the lexicon-key -> family
+reconciliation lives once in `features/text/keywords.py`, shared with the
+synthetic generator.
 
 ### tulip.viz
 
