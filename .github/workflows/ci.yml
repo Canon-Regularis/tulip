@@ -77,6 +77,38 @@ jobs:
       - run: pip install uv
       - run: uv lock --check
 
+  repro:
+    # The reproducible leaderboard must actually be reproducible. This gate
+    # regenerates the whole synthetic suite twice and diffs the guaranteed
+    # artifacts (leaderboard.md, provenance.json, significance-*), so any hidden
+    # nondeterminism -- an unseeded RNG, a dict-ordering leak, a moved generator
+    # default -- fails CI instead of silently shipping.
+    #
+    # It checks SAME-RUN determinism, not a match against the committed board:
+    # the committed numbers are generated on the maintainer's platform, and BLAS
+    # differences across OSes can perturb the last ULP of a probability-derived
+    # metric. `tulip repro verify` performs the stricter match-the-committed
+    # check locally, on the platform that produced the board.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e "."
+      - name: Regenerate the suite twice and diff the deterministic artifacts
+        run: |
+          tulip leaderboard benchmarks/suite.yaml --out run-a >/dev/null
+          tulip leaderboard benchmarks/suite.yaml --out run-b >/dev/null
+          board=synthetic-leaderboard
+          diff "run-a/$board/leaderboard.md" "run-b/$board/leaderboard.md"
+          diff "run-a/$board/provenance.json" "run-b/$board/provenance.json"
+          for artifact in run-a/$board/significance-*.md run-a/$board/significance-*.json; do
+            diff "$artifact" "run-b/$board/$(basename "$artifact")"
+          done
+          echo "leaderboard suite is deterministic"
+
   typecheck:
     # Blocking. mypy reports zero issues across the package today, so gating
     # costs nothing now and stops a type regression from ever merging.

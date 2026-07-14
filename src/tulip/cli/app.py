@@ -38,6 +38,10 @@ datasets_app = typer.Typer(help="Inspect and prepare the source corpora.", no_ar
 app.add_typer(datasets_app, name="data")
 cards_app = typer.Typer(help="Render dataset and model cards.", no_args_is_help=True)
 app.add_typer(cards_app, name="card")
+repro_app = typer.Typer(
+    help="Reproducibility checks for the committed leaderboard.", no_args_is_help=True
+)
+app.add_typer(repro_app, name="repro")
 
 _console = Console()
 _errors = Console(stderr=True, style="bold red")
@@ -355,6 +359,12 @@ def leaderboard(
     suite_path: Path = typer.Argument(..., help="Leaderboard suite YAML (see benchmarks/)."),
     out: Path = typer.Option(Path("benchmarks/results"), "--out", help="Artifact root."),
     split: str = typer.Option("test", help="Split shown in the printed table."),
+    significance: bool = typer.Option(
+        True,
+        "--significance/--no-significance",
+        help="Also write per-experiment paired significance (CIs + McNemar).",
+    ),
+    sig_seed: int = typer.Option(0, "--sig-seed", help="Bootstrap seed for the significance CIs."),
 ) -> None:
     """Regenerate the reproducible leaderboard for a whole suite of configs.
 
@@ -363,12 +373,23 @@ def leaderboard(
     auditable benchmark rather than a snapshot.
     """
     from tulip.evaluation.benchmark import comparison_table
-    from tulip.evaluation.leaderboard import load_suite, run_leaderboard, write_leaderboard
+    from tulip.evaluation.leaderboard import (
+        load_suite,
+        run_leaderboard,
+        write_leaderboard,
+        write_significance,
+    )
 
     suite = load_suite(suite_path)
     results = run_leaderboard(suite)
     destination = out / suite.name
     write_leaderboard(results, destination, suite=suite)
+    if significance:
+        experiments = write_significance(results, destination, seed=sig_seed)
+        if experiments:
+            _console.print(
+                f"[green]significance written for {len(experiments)} experiment(s)[/green]"
+            )
 
     frame = comparison_table(results, split=split, sort_by="f1_macro")
     table = Table(title=f"leaderboard {suite.name!r} ({split} split)")
@@ -378,6 +399,68 @@ def leaderboard(
         table.add_row(*(_format_cell(value) for value in row))
     _console.print(table)
     _console.print(f"[green]leaderboard written to {destination}[/green]")
+
+
+@repro_app.command("verify")
+@_tulip_errors
+def repro_verify(
+    suite_path: Path = typer.Argument(..., help="Leaderboard suite YAML to regenerate."),
+    against: Path = typer.Option(
+        Path("benchmarks/results"), "--against", help="Committed artifact root to compare with."
+    ),
+) -> None:
+    """Regenerate a suite and fail if it no longer matches the committed board.
+
+    Byte-compares every committed artifact except ``leaderboard.json`` (which
+    carries wall-clock timings). Exits non-zero on any drift, so CI catches a
+    hidden nondeterminism, a moved generator default, an environment shift, or a
+    silent metric regression instead of shipping it.
+    """
+    import tempfile
+
+    from tulip.cli._repro import verify_reproduction
+
+    with tempfile.TemporaryDirectory(prefix="tulip-repro-") as scratch:
+        drift = verify_reproduction(suite_path, against, Path(scratch))
+    if drift:
+        _errors.print(f"reproduction FAILED — {len(drift)} artifact(s) drifted:")
+        for line in drift:
+            _errors.print(f"  - {line}")
+        raise typer.Exit(code=1)
+    _console.print("[green]reproduced the committed leaderboard byte-for-byte[/green]")
+
+
+@app.command()
+@_tulip_errors
+def analyze(
+    predictions_path: Path = typer.Argument(
+        ..., help="A predictions_<split>.json written by `tulip train`."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the reports as JSON."),
+    top_k: int = typer.Option(10, "--top-k", min=1, help="Confused pairs / exemplars to show."),
+) -> None:
+    """Analyse a saved per-sample predictions dump: selective prediction + errors.
+
+    Turns the ``predictions_test.json`` a training run leaves behind into an
+    operator's diagnosis: a risk-coverage curve (accuracy at each coverage, AURC)
+    and an error report (most-confused pairs, hardest mistakes, and per-slice
+    fairness metrics).
+    """
+    from tulip.evaluation.error_analysis import error_report
+    from tulip.evaluation.predictions import SplitPredictions
+    from tulip.evaluation.selective import selective_report
+
+    predictions = SplitPredictions.load(predictions_path)
+    selective = selective_report(predictions)
+    errors = error_report(predictions, top_k=top_k)
+    if json_output:
+        _console.print_json(
+            data={"selective": selective.model_dump(), "errors": errors.model_dump()}
+        )
+        return
+    _console.print(selective.to_markdown())
+    _console.print()
+    _console.print(errors.to_markdown())
 
 
 @app.command()
