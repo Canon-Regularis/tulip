@@ -17,3 +17,8 @@ models:
   - logistic_regression
   - linear_svm
   - random_forest
+
+# Top-label calibration (ECE/MCE/Brier) with 10 uniform bins, so the board
+# surfaces over-confidence alongside accuracy. Deterministic, so the committed
+# ECE/Brier columns regenerate byte-for-byte.
+calibration_bins: 10

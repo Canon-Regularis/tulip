@@ -75,6 +75,22 @@
       "split_seed": 42
     }
   ],
+  "environment": {
+    "digest": "blake2b-128",
+    "inputs": {
+      "benchmarks/configs/char_baseline.yaml": "2c08bf8dc9ca78259fb11900300efc91",
+      "benchmarks/configs/lexical_baseline.yaml": "157abca14797a854dba9ef0096791838",
+      "lexicon:dialect_markers.yaml": "a076c69d8d24b349fd2c432d228eefb2",
+      "lexicon:isoglosses.yaml": "23cffac8cc8c4c46acc0ca2fe15cf42d"
+    },
+    "key_dependencies": {
+      "numpy": "2.5.1",
+      "pandas": "3.0.3",
+      "scikit-learn": "1.9.0",
+      "scipy": "1.18.0"
+    },
+    "python": ">=3.10"
+  },
   "float_precision": 6,
   "models": [
     "linear_svm",
@@ -85,6 +101,8 @@
   "results": [
     {
       "accuracy": 0.833333,
+      "brier": 0.314185,
+      "ece": 0.197469,
       "experiment": "synthetic-char-baseline",
       "f1_macro": 0.831328,
       "f1_weighted": 0.831328,
@@ -94,6 +112,8 @@
     },
     {
       "accuracy": 0.8125,
+      "brier": 0.263696,
+      "ece": 0.052095,
       "experiment": "synthetic-char-baseline",
       "f1_macro": 0.810945,
       "f1_weighted": 0.810945,
@@ -103,6 +123,8 @@
     },
     {
       "accuracy": 0.798611,
+      "brier": 0.453971,
+      "ece": 0.356421,
       "experiment": "synthetic-char-baseline",
       "f1_macro": 0.797249,
       "f1_weighted": 0.797249,
@@ -112,6 +134,8 @@
     },
     {
       "accuracy": 0.680556,
+      "brier": 0.468603,
+      "ece": 0.143889,
       "experiment": "synthetic-char-baseline",
       "f1_macro": 0.689966,
       "f1_weighted": 0.689966,
@@ -121,6 +145,8 @@
     },
     {
       "accuracy": 0.798611,
+      "brier": 0.341219,
+      "ece": 0.200109,
       "experiment": "synthetic-lexical-baseline",
       "f1_macro": 0.792517,
       "f1_weighted": 0.792517,
@@ -130,6 +156,8 @@
     },
     {
       "accuracy": 0.743056,
+      "brier": 0.478637,
+      "ece": 0.293125,
       "experiment": "synthetic-lexical-baseline",
       "f1_macro": 0.74522,
       "f1_weighted": 0.74522,
@@ -139,6 +167,8 @@
     },
     {
       "accuracy": 0.743056,
+      "brier": 0.540613,
+      "ece": 0.351974,
       "experiment": "synthetic-lexical-baseline",
       "f1_macro": 0.738919,
       "f1_weighted": 0.738919,
@@ -148,6 +178,8 @@
     },
     {
       "accuracy": 0.444444,
+      "brier": 0.844175,
+      "ece": 0.312839,
       "experiment": "synthetic-lexical-baseline",
       "f1_macro": 0.356207,
       "f1_weighted": 0.356207,

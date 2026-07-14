@@ -1,0 +1,169 @@
+{
+  "alpha": 0.05,
+  "best_model": "linear_svm",
+  "models": [
+    {
+      "metrics": [
+        {
+          "high": 0.861111,
+          "low": 0.736111,
+          "metric": "accuracy",
+          "point": 0.798611
+        },
+        {
+          "high": 0.854231,
+          "low": 0.722535,
+          "metric": "f1_macro",
+          "point": 0.792517
+        },
+        {
+          "high": 0.858783,
+          "low": 0.722554,
+          "metric": "f1_weighted",
+          "point": 0.792517
+        }
+      ],
+      "model": "linear_svm",
+      "tied_with_best": true
+    },
+    {
+      "metrics": [
+        {
+          "high": 0.8125,
+          "low": 0.673611,
+          "metric": "accuracy",
+          "point": 0.743056
+        },
+        {
+          "high": 0.809696,
+          "low": 0.667937,
+          "metric": "f1_macro",
+          "point": 0.74522
+        },
+        {
+          "high": 0.813022,
+          "low": 0.671145,
+          "metric": "f1_weighted",
+          "point": 0.74522
+        }
+      ],
+      "model": "random_forest",
+      "tied_with_best": true
+    },
+    {
+      "metrics": [
+        {
+          "high": 0.8125,
+          "low": 0.673438,
+          "metric": "accuracy",
+          "point": 0.743056
+        },
+        {
+          "high": 0.804766,
+          "low": 0.664373,
+          "metric": "f1_macro",
+          "point": 0.738919
+        },
+        {
+          "high": 0.80746,
+          "low": 0.66468,
+          "metric": "f1_weighted",
+          "point": 0.738919
+        }
+      ],
+      "model": "logistic_regression",
+      "tied_with_best": true
+    },
+    {
+      "metrics": [
+        {
+          "high": 0.527778,
+          "low": 0.361111,
+          "metric": "accuracy",
+          "point": 0.444444
+        },
+        {
+          "high": 0.411253,
+          "low": 0.297777,
+          "metric": "f1_macro",
+          "point": 0.356207
+        },
+        {
+          "high": 0.443418,
+          "low": 0.2742,
+          "metric": "f1_weighted",
+          "point": 0.356207
+        }
+      ],
+      "model": "naive_bayes",
+      "tied_with_best": false
+    }
+  ],
+  "n_resamples": 2000,
+  "n_samples": 144,
+  "pairwise": [
+    {
+      "accuracy_delta": 0.055556,
+      "discordant_a": 12,
+      "discordant_b": 4,
+      "model_a": "linear_svm",
+      "model_b": "random_forest",
+      "p_value": 0.076813,
+      "p_value_holm": 0.230438,
+      "significant": false
+    },
+    {
+      "accuracy_delta": 0.055556,
+      "discordant_a": 12,
+      "discordant_b": 4,
+      "model_a": "linear_svm",
+      "model_b": "logistic_regression",
+      "p_value": 0.076813,
+      "p_value_holm": 0.230438,
+      "significant": false
+    },
+    {
+      "accuracy_delta": 0.354167,
+      "discordant_a": 55,
+      "discordant_b": 4,
+      "model_a": "linear_svm",
+      "model_b": "naive_bayes",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
+      "accuracy_delta": 0.0,
+      "discordant_a": 12,
+      "discordant_b": 12,
+      "model_a": "random_forest",
+      "model_b": "logistic_regression",
+      "p_value": 1.0,
+      "p_value_holm": 1.0,
+      "significant": false
+    },
+    {
+      "accuracy_delta": 0.298611,
+      "discordant_a": 52,
+      "discordant_b": 9,
+      "model_a": "random_forest",
+      "model_b": "naive_bayes",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
+      "accuracy_delta": 0.298611,
+      "discordant_a": 51,
+      "discordant_b": 8,
+      "model_a": "logistic_regression",
+      "model_b": "naive_bayes",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    }
+  ],
+  "ranking_metric": "f1_macro",
+  "seed": 0,
+  "split": "test"
+}
