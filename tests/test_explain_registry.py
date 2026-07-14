@@ -7,7 +7,14 @@ import pytest
 from tulip.core.exceptions import UnknownComponentError
 from tulip.explain import EXPLAINERS, get_explainer
 
-CANONICAL_NAMES = {"top_tfidf", "lime", "shap", "attention", "nearest_examples"}
+CANONICAL_NAMES = {
+    "top_tfidf",
+    "lime",
+    "shap",
+    "attention",
+    "nearest_examples",
+    "dialect_evidence",
+}
 
 
 def test_all_canonical_explainers_registered() -> None:
