@@ -28,18 +28,49 @@ from tulip.features.registries import TEXT_FEATURES
 from tulip.features.text._base import DenseTextExtractor
 from tulip.features.text._resource import read_yaml_resource
 from tulip.features.text._tokenize import word_tokens
+from tulip.labels.taxonomy import family_for
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-__all__ = ["DialectKeywordExtractor", "load_lexicon"]
+__all__ = [
+    "LEXICON_DIALECT_OVERRIDES",
+    "DialectKeywordExtractor",
+    "canonical_dialect",
+    "family_for_lexicon_key",
+    "load_lexicon",
+]
 
 logger = get_logger(__name__)
 
 #: Name of the bundled starter lexicon (package data under ``lexicons/``).
 _BUNDLED_LEXICON = "dialect_markers.yaml"
+
+#: Lexicon keys whose taxonomy ``RegionalDialect`` value differs from the key
+#: itself. The lexicon groups general Masovian markers under ``masovia``; the
+#: taxonomy's regional-dialect value is ``mazovia_proper`` (its family
+#: auto-derives to ``masovian``). This reconciliation is shared by the synthetic
+#: generator (which assigns it as a label) and by ``dialect_intensity`` (which
+#: groups markers by family), so the mapping lives in exactly one place.
+LEXICON_DIALECT_OVERRIDES: dict[str, str] = {"masovia": "mazovia_proper"}
+
+
+def canonical_dialect(key: str) -> str:
+    """Map a lexicon dialect key to its taxonomy ``RegionalDialect`` value."""
+    return LEXICON_DIALECT_OVERRIDES.get(key, key)
+
+
+def family_for_lexicon_key(key: str) -> str | None:
+    """Return the dialect-family value for a lexicon key, or ``None`` if unknown.
+
+    Resolves the lexicon key to its canonical regional-dialect value (see
+    :data:`LEXICON_DIALECT_OVERRIDES`) and then to its family via
+    :func:`tulip.labels.taxonomy.family_for`.
+    """
+    family = family_for(canonical_dialect(key))
+    return family.value if family is not None else None
 
 
 def load_lexicon(path: str | Path | None = None) -> dict[str, tuple[str, ...]]:

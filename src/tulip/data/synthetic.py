@@ -75,12 +75,6 @@ SOURCE = "synthetic"
 #: It is deliberately not a lexicon key, so it can never collide with one.
 _STANDARD = "standard"
 
-#: Lexicon keys whose taxonomy dialect value differs from the key itself. The
-#: lexicon groups general Masovian markers under ``masovia``; the taxonomy's
-#: regional-dialect value is ``mazovia_proper`` (family auto-derives to
-#: ``masovian``). All other lexicon keys are valid ``RegionalDialect`` values.
-_DIALECT_LABEL_OVERRIDES = {"masovia": "mazovia_proper"}
-
 #: Lexicon keys of the Masovian group, which undergo *mazurzenie*.
 _MAZURZENIE_KEYS = frozenset({"kurpie", "masovia"})
 
@@ -159,6 +153,8 @@ def generate_corpus(spec: SyntheticSpec) -> list[Sample]:
     Raises:
         ConfigurationError: if ``spec.dialects`` names an unknown lexicon key.
     """
+    from tulip.features.text.keywords import canonical_dialect
+
     lexicon = _load_lexicon()
     all_keys = tuple(sorted(lexicon))
     selected = _select_dialects(spec.dialects, all_keys)
@@ -174,7 +170,7 @@ def generate_corpus(spec: SyntheticSpec) -> list[Sample]:
     for key in class_order:
         is_standard = key == _STANDARD
         markers = () if is_standard else lexicon[key]
-        dialect_value = None if is_standard else _dialect_value(key)
+        dialect_value = None if is_standard else canonical_dialect(key)
         region, voivodeship_pool = (None, ()) if is_standard else _GEOGRAPHY[key]
 
         for speaker_index in range(spec.n_speakers_per_dialect):
@@ -273,11 +269,6 @@ def _select_dialects(
             f"available lexicon keys: {', '.join(all_keys)}"
         )
     return chosen
-
-
-def _dialect_value(key: str) -> str:
-    """Map a lexicon key to its taxonomy ``RegionalDialect`` value."""
-    return _DIALECT_LABEL_OVERRIDES.get(key, key)
 
 
 def _make_text(
