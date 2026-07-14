@@ -195,6 +195,52 @@ def test_provenance_is_byte_identical_across_runs(
     assert md_first == md_second
 
 
+def test_write_significance_skips_results_without_predictions(
+    results: list[BenchmarkResult], tmp_path: Path
+) -> None:
+    """The fixture results are built via compute_metrics, so carry no predictions."""
+    from tulip.evaluation.leaderboard import write_significance
+
+    written = write_significance(results, tmp_path / "sig")
+    assert written == []
+    assert not list((tmp_path / "sig").glob("significance-*"))
+
+
+def test_write_significance_writes_per_experiment(tmp_path: Path) -> None:
+    from tulip.evaluation.leaderboard import write_significance
+    from tulip.evaluation.predictions import PredictionRecord, SplitPredictions
+
+    y_true = ["a", "b", "a", "b", "a", "b"]
+
+    def _predictions(model: str, y_pred: list[str]) -> SplitPredictions:
+        records = tuple(
+            PredictionRecord(
+                id=f"s{i}", y_true=t, y_pred=p, proba=(0.8, 0.2) if p == "a" else (0.2, 0.8)
+            )
+            for i, (t, p) in enumerate(zip(y_true, y_pred, strict=True))
+        )
+        return SplitPredictions(model=model, split="test", labels=("a", "b"), records=records)
+
+    results = [
+        BenchmarkResult(
+            experiment="exp",
+            model="good",
+            reports={},
+            predictions={"test": _predictions("good", y_true)},
+        ),
+        BenchmarkResult(
+            experiment="exp",
+            model="bad",
+            reports={},
+            predictions={"test": _predictions("bad", ["a"] * 6)},
+        ),
+    ]
+    written = write_significance(results, tmp_path / "sig", seed=0)
+    assert written == ["exp"]
+    assert (tmp_path / "sig" / "significance-exp.md").is_file()
+    assert (tmp_path / "sig" / "significance-exp.json").is_file()
+
+
 def test_load_suite_round_trips_committed_file() -> None:
     suite = load_suite(REPO_ROOT / "benchmarks" / "suite.yaml")
     assert suite.name == "synthetic-leaderboard"
