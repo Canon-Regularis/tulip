@@ -9,7 +9,13 @@ from tulip.models.registry import MODELS
 
 
 def _register_builtins() -> None:
-    from tulip.models import classical, fasttext_model, neural_audio, neural_text  # noqa: F401
+    from tulip.models import (  # noqa: F401
+        classical,
+        ensemble,
+        fasttext_model,
+        neural_audio,
+        neural_text,
+    )
 
 
 _register_builtins()
