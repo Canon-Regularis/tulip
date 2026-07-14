@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from tulip.core.exceptions import DataError
 from tulip.data.cleaning import TextCleaner
 from tulip.data.dedup import deduplicate_samples
+from tulip.data.fingerprint import SPLIT_LOCK_NAME, fingerprint_splits
 from tulip.data.registry import DATASETS
 from tulip.data.splitting import DatasetSplits, save_splits, speaker_disjoint_split
 from tulip.labels.taxonomy import LabelLevel
@@ -102,9 +103,10 @@ class DatasetBuilder:
             target: When given, samples lacking a label at this level are
                 dropped (with a logged count) before splitting -- an
                 experiment can only train on labelled data.
-            output_dir: When given, writes ``train/validation/test.jsonl``
-                plus ``build_manifest.json`` (counts, class distribution,
-                configuration echo) into this directory.
+            output_dir: When given, writes ``train/validation/test.jsonl``,
+                ``build_manifest.json`` (counts, class distribution,
+                configuration echo), and ``split_lock.json`` (a content
+                fingerprint for reproducibility verification) into this directory.
 
         Returns:
             The in-memory :class:`DatasetSplits`.
@@ -135,7 +137,13 @@ class DatasetBuilder:
                 output_dir / BUILD_MANIFEST_NAME,
                 self._build_manifest(splits, split, target),
             )
-            _logger.info("wrote splits and %s to %s", BUILD_MANIFEST_NAME, output_dir)
+            # A content fingerprint next to the counts, so the split's byte-for-byte
+            # reproducibility is verifiable (see tulip.data.fingerprint), not just
+            # its sizes.
+            fingerprint_splits(splits).save(output_dir / SPLIT_LOCK_NAME)
+            _logger.info(
+                "wrote splits, %s, and %s to %s", BUILD_MANIFEST_NAME, SPLIT_LOCK_NAME, output_dir
+            )
         return splits
 
     def _resolve_root(self, name: str, override: Any) -> Path:

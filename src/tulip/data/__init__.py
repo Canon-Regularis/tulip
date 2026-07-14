@@ -10,6 +10,12 @@ from tulip.data.catalog import catalog, get_dataset_info
 from tulip.data.cleaning import TextCleaner
 from tulip.data.dedup import DedupResult, deduplicate_samples
 from tulip.data.download import DownloadReport, DownloadStatus, download_datasets
+from tulip.data.fingerprint import (
+    SPLIT_LOCK_NAME,
+    SplitFingerprint,
+    fingerprint_splits,
+    verify_splits,
+)
 from tulip.data.manifest import ManifestColumns, read_manifest, surrogate_speaker_id
 from tulip.data.reading import read_samples
 from tulip.data.registry import DATASETS
@@ -30,6 +36,7 @@ from tulip.data.validation import ManifestIssue, ManifestReport, validate_manife
 __all__ = [
     "BUILD_MANIFEST_NAME",
     "DATASETS",
+    "SPLIT_LOCK_NAME",
     "AudioSyntheticSpec",
     "DatasetBuilder",
     "DatasetSplits",
@@ -39,11 +46,13 @@ __all__ = [
     "ManifestColumns",
     "ManifestIssue",
     "ManifestReport",
+    "SplitFingerprint",
     "SyntheticSpec",
     "TextCleaner",
     "catalog",
     "deduplicate_samples",
     "download_datasets",
+    "fingerprint_splits",
     "generate_audio_corpus",
     "generate_corpus",
     "get_dataset_info",
@@ -54,6 +63,7 @@ __all__ = [
     "speaker_disjoint_split",
     "surrogate_speaker_id",
     "validate_manifest",
+    "verify_splits",
     "write_synthetic_audio_manifest",
     "write_synthetic_manifest",
 ]
