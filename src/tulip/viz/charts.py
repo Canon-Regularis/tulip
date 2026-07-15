@@ -1,8 +1,8 @@
 """Probability bar charts and confusion-matrix heatmaps.
 
-Both chart builders support two backends -- ``"matplotlib"`` (returns a
+Both chart builders support two backends: ``"matplotlib"`` (returns a
 ``matplotlib.figure.Figure``) and ``"plotly"`` (returns a
-``plotly.graph_objects.Figure``) -- imported lazily via the ``viz`` extra.
+``plotly.graph_objects.Figure``). Both are imported lazily via the ``viz`` extra.
 Matplotlib figures are constructed directly from ``matplotlib.figure.Figure``
 (no pyplot), so no GUI backend or global state is touched and the charts are
 safe in headless environments.
@@ -19,6 +19,7 @@ from tulip.evaluation.calibration import reliability_curve
 from tulip.labels.taxonomy import display_name
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
+from tulip.viz._common import _BACKENDS, _validate_choice
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -27,8 +28,6 @@ if TYPE_CHECKING:
     from tulip.evaluation.calibration import CalibrationReport
 
 logger = get_logger(__name__)
-
-_BACKENDS = ("matplotlib", "plotly")
 
 # Palette roles (validated single-hue set): magnitude bars stay in one hue,
 # with the winning class emphasised by a darker step, not a new hue.
@@ -40,12 +39,7 @@ _GRIDLINE = "#e1e0d9"
 
 
 def _validate_backend(backend: str) -> str:
-    key = backend.strip().lower()
-    if key not in _BACKENDS:
-        raise ConfigurationError(
-            f"unknown chart backend {backend!r}; expected one of {', '.join(_BACKENDS)}"
-        )
-    return key
+    return _validate_choice(backend, _BACKENDS, "chart backend")
 
 
 def probability_bar_chart(
@@ -187,7 +181,7 @@ def _plotly_bars(
 
 
 def confusion_matrix_heatmap(
-    matrix: Sequence[Sequence[float]] | Any,
+    matrix: Any,
     labels: Sequence[str],
     *,
     backend: str = "matplotlib",
@@ -290,7 +284,7 @@ def reliability_diagram(
 
     Two stacked panels share a confidence x-axis. The upper panel plots each
     bin's observed accuracy against its mean confidence together with the
-    ``y = x`` perfect-calibration diagonal -- points below the line are
+    ``y = x`` perfect-calibration diagonal; points below the line are
     overconfident, above it underconfident. The lower panel is a histogram of
     how many samples fell in each bin, so a reliability point backed by three
     samples is visibly distinct from one backed by three hundred. The measured
@@ -435,7 +429,7 @@ def _plotly_reliability(
     fig.update_yaxes(range=[0.0, 1.0], title_text="Accuracy", row=1, col=1)
     fig.update_yaxes(title_text="Count", row=2, col=1)
     fig.update_layout(
-        title=f"{title} — ECE {report.ece:.3f}, MCE {report.mce:.3f}",
+        title=f"{title}: ECE {report.ece:.3f}, MCE {report.mce:.3f}",
         template="plotly_white",
     )
     return fig

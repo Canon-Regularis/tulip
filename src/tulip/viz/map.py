@@ -39,6 +39,8 @@ from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     import folium
 
     from tulip.core.types import Prediction
@@ -75,9 +77,9 @@ _ABSTAIN_COLOR = "#b7d3f6"
 _TILES = "cartodbpositron"
 
 
-def _base_map(folium_mod: object) -> folium.Map:
+def _base_map(folium_mod: ModuleType) -> folium.Map:
     """Create a map centred on Poland and fitted to its bounding box."""
-    fmap = folium_mod.Map(  # type: ignore[attr-defined]
+    fmap = folium_mod.Map(
         location=[POLAND_CENTER.lat, POLAND_CENTER.lon],
         tiles=_TILES,
         zoom_start=6,
@@ -120,8 +122,8 @@ def _shade(probability: float) -> tuple[str, float]:
     Perceived intensity grows roughly with the square root of physical
     intensity (Stevens' power law, exponent ~0.5 for brightness/area), so the
     probability is passed through ``sqrt`` before indexing the ramp and setting
-    opacity. This spreads the visually useful range across low probabilities --
-    where a many-class softmax lives -- instead of leaving everything but the
+    opacity. This spreads the visually useful range across low probabilities,
+    where a many-class softmax lives, instead of leaving everything but the
     winner indistinguishably faint.
     """
     perceptual = math.sqrt(max(0.0, min(1.0, probability)))
@@ -130,13 +132,18 @@ def _shade(probability: float) -> tuple[str, float]:
     return color, fill_opacity
 
 
+def _normalized_probabilities(prediction: Prediction) -> dict[str, float]:
+    """Return the prediction's probabilities keyed by normalised label."""
+    return {label.strip().lower(): p for label, p in prediction.as_dict().items()}
+
+
 def _add_abstention_layer(
-    folium_mod: object, fmap: folium.Map, prediction: Prediction, *, polish: bool
+    folium_mod: ModuleType, fmap: folium.Map, prediction: Prediction, *, polish: bool
 ) -> None:
     """Render every known region faintly and attach an abstention note."""
-    probabilities = {label.strip().lower(): p for label, p in prediction.as_dict().items()}
+    probabilities = _normalized_probabilities(prediction)
     for label, centroid in _centroid_table(prediction.level).items():
-        folium_mod.CircleMarker(  # type: ignore[attr-defined]
+        folium_mod.CircleMarker(
             location=[centroid.lat, centroid.lon],
             radius=8,
             color=_ABSTAIN_COLOR,
@@ -145,7 +152,7 @@ def _add_abstention_layer(
             fill_color=_ABSTAIN_COLOR,
             fill_opacity=0.2,
             opacity=0.5,
-            tooltip=folium_mod.Tooltip(  # type: ignore[attr-defined]
+            tooltip=folium_mod.Tooltip(
                 _tooltip_html(label, probabilities.get(label), polish=polish), sticky=True
             ),
         ).add_to(fmap)

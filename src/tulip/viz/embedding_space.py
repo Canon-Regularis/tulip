@@ -3,7 +3,7 @@
 :func:`project_embeddings` reduces a feature/embedding matrix to two
 dimensions with t-SNE (scikit-learn, always available) or UMAP (optional
 extra ``umap``), returning a tidy ``(x, y, label)`` DataFrame.
-:func:`plot_embedding_space` scatters that frame coloured by label -- the
+:func:`plot_embedding_space` scatters that frame coloured by label: the
 dialect-similarity / clustering visual.
 
 Determinism: both projectors are driven by the explicit ``seed`` argument
@@ -18,9 +18,10 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
-from tulip.core.exceptions import ConfigurationError, DataError
+from tulip.core.exceptions import DataError
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
+from tulip.viz._common import _BACKENDS, _validate_choice
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,7 +32,6 @@ logger = get_logger(__name__)
 PROJECTION_COLUMNS: tuple[str, str, str] = ("x", "y", "label")
 
 _METHODS = ("tsne", "umap")
-_BACKENDS = ("matplotlib", "plotly")
 
 #: Fixed-order categorical palette (validated set). Hues are assigned to the
 #: sorted labels in this order and never cycled on their own: labels beyond
@@ -115,7 +115,7 @@ def project_embeddings(
         seed: Random seed; identical inputs and seed give identical layouts.
 
     Returns:
-        A DataFrame with columns :data:`PROJECTION_COLUMNS` -- float ``x`` and
+        A DataFrame with columns :data:`PROJECTION_COLUMNS`: float ``x`` and
         ``y`` coordinates plus the string ``label`` per sample.
 
     Raises:
@@ -124,11 +124,7 @@ def project_embeddings(
             or has fewer than two rows.
         MissingDependencyError: If ``method="umap"`` and umap-learn is missing.
     """
-    method_key = method.strip().lower()
-    if method_key not in _METHODS:
-        raise ConfigurationError(
-            f"unknown projection method {method!r}; expected one of {', '.join(_METHODS)}"
-        )
+    method_key = _validate_choice(method, _METHODS, "projection method")
     matrix = _as_dense_2d(X)
     n_samples = matrix.shape[0]
     if len(labels) != n_samples:
@@ -188,11 +184,7 @@ def plot_embedding_space(
         DataError: If required columns are missing.
         MissingDependencyError: If the backend library is missing (extra ``viz``).
     """
-    backend_key = backend.strip().lower()
-    if backend_key not in _BACKENDS:
-        raise ConfigurationError(
-            f"unknown plot backend {backend!r}; expected one of {', '.join(_BACKENDS)}"
-        )
+    backend_key = _validate_choice(backend, _BACKENDS, "plot backend")
     missing = [column for column in PROJECTION_COLUMNS if column not in df.columns]
     if missing:
         raise DataError(f"embedding frame is missing columns: {', '.join(missing)}")
