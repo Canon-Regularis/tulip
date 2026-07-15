@@ -343,16 +343,44 @@ def _build_provenance(
 
 
 def _config_provenance(config_path: Path, config: ExperimentConfig) -> dict[str, Any]:
-    """Provenance for one experiment: seeds plus split sizes/distribution."""
+    """Provenance for one experiment: seeds, split sizes/distribution, and a data digest."""
     manifest = _read_manifest(config)
     return {
         "class_distribution": manifest.get("class_distribution") if manifest else None,
+        "dataset_digest": _dataset_digest(config),
         "name": config.name,
         "path": Path(config_path).as_posix(),
         "seed": config.seed,
         "sizes": manifest.get("sizes") if manifest else None,
         "split_seed": config.split.seed,
     }
+
+
+def _dataset_digest(config: ExperimentConfig) -> str | None:
+    """The committed split lock's combined content digest, or ``None`` if absent.
+
+    Ties the leaderboard to the exact dataset content that fed it: the split
+    lock's ``combined`` digest changes if any sample in any split is added,
+    removed, or altered, so a silent data change is caught the same way an edited
+    config or lexicon is. The digest is itself deterministic (an order-independent
+    content hash), so it does not threaten the byte-stable guarantee.
+    """
+    from tulip.data.fingerprint import SPLIT_LOCK_NAME
+
+    path = config.output_dir / config.name / "splits" / SPLIT_LOCK_NAME
+    if not path.is_file():
+        _logger.debug("no split lock at %s; dataset digest omitted from provenance", path)
+        return None
+    try:
+        data = read_json(path)
+    except (OSError, ValueError) as exc:
+        # A corrupt or unreadable lock degrades to null, matching how an absent
+        # build manifest degrades sizes: provenance never fails a valid run.
+        _logger.debug("split lock %s unreadable; dataset digest omitted: %s", path, exc)
+        return None
+    if isinstance(data, dict) and data.get("combined") is not None:
+        return str(data["combined"])
+    return None
 
 
 def _result_provenance(result: BenchmarkResult, split: str) -> dict[str, Any] | None:
