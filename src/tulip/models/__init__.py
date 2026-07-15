@@ -13,6 +13,7 @@ def _register_builtins() -> None:
         classical,
         ensemble,
         fasttext_model,
+        llm_baseline,
         neural_audio,
         neural_text,
     )
@@ -29,6 +30,7 @@ from tulip.models.calibration import (  # noqa: E402
     TemperatureScaling,
 )
 from tulip.models.fasttext_model import FastTextClassifier  # noqa: E402
+from tulip.models.llm_baseline import LLMClassifier, LLMResponseCache  # noqa: E402
 from tulip.models.neural_audio import (  # noqa: E402
     EmbeddingSpeechClassifier,
     FinetunedSpeechClassifier,
@@ -44,6 +46,8 @@ __all__ = [
     "FinetunedSpeechClassifier",
     "IdentityCalibrator",
     "IsotonicCalibrator",
+    "LLMClassifier",
+    "LLMResponseCache",
     "ProbabilityCalibrator",
     "SpeechClassifier",
     "TemperatureScaling",
