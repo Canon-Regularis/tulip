@@ -135,6 +135,11 @@ def _initials(given: str) -> str:
     return " ".join(f"{part[0]}." for part in given.split() if part)
 
 
+def _url(citation: Mapping[str, Any]) -> str:
+    """The project URL, preferring ``url`` and falling back to ``repository-code``."""
+    return str(citation.get("url") or citation.get("repository-code", ""))
+
+
 def format_bibtex(citation: Mapping[str, Any]) -> str:
     """Render a ``@software`` BibTeX entry from parsed citation metadata."""
     authors = " and ".join(f"{family}, {given}".strip(", ") for family, given in _authors(citation))
@@ -143,7 +148,7 @@ def format_bibtex(citation: Mapping[str, Any]) -> str:
         "title": str(citation.get("title", "")),
         "year": _year(citation),
         "version": str(citation.get("version", "")),
-        "url": str(citation.get("url") or citation.get("repository-code", "")),
+        "url": _url(citation),
         "license": str(citation.get("license", "")),
     }
     body = ",\n".join(f"  {key} = {{{value}}}" for key, value in fields.items() if value)
@@ -158,7 +163,7 @@ def format_apa(citation: Mapping[str, Any]) -> str:
     year = _year(citation)
     title = str(citation.get("title", ""))
     version = str(citation.get("version", ""))
-    url = str(citation.get("url") or citation.get("repository-code", ""))
+    url = _url(citation)
     version_note = f" (Version {version})" if version else ""
     return f"{names} ({year}). {title}{version_note} [Computer software]. {url}".strip()
 

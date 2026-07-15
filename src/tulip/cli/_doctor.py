@@ -44,7 +44,7 @@ __all__ = [
 #: (``praat-parselmouth`` imports as ``parselmouth``, ``umap-learn`` as
 #: ``umap``). This is the one place that mapping lives; the extras themselves are
 #: declared in ``pyproject.toml`` and the per-extra module set mirrors it. Only
-#: runtime capabilities are listed -- ``docs`` and ``dev`` are tooling and have
+#: runtime capabilities are listed; ``docs`` and ``dev`` are tooling and have
 #: no bearing on what the toolkit can run.
 _EXTRAS: dict[str, tuple[tuple[str, ...], str]] = {
     "audio": (("librosa", "soundfile", "parselmouth"), "classical audio features"),
@@ -109,6 +109,11 @@ class DoctorReport(BaseModel):
         """Components that cannot run until their extra is installed."""
         return tuple(component for component in self.components if not component.available)
 
+    @property
+    def runnable_count(self) -> int:
+        """How many components run on this install."""
+        return len(self.components) - len(self.blocked_components)
+
     def components_of(self, kind: str) -> tuple[ComponentStatus, ...]:
         """Components of one registry kind (e.g. ``"model"``), in registry order."""
         return tuple(component for component in self.components if component.kind == kind)
@@ -127,8 +132,7 @@ class DoctorReport(BaseModel):
             )
             for extra in self.extras
         ]
-        runnable = len(self.components) - len(self.blocked_components)
-        summary = f"{runnable} of {len(self.components)} components runnable now"
+        summary = f"{self.runnable_count} of {len(self.components)} components runnable now"
         table = markdown_table(("extra", "installed", "unlocks", "install"), extra_rows)
         return f"# tulip doctor\n\n{env}\n\n{table}\n\n{summary}"
 

@@ -26,7 +26,7 @@ from rich.table import Table
 
 from tulip import __version__
 from tulip.core.exceptions import TulipError
-from tulip.core.types import Prediction
+from tulip.core.types import Prediction, TaskType
 from tulip.utils.logging import configure_logging, get_logger
 
 app = typer.Typer(
@@ -129,7 +129,7 @@ def datasets_list(
             info.url,
         )
     _console.print(table)
-    _console.print(f"[dim]local root: {root} -- acquisition notes: docs/datasets.md[/dim]")
+    _console.print(f"[dim]local root: {root}; acquisition notes: docs/datasets.md[/dim]")
 
 
 @datasets_app.command("download")
@@ -148,7 +148,7 @@ def data_download(
     """Download every corpus that has an automatic source; print exact steps for the rest.
 
     Most dialect corpora have no licence-clean bulk download, so full
-    automation is impossible — this command does everything that can be done
+    automation is impossible. This command does everything that can be done
     and tells you precisely what remains.
     """
     from tulip.core.exceptions import ConfigurationError
@@ -180,14 +180,13 @@ def data_download(
     manual = [report for report in reports if report.status is DownloadStatus.MANUAL]
     if manual:
         _console.print(
-            f"[yellow]{len(manual)} corpus(es) need manual steps above[/yellow] — "
+            f"[yellow]{len(manual)} corpus(es) need manual steps above[/yellow]; "
             "full instructions: docs/datasets.md"
         )
     failed = [report for report in reports if report.status is DownloadStatus.FAILED]
     if failed:
         _console.print(
-            f"[red]{len(failed)} download(s) failed[/red] — remediation steps are "
-            "in the table above"
+            f"[red]{len(failed)} download(s) failed[/red]; remediation steps are in the table above"
         )
         raise typer.Exit(code=1)
 
@@ -356,12 +355,7 @@ def benchmark(
     config = load_experiment_config(config_path)
     results = run_benchmark(config, models=model or None)
     frame = comparison_table(results, split=split)
-    table = Table(title=f"benchmark {config.name!r} ({split} split)")
-    for column in frame.columns:
-        table.add_column(str(column))
-    for _, row in frame.iterrows():
-        table.add_row(*(_format_cell(value) for value in row))
-    _console.print(table)
+    _print_frame(frame, f"benchmark {config.name!r} ({split} split)")
     _console.print(f"[green]benchmark artifacts under {config.output_dir / config.name}[/green]")
 
 
@@ -404,12 +398,7 @@ def leaderboard(
             )
 
     frame = comparison_table(results, split=split, sort_by="f1_macro")
-    table = Table(title=f"leaderboard {suite.name!r} ({split} split)")
-    for column in frame.columns:
-        table.add_column(str(column))
-    for _, row in frame.iterrows():
-        table.add_row(*(_format_cell(value) for value in row))
-    _console.print(table)
+    _print_frame(frame, f"leaderboard {suite.name!r} ({split} split)")
     _console.print(f"[green]leaderboard written to {destination}[/green]")
 
 
@@ -435,7 +424,7 @@ def repro_verify(
     with tempfile.TemporaryDirectory(prefix="tulip-repro-") as scratch:
         drift = verify_reproduction(suite_path, against, Path(scratch))
     if drift:
-        _errors.print(f"reproduction FAILED — {len(drift)} artifact(s) drifted:")
+        _errors.print(f"reproduction FAILED: {len(drift)} artifact(s) drifted:")
         for line in drift:
             _errors.print(f"  - {line}")
         raise typer.Exit(code=1)
@@ -620,7 +609,7 @@ def selftrain(
         raise ConfigurationError(
             "no --feature given: classical models need at least one feature extractor "
             "(e.g. -f char_tfidf). Raw-input models (herbert, fasttext, wav2vec2, ...) "
-            "take none -- pass --raw to say so explicitly."
+            "take none; pass --raw to say so explicitly."
         )
 
     result = self_train(
@@ -756,6 +745,22 @@ def evaluate(
 # ------------------------------------------------------------------ predict
 
 
+def _load_and_predict(
+    model_path: Path, text: str | None, audio: Path | None
+) -> tuple[Any, Any, Prediction]:
+    """Validate the single input, load the model, and classify; shared by predict and explain."""
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.pipeline import DialectClassifier
+
+    if (text is None) == (audio is None):
+        raise ConfigurationError("provide exactly one input: a TEXT argument or --audio PATH")
+    raw: Any = text if text is not None else audio
+    classifier = DialectClassifier.load(model_path)
+    _require_input_matches_task(classifier, text=text, audio=audio)
+    prediction = classifier.predict(raw)
+    return classifier, raw, prediction
+
+
 @app.command()
 @_tulip_errors
 def predict(
@@ -772,15 +777,7 @@ def predict(
     ),
 ) -> None:
     """Classify one text (argument) or one audio file (--audio)."""
-    from tulip.core.exceptions import ConfigurationError
-    from tulip.pipeline import DialectClassifier
-
-    if (text is None) == (audio is None):
-        raise ConfigurationError("provide exactly one input: a TEXT argument or --audio PATH")
-    raw: Any = text if text is not None else audio
-    classifier = DialectClassifier.load(model_path)
-    _require_input_matches_task(classifier, text=text, audio=audio)
-    prediction = classifier.predict(raw)
+    classifier, raw, prediction = _load_and_predict(model_path, text, audio)
 
     if json_output:
         _console.print_json(prediction.model_dump_json())
@@ -812,15 +809,7 @@ def explain(
     also reachable as ``predict --explain <method>``. This standalone form
     classifies the input and renders only the explanation.
     """
-    from tulip.core.exceptions import ConfigurationError
-    from tulip.pipeline import DialectClassifier
-
-    if (text is None) == (audio is None):
-        raise ConfigurationError("provide exactly one input: a TEXT argument or --audio PATH")
-    raw: Any = text if text is not None else audio
-    classifier = DialectClassifier.load(model_path)
-    _require_input_matches_task(classifier, text=text, audio=audio)
-    prediction = classifier.predict(raw)
+    classifier, raw, prediction = _load_and_predict(model_path, text, audio)
     _print_prediction(prediction, top_k=3)
     _print_explanation(classifier, raw, method)
 
@@ -833,7 +822,6 @@ def _require_input_matches_task(classifier: Any, *, text: str | None, audio: Pat
     ``TulipError`` boundary as a raw traceback. This turns it into one clean line.
     """
     from tulip.core.exceptions import ConfigurationError
-    from tulip.core.types import TaskType
 
     if text is not None and classifier.task is not TaskType.TEXT:
         raise ConfigurationError(
@@ -899,8 +887,10 @@ def _emit(markdown: str, destination: Path | None) -> None:
     if destination is None:
         _console.print(markdown)
         return
+    from tulip._serialize import write_markdown
+
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(markdown + "\n", encoding="utf-8", newline="\n")
+    write_markdown(destination, markdown)
     _console.print(f"[green]card written to {destination}[/green]")
 
 
@@ -955,7 +945,7 @@ def card_dataset(
     try:
         info = get_dataset_info(name)
     except DataError:
-        # Not every dataset is catalogued -- the generic `manifest` loader
+        # Not every dataset is catalogued: the generic `manifest` loader
         # deliberately is not. Ask the loader for its own metadata rather than
         # fabricating a tier and a licence. An unknown name still raises.
         info = DATASETS.create(name).info
@@ -1071,13 +1061,13 @@ def doctor(
         )
     _console.print(extras)
 
-    runnable = len(report.components) - len(report.blocked_components)
+    runnable = report.runnable_count
     _console.print(
         f"[green]{runnable}[/green] of {len(report.components)} components runnable now."
     )
     if report.blocked_components:
         _console.print(
-            f"[dim]{len(report.blocked_components)} blocked -- install the extras above, or run "
+            f"[dim]{len(report.blocked_components)} blocked; install the extras above, or run "
             "`tulip models/features/explainers list` for the per-component breakdown.[/dim]"
         )
 
@@ -1161,6 +1151,16 @@ def _format_cell(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.4f}"
     return str(value)
+
+
+def _print_frame(frame: Any, title: str) -> None:
+    """Render a comparison DataFrame as a rich table under ``title``."""
+    table = Table(title=title)
+    for column in frame.columns:
+        table.add_column(str(column))
+    for _, row in frame.iterrows():
+        table.add_row(*(_format_cell(value) for value in row))
+    _console.print(table)
 
 
 def main() -> None:

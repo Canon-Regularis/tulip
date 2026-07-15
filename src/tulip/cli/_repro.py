@@ -9,7 +9,7 @@ a moved generator default, an environment shift, or a silent metric regression
 then fails loudly instead of shipping.
 
 Only the two *guaranteed* artifacts are compared. ``leaderboard.json`` is
-deliberately excluded — it retains wall-clock timings and is documented as not
+deliberately excluded: it retains wall-clock timings and is documented as not
 part of the byte-identical guarantee.
 """
 
