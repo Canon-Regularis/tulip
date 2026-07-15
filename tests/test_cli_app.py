@@ -43,6 +43,16 @@ class TestBasics:
         assert result.exit_code == 0
         assert "tulip" in result.output
 
+    def test_repro_group_lists_from_scratch(self) -> None:
+        result = runner.invoke(app, ["repro", "--help"])
+        assert result.exit_code == 0
+        assert "from-scratch" in result.output
+
+    def test_repro_from_scratch_help_exits_zero(self) -> None:
+        result = runner.invoke(app, ["repro", "from-scratch", "--help"])
+        assert result.exit_code == 0
+        assert "isolation" in result.output
+
 
 class TestDatasets:
     def test_list_shows_catalog_with_tiers(self) -> None:

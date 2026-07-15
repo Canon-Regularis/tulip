@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import shutil
 from typing import TYPE_CHECKING
 
 import pytest
 
-from tulip.cli._repro import verify_reproduction
+from tulip.cli._repro import reproduce_from_scratch, verify_reproduction
 from tulip.evaluation.leaderboard import (
     load_suite,
     run_leaderboard,
@@ -86,6 +88,37 @@ def test_reproduces_the_committed_board(
     suite_path, committed_root = suite_and_committed
     drift = verify_reproduction(suite_path, committed_root, tmp_path / "work")
     assert drift == []
+
+
+def test_from_scratch_reproduces_in_isolation(
+    suite_and_committed: tuple[Path, Path], tmp_path: Path
+) -> None:
+    # Simulate a clean room (fresh checkout / container): remove the config's
+    # declared output_dir entirely, so nothing pre-existing can be read. A
+    # from-scratch run rebuilds everything under its own work dir and must still
+    # reproduce the committed board, including the provenance sizes and dataset
+    # digest, which it reads from the isolated build, not the deleted tree.
+    suite_path, committed_root = suite_and_committed
+    shutil.rmtree(tmp_path / "artifacts")  # the config's declared output_dir
+    work = tmp_path / "scratch"
+    drift = reproduce_from_scratch(suite_path, committed_root, work)
+    assert drift == []
+    assert (work / "build").is_dir()  # the build landed inside the isolated work dir
+    # And provenance carried real sizes/digest, sourced from the isolated build.
+    provenance = json.loads(
+        (work / "repro-test-suite" / "provenance.json").read_text(encoding="utf-8")
+    )
+    (config_entry,) = provenance["configs"]
+    assert config_entry["sizes"] is not None
+    assert config_entry["dataset_digest"] is not None
+
+
+def test_from_scratch_detects_drift(suite_and_committed: tuple[Path, Path], tmp_path: Path) -> None:
+    suite_path, committed_root = suite_and_committed
+    board = committed_root / "repro-test-suite" / "provenance.json"
+    board.write_text('{"tampered": true}', encoding="utf-8")
+    drift = reproduce_from_scratch(suite_path, committed_root, tmp_path / "scratch")
+    assert any("provenance.json" in line for line in drift)
 
 
 def test_detects_a_drifted_leaderboard(
