@@ -271,7 +271,8 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
 (standalone; the command group the contract lists), `benchmark`, `leaderboard`
 (also emits significance), `analyze` (selective + error report from a saved
-`predictions_<split>.json`), `crossval`, `transfer`, `conformal`, `repro verify`
+`predictions_<split>.json`), `crossval`, `transfer`, `conformal`, `robustness`
+(score a model as its inputs are perturbed), `repro verify`
 (regenerate a suite and fail on drift from the committed board), `registry`
 (add/promote/rollback/ls/resolve), `card` (dataset/model), `selftrain`, `serve`.
 Discovery and metadata: `doctor` reports which components run now and what to
@@ -409,6 +410,22 @@ stack (so "previous production" is unambiguous). `resolve("name@production")`
 returns the entry the serving layer binds to. The index (`registry.json`) uses
 the shared deterministic JSON writer, so the same operation sequence reproduces
 byte-identical bytes.
+
+### tulip.robustness
+
+`run_robustness(config, *, perturbations)` trains one model, then re-scores the
+test split perturbed at each level of each perturbation, returning a
+`RobustnessReport` grid of macro-F1 by perturbation and level. Perturbations
+self-register in `PERTURBATIONS` (built from `core.registry.Registry`, so the
+frozen `features/registries.py` is untouched): `dialect_intensity_dial` and
+`standardize` rewrite a seeded fraction of tokens through the phonological rules
+(`apply_rules` / `normalize_to_standard`), so a level is a real move along the
+standard-to-dialect axis; `asr_noise` and `typo_noise` stress the surface. Level
+0 is identity for every perturbation, so a curve anchors at the clean baseline.
+Seeds derive from `(perturbation seed, level index)` and the report rounds to
+`ROBUSTNESS_FLOAT_DIGITS`, so `robustness-<name>.{md,json}` regenerate byte for
+byte. `data/augment.py` `augment_samples` reuses the same engine to grow a
+training set; it imports the engine lazily, so `import tulip.data` stays light.
 
 ## Conventions (enforced)
 
