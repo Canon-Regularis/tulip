@@ -221,6 +221,13 @@ cosine-similar training samples. `lime`/`shap`/`attention` guard their imports.
 (which marker lexemes matched, which isoglosses fired), composed over the shared
 lexicon and phonological rule engine.
 
+`aggregate.py`: `dataset_evidence` rolls those per-sample findings up over a
+labelled corpus into a `GlobalEvidenceReport`. Each phenomenon is scored by the
+class-conditional lift of its most associated gold class, so a linguist can see
+which isoglosses actually separate the corpora; low-support phenomena are flagged
+and never headline. The evidence is resource-defined, so the roll-up needs no
+fitted model and is byte-stable. Reachable as `tulip explain-global DATA`.
+
 The `phonological_rules` engine (`features/text/phonological_rules.py`) is the
 domain core those dialectology surfaces share. A single `PhonologicalRule` value
 object models each group-defining isogloss as a reversible rewrite. It reports an
@@ -269,7 +276,9 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 (list/download/prepare/synthesize/synthesize-audio/validate), `train`,
 `evaluate`, `predict` (text arg or `--audio` path; `--json`; map export via
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
-(standalone; the command group the contract lists), `benchmark`, `leaderboard`
+(standalone; the command group the contract lists), `explain-global`
+(corpus-level dialect-evidence roll-up ranked by class-conditional lift),
+`benchmark`, `leaderboard`
 (also emits significance), `analyze` (selective + error report from a saved
 `predictions_<split>.json`; `--hierarchical` adds family/dialect partial credit,
 `--power` the minimum detectable effect, `--fairness` the worst-versus-best

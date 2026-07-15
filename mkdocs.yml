@@ -58,6 +58,7 @@ nav:
       - Data: reference/data.md
       - Features: reference/features.md
       - Evaluation: reference/evaluation.md
+      - Explainability: reference/explain.md
       - Robustness: reference/robustness.md
       - Deployment &amp; serving: reference/deploy.md
   - Project:
