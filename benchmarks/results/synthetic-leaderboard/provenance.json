@@ -27,6 +27,7 @@
           "silesia": 24
         }
       },
+      "dataset_digest": "0da314729ae9cac441a9407fedba93f5",
       "name": "synthetic-char-baseline",
       "path": "benchmarks/configs/char_baseline.yaml",
       "seed": 42,
@@ -64,6 +65,7 @@
           "silesia": 24
         }
       },
+      "dataset_digest": "0da314729ae9cac441a9407fedba93f5",
       "name": "synthetic-lexical-baseline",
       "path": "benchmarks/configs/lexical_baseline.yaml",
       "seed": 42,
@@ -89,7 +91,7 @@
       "scikit-learn": "1.9.0",
       "scipy": "1.18.0"
     },
-    "python": ">=3.10"
+    "python": ">=3.11"
   },
   "float_precision": 6,
   "models": [
