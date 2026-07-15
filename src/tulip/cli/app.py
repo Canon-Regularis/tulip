@@ -365,6 +365,9 @@ def leaderboard(
     suite_path: Path = typer.Argument(..., help="Leaderboard suite YAML (see benchmarks/)."),
     out: Path = typer.Option(Path("benchmarks/results"), "--out", help="Artifact root."),
     split: str = typer.Option("test", help="Split shown in the printed table."),
+    tracks: bool = typer.Option(
+        False, "--tracks", help="Read a multi-track suite and rank each modality separately."
+    ),
     significance: bool = typer.Option(
         True,
         "--significance/--no-significance",
@@ -376,8 +379,14 @@ def leaderboard(
 
     ``leaderboard.md`` and ``provenance.json`` are deterministic: the same seeds
     reproduce them byte for byte, which is what makes the committed artifact an
-    auditable benchmark rather than a snapshot.
+    auditable benchmark rather than a snapshot. ``--tracks`` reads a multi-track
+    suite instead and writes one ranking per modality (text, audio, transcribed
+    speech) to ``leaderboard-tracks.md``.
     """
+    if tracks:
+        _run_tracked_leaderboard(suite_path, out)
+        return
+
     from tulip.evaluation.benchmark import comparison_table
     from tulip.evaluation.leaderboard import (
         load_suite,
@@ -400,6 +409,70 @@ def leaderboard(
     frame = comparison_table(results, split=split, sort_by="f1_macro")
     _print_frame(frame, f"leaderboard {suite.name!r} ({split} split)")
     _console.print(f"[green]leaderboard written to {destination}[/green]")
+
+
+def _run_tracked_leaderboard(suite_path: Path, out: Path) -> None:
+    """Run and write a multi-track leaderboard (``leaderboard --tracks``)."""
+    from tulip.evaluation.tracks import (
+        load_tracked_suite,
+        run_tracked_leaderboard,
+        write_tracked_leaderboard,
+    )
+
+    suite = load_tracked_suite(suite_path)
+    track_results = run_tracked_leaderboard(suite)
+    destination = out / suite.name
+    write_tracked_leaderboard(track_results, destination, suite=suite)
+    for track_result in track_results:
+        _console.print(
+            f"[dim]track {track_result.track.name}: {len(track_result.results)} result(s)[/dim]"
+        )
+    _console.print(f"[green]tracked leaderboard written to {destination}[/green]")
+
+
+@app.command()
+@_tulip_errors
+def efficiency(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    data: Path = typer.Argument(..., help="Samples to time predictions over."),
+    model: str = typer.Option("model", "--model", help="Model name recorded on the record."),
+    repeats: int = typer.Option(3, "--repeats", min=1, help="Timed passes; the median is kept."),
+    out: Path | None = typer.Option(None, "--out", help="Write the record JSON here (excluded)."),
+    json_output: bool = typer.Option(False, "--json", help="Emit the record as JSON."),
+) -> None:
+    """Measure a saved model's inference latency, size, and parameter count.
+
+    These numbers are machine dependent, so the record is an excluded artifact:
+    it never feeds the byte-stable leaderboard or provenance.
+    """
+    from tulip.data import read_samples
+    from tulip.evaluation.efficiency import measure_efficiency, write_efficiency
+    from tulip.pipeline import DialectClassifier
+
+    classifier = DialectClassifier.load(model_path)
+    record = measure_efficiency(
+        classifier,
+        list(read_samples(data)),
+        model=model,
+        repeats=repeats,
+        model_dir=model_path,
+    )
+    if out is not None:
+        write_efficiency([record], out)
+        _console.print(f"[green]efficiency written to {out}[/green]")
+    if json_output:
+        _console.print_json(record.model_dump_json())
+    else:
+        size = (
+            "n/a"
+            if record.model_size_bytes is None
+            else f"{record.model_size_bytes / 1024:.1f} KiB"
+        )
+        params = "n/a" if record.n_params is None else str(record.n_params)
+        _console.print(
+            f"latency [bold]{record.latency_ms:.4f} ms[/bold]/sample over {record.n_samples} "
+            f"sample(s); size {size}; params {params}"
+        )
 
 
 @repro_app.command("verify")
