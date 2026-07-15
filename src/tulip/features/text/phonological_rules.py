@@ -11,7 +11,7 @@ reversible **rewrite rules** and does three things a rate detector cannot:
   ``applicable`` rate (the standard environment where the change *could* fire is
   present) and, when the reflex is positively identifiable, a ``fired`` rate (the
   dialectal reflex *is* present). "environment present, change absent" is
-  standard Polish; "change fired" is dialectal -- a distinction a single rate
+  standard Polish; "change fired" is dialectal, a distinction a single rate
   column blurs.
 * **Normalise dialect -> standard.** Running the detectable rules in reverse
   (:func:`normalize_to_standard`) collapses dialectal spellings back to their
@@ -44,7 +44,7 @@ import numpy as np
 from tulip.core.exceptions import ConfigurationError
 from tulip.features.registries import TEXT_FEATURES
 from tulip.features.text._base import DenseTextExtractor
-from tulip.features.text._resource import read_yaml_resource
+from tulip.features.text._resource import read_versioned_entries
 from tulip.features.text._tokenize import word_tokens
 from tulip.utils.logging import get_logger
 
@@ -87,7 +87,7 @@ class PhonologicalRule:
 
     ``detectable`` splits the two dialectological cases: a positively
     identifiable change (soft labials) exposes a ``fired`` rate and a working
-    reverse; a merger (mazurzenie) does neither -- its reflex is ordinary
+    reverse; a merger (mazurzenie) does neither: its reflex is ordinary
     standard Polish, so only its ``applicable`` rate carries signal.
 
     The compiled matchers and the forward/reverse lookup maps are built once by
@@ -166,21 +166,15 @@ def load_phonological_rules(path: str | Path | None = None) -> tuple[Phonologica
         ConfigurationError: if the file is missing, is not a versioned mapping,
             has an empty/duplicate/malformed entry, or names an unknown ``where``.
     """
-    source, data = read_yaml_resource(
-        path, bundled_name=_BUNDLED_RULES, noun="phonological rules", bundled_label="rules"
+    source, entries = read_versioned_entries(
+        path,
+        bundled_name=_BUNDLED_RULES,
+        noun="phonological rules",
+        bundled_label="rules",
+        entity="rule",
+        list_key="rules",
+        version=_SCHEMA_VERSION,
     )
-    if not isinstance(data, dict):
-        raise ConfigurationError(
-            f"{source}: rule file must be a mapping with 'version' and 'rules'"
-        )
-    if data.get("version") != _SCHEMA_VERSION:
-        raise ConfigurationError(
-            f"{source}: unsupported rule schema version {data.get('version')!r}; "
-            f"expected {_SCHEMA_VERSION}"
-        )
-    entries = data.get("rules")
-    if not isinstance(entries, list) or not entries:
-        raise ConfigurationError(f"{source}: 'rules' must be a non-empty list")
 
     rules: list[PhonologicalRule] = []
     seen: set[str] = set()
@@ -335,7 +329,7 @@ class PhonologicalRuleExtractor(DenseTextExtractor):
     ``rule:<name>:fired`` for every *detectable* rule. Each cell is the rule's
     per-token rate scaled by ``per_tokens``. Together the two columns let a model
     separate "the standard environment is present but unchanged" (standard) from
-    "the dialectal reflex fired" (dialectal) -- the distinction a single rate
+    "the dialectal reflex fired" (dialectal), the distinction a single rate
     cannot express.
 
     ``per_tokens`` defaults to ``1.0`` (a plain fraction of tokens) for the same

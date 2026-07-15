@@ -74,8 +74,8 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
         """Resolve the embedding dimensionality; the encoder stays frozen.
 
         Only the checkpoint *config* is fetched here (kilobytes, cached), so
-        ``get_feature_names_out`` works right after ``fit`` -- the sklearn
-        fitted-state contract every sibling extractor honours -- while the
+        ``get_feature_names_out`` works right after ``fit``, the sklearn
+        fitted-state contract every sibling extractor honours, while the
         multi-hundred-MB model weights still load lazily on first
         ``transform``.
 

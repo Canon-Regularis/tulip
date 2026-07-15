@@ -8,8 +8,8 @@ Registers two thin, well-defaulted wrappers over
   2-5 grams). Character n-grams capture sub-word orthographic reflexes of
   dialect phonology (mazurzenie respellings, o/uo alternations, dialectal
   suffix shapes) and are robust to rich Polish inflection.
-- ``word_tfidf``: word 1-2 grams, lowercased but with diacritics preserved --
-  diacritics are part of the dialect signal and must never be stripped.
+- ``word_tfidf``: word 1-2 grams, lowercased but with diacritics preserved.
+  Diacritics are part of the dialect signal and must never be stripped.
 
 Every default is overridable through registry ``params``.
 """
@@ -26,7 +26,7 @@ __all__ = ["make_char_tfidf", "make_word_tfidf"]
 
 #: Defaults for ``char_tfidf``. ``char_wb`` pads n-grams with spaces at word
 #: edges, which makes word-final suffixes and word-initial prefixes explicit
-#: n-grams -- exactly where Polish dialect morphology lives. ``sublinear_tf``
+#: n-grams, exactly where Polish dialect morphology lives. ``sublinear_tf``
 #: dampens length effects in transcribed speech; ``min_df=2`` drops one-off
 #: transcription noise.
 _CHAR_TFIDF_DEFAULTS: dict[str, Any] = {

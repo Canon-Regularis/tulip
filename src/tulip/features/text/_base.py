@@ -23,17 +23,32 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.exceptions import NotFittedError
 
+from tulip.core.exceptions import ConfigurationError
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-__all__ = ["DenseTextExtractor"]
+__all__ = ["DenseTextExtractor", "check_per_tokens"]
+
+
+def check_per_tokens(per_tokens: float) -> None:
+    """Raise :class:`ConfigurationError` unless ``per_tokens`` is positive.
+
+    Shared by the dense extractors, whose ``per_tokens`` normalisation base
+    must be strictly positive to scale counts or rates.
+
+    Raises:
+        ConfigurationError: If ``per_tokens`` is not greater than zero.
+    """
+    if per_tokens <= 0:
+        raise ConfigurationError(f"per_tokens must be > 0, got {per_tokens}")
 
 
 class DenseTextExtractor(TransformerMixin, BaseEstimator):
     """Base for dense, named text feature extractors (fitted-state + feature names).
 
-    Subclasses set their fitted attributes -- always including
-    ``feature_names_`` -- in ``fit``, implement ``transform``, and (unless they
+    Subclasses set their fitted attributes, always including
+    ``feature_names_``, in ``fit``, implement ``transform``, and (unless they
     guard on a different attribute) inherit the fitted check and
     ``get_feature_names_out`` unchanged. The public name is exported without the
     leading underscore for subclasses in sibling modules; it is not part of the

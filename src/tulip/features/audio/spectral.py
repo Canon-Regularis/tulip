@@ -6,7 +6,7 @@ All extractors are pooled frame-level features registered in
 librosa is imported lazily inside the frame computations (``audio`` extra).
 
 Framing defaults (``n_fft=1024``, ``hop_length=256``) correspond to 64 ms
-windows with a 16 ms hop at 16 kHz — finer-grained than librosa's music
+windows with a 16 ms hop at 16 kHz, finer-grained than librosa's music
 defaults, which suits short dialect speech recordings.
 """
 

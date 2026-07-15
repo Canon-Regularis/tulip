@@ -9,7 +9,7 @@ statistics with NaN.
 ``formants`` prefers Praat's Burg algorithm (praat-parselmouth) and falls
 back to a classic autocorrelation-LPC estimate (:func:`lpc_formant_frames`,
 pure numpy/scipy) when parselmouth is unavailable, so the feature works from
-the ``audio`` extra alone — and, given pre-decoded signals, with no optional
+the ``audio`` extra alone, and, given pre-decoded signals, with no optional
 dependency at all.
 """
 
@@ -161,7 +161,7 @@ def lpc_formant_frames(
        ``(min_formant_hz, max_formant_hz)``; the lowest ``n_formants`` in
        ascending frequency are F1..Fn.
 
-    Frames below the energy gate (relative to the loudest frame — silence or
+    Frames below the energy gate (relative to the loudest frame: silence or
     weak unvoiced speech, where LPC roots are meaningless) and missing
     formants are returned as NaN; downstream pooling is NaN-safe.
 

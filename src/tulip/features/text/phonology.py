@@ -11,7 +11,7 @@ primary diagnostics: *asynchronous soft labials* (Kurpie ``pi/bi/wi/mi`` ->
 emits per-document rates the classifier can weigh.
 
 Design (OCP + DIP):
-    Each isogloss is a :class:`PhonologicalFeature` -- a narrow ``Protocol`` with
+    Each isogloss is a :class:`PhonologicalFeature`, a narrow ``Protocol`` with
     a single :meth:`~PhonologicalFeature.rate` method (ISP). The extractor holds
     a ``Sequence[PhonologicalFeature]`` and knows nothing about their kinds; it
     depends only on the Protocol (DIP). Concrete kinds are selected from YAML by
@@ -21,7 +21,7 @@ Design (OCP + DIP):
 This is a feature extractor, not a predictor: it is a scikit-learn transformer
 and is unrelated to the ``tulip.pipeline.protocols.SamplePredictor`` hierarchy.
 
-Precision caveats -- read before trusting either shipped feature:
+Precision caveats to read before trusting either shipped feature:
 
 * **Soft labials are only usable with an exclusion stoplist.** A bare
   ``psi|bzi|wzi|mni`` regex is noise: ``mni`` occurs in standard *mnie* ("me"),
@@ -54,8 +54,8 @@ import numpy as np
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.features.registries import TEXT_FEATURES
-from tulip.features.text._base import DenseTextExtractor
-from tulip.features.text._resource import read_yaml_resource
+from tulip.features.text._base import DenseTextExtractor, check_per_tokens
+from tulip.features.text._resource import read_versioned_entries
 from tulip.features.text._tokenize import word_tokens
 from tulip.utils.logging import get_logger
 
@@ -155,7 +155,7 @@ class DigraphRate:
     Used for the *absence*-based operationalisation of mazurzenie: measuring the
     rate of the standard sibilant digraphs ``cz/sz/ż/dż`` lets a classifier learn
     that a conspicuously LOW rate marks the Masovian merger. It does not detect
-    mazurzenie positively -- no positive string can, because the merger deletes
+    mazurzenie positively: no positive string can, because the merger deletes
     the very digraphs it would key on.
 
     Attributes:
@@ -253,21 +253,15 @@ def load_isoglosses(path: str | Path | None = None) -> tuple[PhonologicalFeature
             has an empty/duplicate/malformed entry, names an unknown ``kind``, or
             carries an invalid regex or empty digraph list.
     """
-    source, data = read_yaml_resource(
-        path, bundled_name=_BUNDLED_ISOGLOSSES, noun="isogloss", bundled_label="isoglosses"
+    source, entries = read_versioned_entries(
+        path,
+        bundled_name=_BUNDLED_ISOGLOSSES,
+        noun="isogloss",
+        bundled_label="isoglosses",
+        entity="isogloss",
+        list_key="isoglosses",
+        version=_SCHEMA_VERSION,
     )
-    if not isinstance(data, dict):
-        raise ConfigurationError(
-            f"{source}: isogloss file must be a mapping with 'version' and 'isoglosses'"
-        )
-    if data.get("version") != _SCHEMA_VERSION:
-        raise ConfigurationError(
-            f"{source}: unsupported isogloss schema version {data.get('version')!r}; "
-            f"expected {_SCHEMA_VERSION}"
-        )
-    entries = data.get("isoglosses")
-    if not isinstance(entries, list) or not entries:
-        raise ConfigurationError(f"{source}: 'isoglosses' must be a non-empty list")
 
     features: list[PhonologicalFeature] = []
     seen: set[str] = set()
@@ -301,7 +295,7 @@ class PhonologicalMarkerExtractor(DenseTextExtractor):
     the isogloss's per-token :meth:`PhonologicalFeature.rate` scaled by
     ``per_tokens``. Documents with no word tokens produce an all-zero row.
 
-    ``per_tokens`` defaults to ``1.0`` -- a plain fraction of tokens, in [0, 1] --
+    ``per_tokens`` defaults to ``1.0``, a plain fraction of tokens, in [0, 1],
     rather than the "per 1000 tokens" convention that ``dialect_keywords`` uses,
     and the difference is deliberate. These are *dense* columns unioned with
     *sparse* TF-IDF blocks whose values also live in [0, 1]. An L2-penalised
@@ -309,7 +303,7 @@ class PhonologicalMarkerExtractor(DenseTextExtractor):
     column scaled 1000x larger is effectively 1000x less regularised and drowns
     thousands of TF-IDF columns. Measured on the synthetic corpus, per-1000
     scaling turned a +0.02 accuracy gain into a -0.01 loss. Raise ``per_tokens``
-    to 1000 when you want human-readable "hits per 1000 tokens" for reporting --
+    to 1000 when you want human-readable "hits per 1000 tokens" for reporting,
     not when feeding a linear model alongside TF-IDF.
 
     The extractor holds the isoglosses as an opaque ``Sequence[PhonologicalFeature]``
@@ -345,8 +339,7 @@ class PhonologicalMarkerExtractor(DenseTextExtractor):
             ConfigurationError: If ``per_tokens`` is not positive or the isogloss
                 set is missing/malformed.
         """
-        if self.per_tokens <= 0:
-            raise ConfigurationError(f"per_tokens must be > 0, got {self.per_tokens}")
+        check_per_tokens(self.per_tokens)
         self.features_: tuple[PhonologicalFeature, ...] = load_isoglosses(self.isogloss_path)
         self.feature_names_: tuple[str, ...] = tuple(
             f"phon:{feature.name}" for feature in self.features_

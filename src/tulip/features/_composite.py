@@ -3,9 +3,8 @@
 Both :func:`tulip.features.text.composite.build_text_features` and
 :func:`tulip.features.audio.composite.build_audio_features` delegate here, so
 config coercion, step naming, and error behaviour are identical for the two
-modalities — previously each had its own copy with silently divergent
-policies (different step-name normalisation, only one accepting bare-string
-entries).
+modalities. Previously each had its own copy with silently divergent policies
+(different step-name normalisation, only one accepting bare-string entries).
 """
 
 from __future__ import annotations

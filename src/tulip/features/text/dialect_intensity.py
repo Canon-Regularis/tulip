@@ -4,14 +4,14 @@ Registers ``dialect_intensity`` in
 :data:`tulip.features.registries.TEXT_FEATURES`.
 
 The lexical and phonological features answer *which* dialect; this one answers
-*how dialectal at all* -- a single interpretable number, plus a per-family
+*how dialectal at all*: a single interpretable number, plus a per-family
 breakdown, anchored so that **0 means indistinguishable from standard Polish**.
 It is useful wherever a scalar dialectality signal is wanted: gating
 self-training pseudo-labels on genuine dialect signal rather than model
 over-confidence, triaging noisy corpora, driving map opacity, or as a compact
 dense feature.
 
-It is pure composition -- it re-implements no detection. Lexical evidence comes
+It is pure composition: it re-implements no detection. Lexical evidence comes
 from the shared marker lexicon (:func:`tulip.features.text.keywords.load_lexicon`,
 grouped into families by
 :func:`~tulip.features.text.keywords.family_for_lexicon_key`); phonological
@@ -21,8 +21,8 @@ densities are fused and squashed to [0, 1] by a fixed, documented saturating
 map, so the score is deterministic and needs no fitting.
 
 Why the anchor needs no separate "standard reference" corpus: standard Polish is
-*definitionally* the absence of dialectal evidence -- no marker lexeme, no fired
-sound change -- so a standard text has zero signal and maps to exactly 0. The
+*definitionally* the absence of dialectal evidence: no marker lexeme, no fired
+sound change, so a standard text has zero signal and maps to exactly 0. The
 diacritic-exact marker matching and the rules' exclusion stoplists keep standard
 text from accruing spurious signal, so the zero anchor holds without an external
 baseline.
@@ -55,7 +55,7 @@ logger = get_logger(__name__)
 
 #: Weight on lexical-marker density in the pre-saturation signal. Calibrated so a
 #: text with roughly one dialect marker per ten tokens (density 0.1) scores about
-#: 0.55 -- clearly dialectal without saturating on a single lexeme.
+#: 0.55, clearly dialectal without saturating on a single lexeme.
 DEFAULT_MARKER_WEIGHT = 8.0
 
 #: Weight on fired-rule density. Equal to the marker weight: a fired sound change
@@ -78,8 +78,8 @@ class DialectIntensityExtractor(DenseTextExtractor):
     ``marker_density`` is the fraction of tokens matching a dialect marker (of the
     family, or of any family for ``overall``); ``fired_density`` is the summed
     per-token fired rate of the detectable rules (of the family, or all).
-    Mergers contribute nothing here -- their reflex is not positively
-    identifiable -- so intensity is built only from positive dialectal evidence.
+    Mergers contribute nothing here: their reflex is not positively
+    identifiable, so intensity is built only from positive dialectal evidence.
 
     Args:
         lexicon_path: YAML marker lexicon replacing the bundled one (see
