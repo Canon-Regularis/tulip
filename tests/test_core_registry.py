@@ -101,6 +101,8 @@ class TestMetadata:
             "fasttext",
             "herbert",
             "hubert",
+            "llm_fewshot",
+            "llm_zeroshot",
             "mbert",
             "polish_roberta",
             "wav2vec2",
