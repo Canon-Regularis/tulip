@@ -4,21 +4,21 @@
 steps. The guiding principle is that *dialectal orthography is signal*: the
 cleaner normalises encoding, typography, and transcription artifacts, but it
 never strips diacritics, never respells dialect forms, and never "corrects"
-non-standard grammar -- those are exactly the features the classifiers need.
+non-standard grammar: those are exactly the features the classifiers need.
 
 Steps (applied in this order when enabled):
 
-1. ``nfc`` -- Unicode NFC normalisation, so byte-identical text compares
+1. ``nfc``: Unicode NFC normalisation, so byte-identical text compares
    equal regardless of how diacritics were encoded.
-2. ``remove_artifacts`` -- transcription artifacts: bracketed annotations
+2. ``remove_artifacts`` removes transcription artifacts: bracketed annotations
    (``[smiech]``, ``{pauza}``, ``<laugh>``), parenthesised annotation
    keywords (``(niezrozumiale)``), stand-alone pause markers (`` ... ``,
    ``--``), and repeated-punctuation squeeze (``???`` -> ``?``).
-3. ``normalise_punctuation`` -- typographic quotes/dashes/ellipsis to their
+3. ``normalise_punctuation``: typographic quotes/dashes/ellipsis to their
    plain ASCII equivalents, so the same utterance typed with different
    editors yields identical features.
-4. ``collapse_whitespace`` -- any whitespace run to a single space, trimmed.
-5. ``lowercase`` -- optional casefolding (off by default: capitalisation
+4. ``collapse_whitespace``: any whitespace run to a single space, trimmed.
+5. ``lowercase``: optional casefolding (off by default: capitalisation
    carries stylometric signal).
 """
 

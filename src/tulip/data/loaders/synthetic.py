@@ -5,7 +5,7 @@ linguistically-grounded corpus on demand (see :mod:`tulip.data.synthetic`), so
 the whole toolkit is runnable end-to-end out of the box. If a manifest has been
 materialised under ``root`` (e.g. via
 :func:`tulip.data.synthetic.write_synthetic_manifest`), that auditable copy is
-read instead of regenerating -- mirroring the on-demand precedent set by the
+read instead of regenerating, mirroring the on-demand precedent set by the
 BIGOS/Common Voice loaders that also override :meth:`is_available`.
 """
 

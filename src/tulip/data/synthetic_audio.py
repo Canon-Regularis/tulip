@@ -12,9 +12,9 @@ Each synthetic "dialect" is a distinct point in acoustic space (see
 formant triple, and a spectral-tilt pole. A clip is built with a classic
 source-filter (Klatt-style) model:
 
-1. A glottal **source** -- an impulse train at the class F0, phase-accumulated
+1. A glottal **source**: an impulse train at the class F0, phase-accumulated
    through a slow vibrato so the pitch contour is not dead flat.
-2. A **filter** -- three parallel second-order bandpass resonators at the class
+2. A **filter**: three parallel second-order bandpass resonators at the class
    formants (F1/F2/F3), summed with decreasing weight, then a one-pole tilt
    filter imposing the class spectral slope.
 3. A little seeded aspiration **noise**, and a constant-loudness normalisation
@@ -24,7 +24,7 @@ Small per-speaker jitter is applied to F0 and the formants, so speakers within a
 class differ (which is what makes a speaker-disjoint split meaningful) while the
 class fingerprint dominates. The result is separable by the *classical* audio
 features (``pitch``, ``formants``, ``spectral_centroid``, ``mfcc``) with a
-logistic-regression head -- no torch/speechbrain required.
+logistic-regression head: no torch/speechbrain required.
 
 Generation is fully deterministic: one ``numpy.random.default_rng(seed)`` is
 consumed in a fixed order (sorted class keys -> speaker index -> sample index,
@@ -289,8 +289,8 @@ def _synthesize_clip(
 ) -> np.ndarray:
     """Synthesize one source-filter clip as a constant-loudness float signal.
 
-    RNG draws happen in a fixed order -- the vibrato phase, then the whole noise
-    vector -- so the stream stays reproducible regardless of the acoustic
+    RNG draws happen in a fixed order, the vibrato phase then the whole noise
+    vector, so the stream stays reproducible regardless of the acoustic
     parameters.
     """
     n_samples = round(duration_s * sample_rate)

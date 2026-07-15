@@ -5,11 +5,11 @@ record: canonical name, acquisition URL, quality tier, supported tasks, and
 the label granularities its metadata can populate. Tiers rank how directly a
 corpus serves dialect classification:
 
-* **Tier 1** -- dialect corpora with fine-grained geographic metadata.
-* **Tier 2** -- single-dialect corpora (positive examples for one class).
-* **Tier 3** -- large general-Polish corpora (standard-language negatives,
+* **Tier 1**: dialect corpora with fine-grained geographic metadata.
+* **Tier 2**: single-dialect corpora (positive examples for one class).
+* **Tier 3**: large general-Polish corpora (standard-language negatives,
   or dialect signal only via self-reported accent metadata).
-* **Tier 4** -- aggregated ASR benchmarks; useful audio, weak dialect labels.
+* **Tier 4**: aggregated ASR benchmarks; useful audio, weak dialect labels.
 
 The catalog is intentionally static and import-cheap: acquisition of every
 corpus is documented in ``docs/datasets.md`` and tulip never scrapes remote

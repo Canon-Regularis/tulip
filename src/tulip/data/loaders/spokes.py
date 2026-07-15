@@ -13,7 +13,7 @@ class SpokesLoader(ManifestBackedLoader):
     """Spokes (https://spokes.clarin-pl.eu/): conversational transcripts.
 
     Tier-3 corpus of transcribed spontaneous conversations, predominantly
-    standard (colloquial) Polish -- useful as spoken-register negatives that
+    standard (colloquial) Polish, useful as spoken-register negatives that
     match dialect corpora in genre. Export locally (see ``docs/datasets.md``)
     into::
 
@@ -21,7 +21,7 @@ class SpokesLoader(ManifestBackedLoader):
             manifest.csv          # or .tsv / .jsonl
 
     Expected manifest columns: ``text`` (required), plus any of ``id``,
-    ``speaker_id`` (Spokes identifies speakers per conversation -- keep
+    ``speaker_id`` (Spokes identifies speakers per conversation; keep
     them), ``dialect``, ``region``. Samples default to ``family="standard"``;
     dialect columns, when present, override that per row (the derived family
     then wins over the default).

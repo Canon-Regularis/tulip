@@ -2,7 +2,7 @@
 
 Complements :mod:`tulip.data.manifest` (which ingests *foreign* corpora):
 this module reads sample collections in any of the shapes tulip itself
-produces or documents -- split JSONL files written by
+produces or documents: split JSONL files written by
 :func:`tulip.data.splitting.save_splits`, manifest files, or a directory
 containing a manifest. The CLI and evaluation entry points share it so
 "anything labelled" is accepted uniformly everywhere.
@@ -34,11 +34,11 @@ def read_samples(path: Path | str) -> Iterator[Sample]:
 
     Accepted shapes, tried in order:
 
-    * a directory -- probed for ``manifest.{csv|tsv|jsonl}``;
+    * a directory: probed for ``manifest.{csv|tsv|jsonl}``;
     * a ``.jsonl``/``.ndjson`` file of serialised :class:`Sample` records
       (as written by :func:`~tulip.data.splitting.save_splits`), falling back
       to the manifest row format when the records are not that shape;
-    * any other file -- parsed as a manifest (CSV/TSV).
+    * any other file: parsed as a manifest (CSV/TSV).
 
     Raises:
         DataError: if the path does not exist or no interpretation succeeds.
@@ -67,7 +67,7 @@ def read_samples(path: Path | str) -> Iterator[Sample]:
                 samples = [Sample.model_validate(record) for record in records]
             except (ValueError, TypeError) as exc:
                 # The shape says split file, so a bad record is a corrupt split
-                # file -- not a manifest. Falling back here would reparse the
+                # file, not a manifest. Falling back here would reparse the
                 # records as flat rows, quietly demoting every nested "labels"
                 # object to metadata and returning wholly unlabelled samples.
                 raise DataError(

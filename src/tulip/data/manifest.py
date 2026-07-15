@@ -2,7 +2,7 @@
 
 Most of the corpora tulip supports have no bulk download: the researcher
 assembles them locally (per the acquisition notes in ``docs/datasets.md``)
-into a *manifest* -- one row per sample, with columns for the text and/or an
+into a *manifest*: one row per sample, with columns for the text and/or an
 audio file path plus whatever labels and speaker metadata the corpus
 provides. This module is the single, well-tested path from such manifests to
 validated :class:`~tulip.core.types.Sample` streams; corpus loaders simply
@@ -18,7 +18,7 @@ so no corpus information is silently dropped.
 Speaker IDs are never left empty: when a row has no explicit speaker, a
 stable surrogate is synthesised by hashing the available speaker-adjacent
 metadata (village/region/voivodeship/dialect), falling back to one surrogate
-per source file. Surrogates deliberately err toward *grouping* samples --
+per source file. Surrogates deliberately err toward *grouping* samples:
 over-grouping merely shrinks the effective number of groups for splitting,
 whereas under-grouping would leak speakers across splits.
 """

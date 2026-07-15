@@ -4,7 +4,7 @@ The build manifest records split *sizes* and class distribution, but not their
 *content*. So the headline "byte-for-byte reproducible, speaker-disjoint split"
 claim is unverifiable: a library upgrade that reorders deduplication, or a
 generator default that shifts a boundary, changes which samples land where while
-leaving every count identical — and nothing notices.
+leaving every count identical, and nothing notices.
 
 This module closes that gap with a canonical, order-independent BLAKE2b digest
 over each split's membership:
@@ -18,8 +18,8 @@ over each split's membership:
   shipping.
 
 Committed as ``split_lock.json`` (deterministic: sorted keys, no timestamps), it
-is CI-gateable. This module stays import-light — stdlib + pydantic + core types,
-no numpy/sklearn — so ``import tulip.data`` keeps its lean footprint.
+is CI-gateable. This module stays import-light: stdlib + pydantic + core types,
+no numpy/sklearn, so ``import tulip.data`` keeps its lean footprint.
 """
 
 from __future__ import annotations

@@ -50,7 +50,7 @@ class CommonVoiceLoader(DatasetLoader):
     grouping speaker-disjoint splitting needs. The corpus is read standard
     Polish, so samples default to ``family="standard"``; self-reported
     ``accents``/``variant`` values are preserved in ``Sample.metadata`` and
-    can be promoted to dialect labels through ``accent_to_dialect`` -- the
+    can be promoted to dialect labels through ``accent_to_dialect``; the
     mapping is deliberately explicit because Common Voice accent strings are
     free-form and unreviewed.
 
@@ -66,7 +66,7 @@ class CommonVoiceLoader(DatasetLoader):
     acquisition: ClassVar[str] = (
         "automatic (text only): `tulip data download common_voice_pl` fetches "
         "validated.tsv from a community mirror of the CC0 release; audio clips "
-        "(tens of GB) are not fetched — get them from "
+        "(tens of GB) are not fetched; get them from "
         "https://commonvoice.mozilla.org/en/datasets if you need audio "
         "(see docs/datasets.md)"
     )
@@ -134,7 +134,7 @@ class CommonVoiceLoader(DatasetLoader):
                 raise DataError(
                     f"downloaded file is not a Common Voice release TSV "
                     f"(missing column(s): {', '.join(missing)}); the mirror may have "
-                    "changed layout — pass url=... to point at a good source"
+                    "changed layout; pass url=... to point at a good source"
                 )
             if limit is None:
                 return

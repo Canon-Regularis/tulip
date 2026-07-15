@@ -38,8 +38,8 @@ if TYPE_CHECKING:
 
 _logger = get_logger(__name__)
 
-#: URL schemes :func:`fetch_file` will open. ``file:`` is kept deliberately --
-#: offline mirrors and the test fixtures rely on it -- but everything outside
+#: URL schemes :func:`fetch_file` will open. ``file:`` is kept deliberately:
+#: offline mirrors and the test fixtures rely on it, but everything outside
 #: this set (``ftp:``, ``data:``, and any custom-registered urllib opener) is
 #: refused. Passing an arbitrary scheme straight to ``urlopen`` is what makes
 #: the call surprising; an explicit allow-list makes the supported set the
@@ -149,7 +149,7 @@ def download_datasets(
         ``MANUAL`` reports carry the acquisition steps in ``detail``; a
         failing automatic download yields a ``FAILED`` report (with the error
         and any remediation steps in ``detail``) rather than aborting the
-        remaining corpora — one gated dataset must not sink an ``--all`` run.
+        remaining corpora. One gated dataset must not sink an ``--all`` run.
 
     Raises:
         UnknownComponentError: if a name is not a registered dataset (a

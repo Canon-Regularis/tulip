@@ -2,9 +2,9 @@
 
 This module is the *data* half of :mod:`tulip.data.synthetic_audio`: the literal
 per-class acoustic fingerprints the source-filter synthesiser draws from. Each
-synthetic "dialect" is given a distinct point in acoustic space -- a fundamental
+synthetic "dialect" is given a distinct point in acoustic space: a fundamental
 frequency (pitch register), a formant triple (vowel-space centroid), and a
-spectral-tilt pole (how fast the source harmonics roll off) -- chosen so that
+spectral-tilt pole (how fast the source harmonics roll off), chosen so that
 the toolkit's *classical* audio features separate the classes:
 
 * **F0** drives the ``pitch`` feature (f0_mean/std/min/max/range/voiced_ratio).
@@ -13,14 +13,14 @@ the toolkit's *classical* audio features separate the classes:
   corpus stays learnable from pitch alone.
 * **Formants F1/F2/F3** drive the ``formants`` feature and shape the ``mfcc``
   cepstral envelope and the ``mel_spectrogram``. The classes range from a
-  back/low vowel space (high F1, low F2 -- ``podhale``) to a front/high one
-  (low F1, high F2 -- ``mazovia_proper``).
+  back/low vowel space (high F1, low F2: ``podhale``) to a front/high one
+  (low F1, high F2: ``mazovia_proper``).
 * **Spectral tilt** (a one-pole lowpass coefficient) drives the
   ``spectral_centroid`` and the low MFCCs: a darker source (pole near 1) pushes
   the spectral centre of mass down, a brighter one lifts it.
 
 Like :mod:`tulip.data._synthetic_corpus`, this module contains **zero logic**
-and imports nothing but ``__future__`` -- no numpy, no scipy -- so importing
+and imports nothing but ``__future__``: no numpy, no scipy, so importing
 ``tulip.data`` stays light and pulls in none of the scientific stack.
 
 Ordering is load-bearing. The generator consumes a single

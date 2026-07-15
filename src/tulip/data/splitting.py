@@ -192,7 +192,7 @@ def _greedy_assign(
         if empty_positive and remaining <= len(empty_positive):
             # Rescue pass: exactly enough groups remain to cover the still-empty
             # splits, so fill them (largest fraction first) instead of chasing
-            # deficits -- an empty split is worse than an off-target one.
+            # deficits: an empty split is worse than an off-target one.
             target = max(empty_positive, key=lambda name: fractions[name])
         else:
             target = max(

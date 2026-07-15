@@ -42,7 +42,7 @@ class DatasetBuilder:
     Args:
         config: Which corpora to load and how to prepare them.
         cleaner: Text normaliser applied when ``config.clean`` is true
-            (default: a :class:`TextCleaner` with standard settings --
+            (default: a :class:`TextCleaner` with standard settings:
             dialectal orthography is always preserved).
         dedup_params: Overrides forwarded to
             :func:`~tulip.data.dedup.deduplicate_samples` (e.g. ``threshold``).
@@ -101,7 +101,7 @@ class DatasetBuilder:
         Args:
             split: Split fractions, grouping key, stratification, seed.
             target: When given, samples lacking a label at this level are
-                dropped (with a logged count) before splitting -- an
+                dropped (with a logged count) before splitting: an
                 experiment can only train on labelled data.
             output_dir: When given, writes ``train/validation/test.jsonl``,
                 ``build_manifest.json`` (counts, class distribution,

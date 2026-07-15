@@ -5,9 +5,9 @@ transcribed twice, the same NKJP sentence sampled from two subcorpora), and
 duplicates that straddle a train/test boundary silently inflate scores. This
 module removes them deterministically in two passes:
 
-1. **Exact pass** -- a stable hash of the normalised text (NFC, casefolded,
+1. **Exact pass**: a stable hash of the normalised text (NFC, casefolded,
    whitespace-collapsed). Catches re-encodings and trivial reformatting.
-2. **Near pass** -- character 5-shingle Jaccard similarity, estimated with
+2. **Near pass**: character 5-shingle Jaccard similarity, estimated with
    MinHash and made sub-quadratic with locality-sensitive banding: only
    texts sharing at least one signature band are compared, and candidate
    pairs are then *verified* with the exact Jaccard on shingle sets, so
@@ -60,7 +60,7 @@ def normalise_for_hash(text: str) -> str:
 
     Deliberately more aggressive than :class:`~tulip.data.cleaning.TextCleaner`:
     case and spacing differences should not protect a duplicate. Diacritics
-    are preserved -- two texts differing only in diacritics are genuinely
+    are preserved: two texts differing only in diacritics are genuinely
     different dialect data.
     """
     return _WHITESPACE_RE.sub(" ", unicodedata.normalize("NFC", text)).strip().casefold()

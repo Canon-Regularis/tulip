@@ -36,7 +36,7 @@ class BigosLoader(ManifestBackedLoader):
       like any other corpus (see ``docs/datasets.md``).
     * **Hugging Face Hub** (``from_hub=True``): stream transcriptions
       directly with the ``datasets`` library (extra ``hf``). Hub mode yields
-      *text-only* samples -- decoding hub-hosted audio to local files is out
+      *text-only* samples; decoding hub-hosted audio to local files is out
       of scope for a loader; audio experiments should download the clips and
       use the manifest mode.
 
@@ -141,7 +141,7 @@ class BigosLoader(ManifestBackedLoader):
             # _load_from_hub is a generator: even load_dataset only runs on
             # first iteration, i.e. AFTER the header was written. Any failure
             # (gated dataset, network drop, Ctrl+C) must not leave a partial
-            # manifest behind — it would masquerade as a present corpus.
+            # manifest behind; it would masquerade as a present corpus.
             manifest_path.unlink(missing_ok=True)
             raise
         if count == 0:
@@ -172,7 +172,7 @@ class BigosLoader(ManifestBackedLoader):
             lowered = str(exc).lower()
             if "gated" in lowered or "authenticat" in lowered or "401" in lowered:
                 message += (
-                    " — this dataset is gated on the Hugging Face Hub: "
+                    "; this dataset is gated on the Hugging Face Hub: "
                     f"(1) sign in at https://huggingface.co/datasets/{self._hf_dataset} "
                     "and accept the access conditions, (2) authenticate locally with "
                     "`hf auth login` or by setting the HF_TOKEN environment variable, "

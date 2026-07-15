@@ -8,7 +8,7 @@ provide both. :class:`MultimodalClassifier` fuses them at the probability level.
 **Why not extend the task enum.** ``TaskType`` (in the frozen ``core/types``)
 has only ``TEXT`` and ``AUDIO``; adding a ``MULTIMODAL`` member would be the
 wrong design even if the enum were editable. A multimodal model is not a third
-*modality* -- it is a *composition* of two single-modality models, each an
+*modality*; it is a *composition* of two single-modality models, each an
 expert on its own input. Modelling it as two :class:`DialectClassifier`s joined
 by a :class:`~tulip.pipeline.fusion.strategies.FusionStrategy` keeps each base
 independently trainable, swappable, and persistable.
@@ -23,8 +23,8 @@ relates to its bases by *composition* and exposes only the narrow
 :class:`~tulip.pipeline.protocols.SamplePredictor` contract.
 
 **Why the dependency is a structural type (DIP).** The classifier depends on
-:class:`~tulip.pipeline.protocols.ProbabilisticClassifier` -- just ``classes_``,
-``target``, ``task``, and ``predict_proba`` -- not on concrete
+:class:`~tulip.pipeline.protocols.ProbabilisticClassifier` (just ``classes_``,
+``target``, ``task``, and ``predict_proba``), not on concrete
 ``DialectClassifier``. Any object exposing those satisfies it, which lets tests
 inject a cheap deterministic audio stub instead of training a real speech model.
 """
@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
+from tulip._serialize import write_sorted_json
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.types import Prediction, TaskType
 from tulip.pipeline._assembly import predictions_from_proba
@@ -224,6 +225,7 @@ class MultimodalClassifier:
     # -------------------------------------------------------------- persist
 
     #: Sub-directory names and sidecar file within a saved artifact.
+    _KIND: ClassVar[str] = "MultimodalClassifier"
     _TEXT_DIR: ClassVar[str] = "text"
     _AUDIO_DIR: ClassVar[str] = "audio"
     _SIDECAR: ClassVar[str] = "fusion.json"
@@ -247,12 +249,11 @@ class MultimodalClassifier:
         self._save_base(self.text, target / self._TEXT_DIR)
         self._save_base(self.audio, target / self._AUDIO_DIR)
         sidecar = {
-            "kind": "MultimodalClassifier",
+            "kind": self._KIND,
             "target": self.target.value,
             "strategy": self._strategy_config(self.strategy),
         }
-        payload = json.dumps(sidecar, ensure_ascii=False, indent=2, sort_keys=True)
-        (target / self._SIDECAR).write_text(payload + "\n", encoding="utf-8", newline="\n")
+        write_sorted_json(target / self._SIDECAR, sidecar)
         _logger.info("saved MultimodalClassifier to %s", target)
         return target
 
@@ -278,7 +279,7 @@ class MultimodalClassifier:
             raise DataError(f"corrupt fusion sidecar at {sidecar_path}: {exc}") from exc
         if not isinstance(sidecar, dict):
             raise DataError(f"corrupt fusion sidecar at {sidecar_path}: expected a JSON object")
-        if sidecar.get("kind") != "MultimodalClassifier":
+        if sidecar.get("kind") != cls._KIND:
             raise DataError(
                 f"artifact at {source} was not saved by MultimodalClassifier.save() "
                 f"(kind={sidecar.get('kind')!r})"

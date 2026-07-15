@@ -1,14 +1,14 @@
 """Linguistic resource for the synthetic dialect generator.
 
 This module is the *data* half of :mod:`tulip.data.synthetic`: the literal
-corpus tables the generator draws from -- carrier templates, slot pools, filler
+corpus tables the generator draws from: carrier templates, slot pools, filler
 particles, per-dialect geography, and the two phonological substitution tables
 (*mazurzenie* and asynchronous soft-labial respelling). It is separated from the
 generator so the linguistic resource can be read, reviewed, and extended without
 touching generation logic, and vice versa.
 
 It contains **zero logic** and deliberately imports nothing but
-``__future__`` -- no numpy, no yaml, no sklearn -- so that ``import tulip.data``
+``__future__``: no numpy, no yaml, no sklearn, so that ``import tulip.data``
 stays light and pulls in none of the scientific stack.
 
 Ordering is load-bearing. The generator consumes a single
@@ -170,8 +170,8 @@ TIMES: tuple[str, ...] = (
 
 #: Colloquial filler particles from which each speaker draws a personal subset.
 #: They are dialect-neutral (assigned independent of class), so they encode
-#: speaker identity -- the leakage that speaker-disjoint splitting defends
-#: against -- rather than dialect signal.
+#: speaker identity, the leakage that speaker-disjoint splitting defends
+#: against, rather than dialect signal.
 FILLERS: tuple[str, ...] = (
     "no",
     "prawda",

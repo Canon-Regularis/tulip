@@ -4,9 +4,9 @@ Researchers assemble most tulip corpora by hand (see ``docs/datasets.md``),
 and the synthetic generator writes manifests too. Before such a manifest is
 fed to a training run, it is worth a cheap, actionable integrity check:
 :func:`validate_manifest` parses it through the canonical
-:func:`tulip.data.manifest.read_manifest` path and reports problems -- missing
+:func:`tulip.data.manifest.read_manifest` path and reports problems: missing
 content columns, out-of-taxonomy labels, absent audio files, and the
-surrogate-speaker behaviour that silently shapes speaker-disjoint splitting --
+surrogate-speaker behaviour that silently shapes speaker-disjoint splitting,
 as a :class:`ManifestReport` of typed :class:`ManifestIssue` records.
 
 The report is deliberately CI-friendly: :attr:`ManifestReport.ok` is ``False``
@@ -88,7 +88,7 @@ class ManifestReport(BaseModel):
         n_rows: Total data rows found in the file (excluding the header).
         n_usable: Rows that parsed into a :class:`~tulip.core.types.Sample`
             (i.e. carried text and/or an audio path).
-        counts: Aggregate tallies -- one entry per severity plus a
+        counts: Aggregate tallies: one entry per severity plus a
             ``"dialect:<label>"`` entry per observed dialect label.
         issues: All findings, most severe first.
     """
@@ -163,19 +163,19 @@ def validate_manifest(
     """Validate a manifest file and return a structured integrity report.
 
     The manifest is parsed through :func:`tulip.data.manifest.read_manifest`
-    (the single canonical path), so structural failures -- missing required
-    columns, "neither text nor audio", malformed rows, bad encoding -- surface
+    (the single canonical path), so structural failures (missing required
+    columns, "neither text nor audio", malformed rows, bad encoding) surface
     as ``severity="error"`` issues rather than exceptions. On top of that, the
     following advisory checks run when parsing succeeds:
 
-    * **Taxonomy** -- ``dialect``/``family`` values outside
+    * **Taxonomy**: ``dialect``/``family`` values outside
       :class:`~tulip.labels.taxonomy.RegionalDialect`/:class:`DialectFamily`
       are *warnings*, not errors: corpus-specific labels are explicitly
       permitted to flow through the pipeline.
-    * **Speaker IDs** -- reports whether the ``speaker_id`` column is present
+    * **Speaker IDs**: reports whether the ``speaker_id`` column is present
       and, when it is absent, which fields surrogate IDs will be synthesised
       from, because over-grouping changes speaker-disjoint split behaviour.
-    * **Audio** -- relative ``audio_path`` values are resolved against
+    * **Audio**: relative ``audio_path`` values are resolved against
       ``audio_root`` (default: the manifest's parent, matching
       ``read_manifest``); missing files are warnings.
 
@@ -339,7 +339,7 @@ def _speaker_issue(
 
     Surrogate IDs shape speaker-disjoint splitting: replicating
     ``read_manifest``'s logic, when a row has no speaker it is grouped by its
-    locality fields, or -- absent those -- collapsed to a single surrogate per
+    locality fields, or, absent those, collapsed to a single surrogate per
     file, which defeats leakage-free splitting entirely.
     """
     speaker_col = cols.speaker_id
@@ -407,7 +407,7 @@ def _scan_shape(path: Path, speaker_col: str | None) -> tuple[int, set[str], int
     """Measure the manifest's shape without re-parsing it into samples.
 
     Counts data rows, collects the column names present, and tallies rows with
-    a non-blank speaker cell -- the facts needed to report dropped rows and
+    a non-blank speaker cell: the facts needed to report dropped rows and
     surrogate behaviour. All authoritative parsing stays in ``read_manifest``;
     this pass only mirrors its suffix-based format detection to *measure* the
     file, and swallows content errors (which ``read_manifest`` reports).

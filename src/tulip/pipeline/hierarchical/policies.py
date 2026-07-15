@@ -1,7 +1,7 @@
 """Backoff policies: the predicate family that decides "confident enough?".
 
-Whether a fine-grained prediction is trustworthy enough to keep -- rather than
-back off to a coarser level -- is a decision with its *own* reason to change:
+Whether a fine-grained prediction is trustworthy enough to keep, rather than
+back off to a coarser level, is a decision with its *own* reason to change:
 new confidence heuristics get added, combined, and persisted independently of
 how the classifier walks the taxonomy. That is why the policy family lives here,
 apart from :mod:`tulip.pipeline.hierarchical.classifier`.
@@ -10,7 +10,7 @@ A policy is a one-method :class:`BackoffPolicy` predicate over a single
 prediction (ISP): the small frozen-dataclass implementations
 (:class:`ConfidenceThreshold`, :class:`MarginThreshold`, :class:`NotAbstained`,
 the :class:`AlwaysAccept` null object, and the :class:`AllOf`/:class:`AnyOf`
-combinators) never decide *when* to back off -- that is the classifier's job.
+combinators) never decide *when* to back off; that is the classifier's job.
 
 Adding a new policy never edits the classifier: policies are reconstructed from
 persisted artifacts through a name-keyed factory (:func:`policy_from_spec`), not
@@ -55,8 +55,8 @@ class BackoffPolicy(Protocol):
     """Decides whether a prediction is trustworthy enough to keep.
 
     The single method keeps the protocol narrow (ISP): a policy is *only* a
-    predicate over one prediction. Backoff — stepping to a coarser level when a
-    policy rejects — is the classifier's job, not the policy's.
+    predicate over one prediction. Backoff, stepping to a coarser level when a
+    policy rejects, is the classifier's job, not the policy's.
     """
 
     def accepts(self, prediction: Prediction) -> bool:
@@ -135,7 +135,7 @@ class AlwaysAccept:
     """Null-object policy: keep every fine prediction, never back off.
 
     The default policy, so a hierarchical classifier with no policy configured
-    behaves exactly like its finest-level classifier -- predictable and free of
+    behaves exactly like its finest-level classifier: predictable and free of
     scattered ``if policy is None`` checks in the backoff walk.
     """
 
@@ -186,7 +186,7 @@ def _spec_of(policy: BackoffPolicy) -> PolicySpec:
 
     Custom policies outside this module are welcome at prediction time (they
     satisfy :class:`BackoffPolicy`), but a classifier using one cannot be saved
-    unless the policy also offers a ``to_spec`` -- reported here rather than
+    unless the policy also offers a ``to_spec``; reported here rather than
     writing a lossy artifact.
     """
     to_spec = getattr(policy, "to_spec", None)

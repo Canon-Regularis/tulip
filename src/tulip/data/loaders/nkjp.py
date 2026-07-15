@@ -146,15 +146,15 @@ def _iter_tei_paragraphs(source: IO[bytes]) -> Iterator[str]:
     """Yield paragraph texts from one NKJP TEI ``text.xml`` document.
 
     NKJP-1M texts carry their content in ``<ab>`` (anonymous block) elements
-    — some written documents use ``<p>`` — inside the TEI namespace; nested
+    (some written documents use ``<p>``) inside the TEI namespace; nested
     inline markup is flattened with ``itertext``. Undecodable or malformed
     documents are skipped with a warning rather than failing a 4000-document
     parse for one bad file.
     """
     try:
         # S314 is suppressed below: stdlib ElementTree is used deliberately.
-        # The input is a locally acquired NKJP corpus -- unpacked by hand, or
-        # fetched by this loader from the project's own published archive --
+        # The input is a locally acquired NKJP corpus, unpacked by hand or
+        # fetched by this loader from the project's own published archive,
         # not untrusted data pulled at request time. It is parsed once, offline,
         # on the operator's own machine, so an entity-expansion attack could
         # only affect the operator's own run. `defusedxml` would harden this but

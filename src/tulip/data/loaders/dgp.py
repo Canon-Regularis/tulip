@@ -23,7 +23,7 @@ class DgpLoader(ManifestBackedLoader):
     Expected manifest columns: ``text`` (required), plus any of ``id``,
     ``speaker_id``, ``family``, ``dialect``, ``region``, ``village``,
     ``voivodeship``. DGP sample pages usually identify the village and the
-    informant; record both when available -- village metadata drives the
+    informant; record both when available: village metadata drives the
     surrogate speaker ID when informants are anonymous.
     """
 

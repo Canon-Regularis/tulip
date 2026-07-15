@@ -43,8 +43,8 @@ __all__ = [
 class FusionStrategy(Protocol):
     """Combines per-modality probabilities into one distribution per sample.
 
-    ``stack`` has shape ``(n_modalities, n_samples, n_classes)`` -- every
-    modality's probabilities already aligned to the same class columns -- and
+    ``stack`` has shape ``(n_modalities, n_samples, n_classes)``, every
+    modality's probabilities already aligned to the same class columns, and
     ``mask`` has shape ``(n_modalities, n_samples)`` with ``True`` where that
     modality is present for that sample. The return has shape
     ``(n_samples, n_classes)`` with every row summing to 1.
@@ -87,13 +87,13 @@ def _check_weights(weights: tuple[float, ...]) -> None:
 class _FusionBase(abc.ABC):
     """Template enforcing the identical :class:`FusionStrategy` postcondition.
 
-    Concrete strategies implement only :meth:`_pool` -- how the *present*
+    Concrete strategies implement only :meth:`_pool`: how the *present*
     modalities combine into an unnormalised score. This template validates the
     shapes, rejects a sample with no present modality, forces a lone present
     modality to pass through unchanged, and renormalises every row. Centralising
     the contract here is exactly what makes the three strategies provably
-    substitutable (LSP), rather than each re-deriving -- and risking diverging
-    from -- the same postcondition.
+    substitutable (LSP), rather than each re-deriving, and risking diverging
+    from, the same postcondition.
     """
 
     #: Stable identifier used to (de)serialise the strategy; set by subclasses.
@@ -138,7 +138,7 @@ class _FusionBase(abc.ABC):
         """Overwrite single-modality rows with that modality's distribution, in place.
 
         Guarantees the "lone present modality passes through unchanged"
-        postcondition for *every* strategy -- including log pooling, whose
+        postcondition for *every* strategy, including log pooling, whose
         single-expert pool ``p ** w`` would otherwise distort a weighted expert.
         """
         singletons = np.flatnonzero(present_counts == 1)
@@ -155,7 +155,7 @@ class _FusionBase(abc.ABC):
         caller may hand a degenerate stack whose pooled row sums to zero (e.g. an
         all-zero probability column across every modality). Dividing that by its
         zero sum would yield ``NaN`` and break the documented postcondition, so a
-        zero-sum row falls back to uniform -- the same guard
+        zero-sum row falls back to uniform, the same guard
         :func:`tulip.models.calibration` uses.
         """
         row_sums = combined.sum(axis=1, keepdims=True)
@@ -233,7 +233,7 @@ class MaximumFusion(_FusionBase):
 
 @dataclass(frozen=True)
 class LogarithmicPoolingFusion(_WeightedFusion):
-    """Fuse by the weighted geometric mean -- the log-linear opinion pool.
+    """Fuse by the weighted geometric mean, the log-linear opinion pool.
 
     Computes ``prod_m p_m ** w_m`` over present modalities, renormalised.
     Probabilities are clipped to ``[EPS, 1]`` before the logarithm so a

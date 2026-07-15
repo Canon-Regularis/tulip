@@ -5,11 +5,11 @@ data acquisition, yet carries **real, learnable** dialect signal rather than
 random noise. Every generated text is a standard-Polish carrier sentence into
 which two grounded sources of dialect information are injected:
 
-* **Lexical** -- a seeded subset of each dialect's genuine marker lexemes from
+* **Lexical**: a seeded subset of each dialect's genuine marker lexemes from
   ``tulip/features/text/lexicons/dialect_markers.yaml`` (e.g. Podhale ``baca``,
   Silesian ``gryfny``, Kashubian ``chëcz``), which gives the whole-word
   keyword/TF-IDF features something to key on.
-* **Phonological** -- deterministic string transforms reproducing real dialect
+* **Phonological**: deterministic string transforms reproducing real dialect
   processes: *mazurzenie* (cz/sz/ż/dż -> c/s/z/dz) for the Masovian group
   (Kurpie, Mazovia) and asynchronous soft-labial respelling (pi/bi/wi/mi ->
   psi/bzi/wzi/mni) for Kurpie. Applying these to the standard carrier
@@ -19,14 +19,14 @@ which two grounded sources of dialect information are injected:
 
 Three further design choices make the corpus behave like a real one:
 
-* **Speaker idiolect** -- each speaker draws a seeded personal filler
+* **Speaker idiolect**: each speaker draws a seeded personal filler
   vocabulary and marker subset, so a model can partly re-identify the speaker.
   That leakage is precisely what speaker-disjoint splitting must defend
   against, so the split step is genuinely exercised.
-* **Cross-class noise** (``noise_level``) -- a small fraction of samples pick
+* **Cross-class noise** (``noise_level``): a small fraction of samples pick
   up a foreign marker (or, for the ``standard`` class, any marker), so the task
   is not trivially separable.
-* **Marker dropout** (``marker_dropout``) -- a fraction of samples carry *no*
+* **Marker dropout** (``marker_dropout``): a fraction of samples carry *no*
   lexical marker at all, mirroring the fact that plenty of real dialect
   utterances contain no diagnostic lexeme. Such a sample is recoverable only
   from a phonological transform (Kurpie, Mazovia) and is otherwise genuinely

@@ -6,21 +6,21 @@ prediction time, answers at the *finest* level it is confident about, backing
 off to a coarser level otherwise. A confident sample gets a fine-grained
 regional dialect; an ambiguous one is answered only at the family level rather
 than guessed. The level at which each sample is answered therefore varies *per
-sample* -- that variation is the whole point of the taxonomy note
+sample*; that variation is the whole point of the taxonomy note
 (``taxonomy.py``) that "hierarchical classifiers can back off from fine-grained
 to coarse-grained predictions".
 
 Why this is *not* a ``DialectClassifier`` subclass (Liskov)
 ----------------------------------------------------------
 ``DialectClassifier.predict_batch`` carries a postcondition: every returned
-:class:`~tulip.core.types.Prediction` has ``level == self.target`` -- one fixed
+:class:`~tulip.core.types.Prediction` has ``level == self.target``, one fixed
 level for the whole batch. A backoff classifier deliberately breaks that: the
 ``level`` it returns differs from sample to sample. A subclass that weakened a
 base-class postcondition would not be substitutable for its base, so this class
 does **not** inherit from ``DialectClassifier``. It relates to it through
 composition (it *owns* one per level) and satisfies the narrow
 :class:`~tulip.pipeline.protocols.SamplePredictor` protocol instead, which fixes
-only "one :class:`Prediction` per input :class:`Sample`, in order" -- a contract
+only "one :class:`Prediction` per input :class:`Sample`, in order", a contract
 a per-sample-varying level honours without strain.
 
 Whether a prediction is "confident enough" to keep is decided by a
@@ -38,6 +38,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from tulip._serialize import write_sorted_json
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.types import ClassProbability, Prediction, TaskType
 from tulip.labels.taxonomy import LabelLevel, family_for
@@ -79,7 +80,7 @@ class HierarchicalConfig(BaseModel):
 
     Module-owned rather than folded into
     :class:`~tulip.config.schemas.ExperimentConfig`, which is frozen and
-    ``extra="forbid"`` -- backoff knobs cannot be bolted onto it without editing
+    ``extra="forbid"``: backoff knobs cannot be bolted onto it without editing
     the frozen config contract (reported as friction, matching the precedent set
     by :class:`~tulip.pipeline.selftrain.SelfTrainConfig`).
 
@@ -106,7 +107,7 @@ class HierarchicalDialectClassifier:
     """Predict at the finest confident level, backing off to coarser ones.
 
     Composes one :class:`~tulip.pipeline.classifier.DialectClassifier` per
-    label level (never subclasses it -- see the module docstring for the Liskov
+    label level (never subclasses it; see the module docstring for the Liskov
     argument) and satisfies :class:`~tulip.pipeline.protocols.SamplePredictor`.
 
     Args:
@@ -228,7 +229,7 @@ class HierarchicalDialectClassifier:
             candidate = self._candidate(level, index, by_level)
             # ``None`` means this level cannot express the coarser decision at all
             # (e.g. the family is ``standard``, which has no dialects). That is not
-            # a low-confidence answer -- it is no answer -- so back off immediately.
+            # a low-confidence answer; it is no answer, so back off immediately.
             if candidate is not None and self.policy.accepts(candidate):
                 return candidate
         coarsest_candidate = self._candidate(coarsest, index, by_level)
@@ -261,7 +262,7 @@ class HierarchicalDialectClassifier:
         backoff policy. Under the chain rule that same case yields exactly
         ``P(family)``, so the fine prediction can never be more confident than the
         coarse decision it rests on. The returned distribution therefore sums to
-        ``P(family)``, not to 1 -- it is a joint, not a conditional.
+        ``P(family)``, not to 1; it is a joint, not a conditional.
 
         Returns:
             The projected prediction, or ``None`` when the predicted family has no
@@ -320,8 +321,7 @@ class HierarchicalDialectClassifier:
         for level, classifier in self._classifiers.items():
             classifier.save(root / level.value)
         sidecar = {"kind": _ARTIFACT_KIND, "config": self._config().model_dump(mode="json")}
-        payload = json.dumps(sidecar, ensure_ascii=False, indent=2, sort_keys=True)
-        (root / _SIDECAR_NAME).write_text(payload + "\n", encoding="utf-8", newline="\n")
+        write_sorted_json(root / _SIDECAR_NAME, sidecar)
         _logger.info("saved hierarchical classifier (%d levels) to %s", len(self.levels), root)
         return root
 

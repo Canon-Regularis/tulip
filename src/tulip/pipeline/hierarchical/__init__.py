@@ -1,8 +1,8 @@
 """Hierarchical family->dialect backoff classification.
 
-The package keeps its two concerns in separate modules -- the backoff-policy
+The package keeps its two concerns in separate modules: the backoff-policy
 family (:mod:`.policies`) and the classifier that walks levels and projects onto
-families (:mod:`.classifier`) -- while re-exporting the flat public surface the
+families (:mod:`.classifier`), while re-exporting the flat public surface the
 module presented before it was split, so ``tulip.pipeline.hierarchical`` remains
 a single import point.
 """
