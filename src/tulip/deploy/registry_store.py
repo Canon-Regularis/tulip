@@ -3,7 +3,7 @@
 A trained model is a directory artifact (``model.joblib`` + ``metadata.json``,
 see :mod:`tulip.models.persistence`) but nothing above it records *identity*: no
 version, no integrity digest, and no notion of which artifact is the one in
-production. This module adds that thin layer -- and only that layer, reusing the
+production. This module adds that thin layer, and only that layer, reusing the
 persistence format verbatim rather than re-implementing it:
 
 * **Content addressing.** Every artifact is stored under
@@ -11,7 +11,7 @@ persistence format verbatim rather than re-implementing it:
   models deduplicate and bit-rot is caught as a digest mismatch rather than an
   opaque unpickle error.
 * **Versioned entries.** Each ``(name, version)`` is an immutable
-  :class:`RegistryEntry` recording the digest, the model class, and the labels --
+  :class:`RegistryEntry` recording the digest, the model class, and the labels,
   read straight from the persisted sidecar.
 * **Promotion & rollback.** ``promote`` moves a version to ``production`` (the
   previous production is archived); ``rollback`` restores it in one call, using a
@@ -21,7 +21,7 @@ persistence format verbatim rather than re-implementing it:
   moving target and report ``X-Model-Version`` / ``X-Model-Digest``.
 
 The index (``<root>/registry.json``) is written with the shared deterministic
-JSON writer -- sorted keys, no timestamps -- so the same operation sequence
+JSON writer (sorted keys, no timestamps) so the same operation sequence
 reproduces byte-identical bytes, like the leaderboard provenance.
 """
 

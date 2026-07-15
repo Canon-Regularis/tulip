@@ -1,7 +1,7 @@
 """Self-contained demo web page for the serving app.
 
-Everything the browser needs -- CSS, JavaScript, and an inline SVG map of
-Poland -- is embedded in a single HTML string with no external CDN, font, or
+Everything the browser needs (CSS, JavaScript, and an inline SVG map of
+Poland) is embedded in a single HTML string with no external CDN, font, or
 image reference, so the page works behind an air-gap and adds no runtime
 dependency. The two ingredients that carry real logic (the lat/lon -> SVG
 projection and the whole-page builder) are plain pure functions so they can be

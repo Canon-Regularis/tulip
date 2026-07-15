@@ -14,7 +14,7 @@ The intended nesting, outermost first::
     observability -> security-headers -> CORS -> auth -> rate-limit
         -> concurrency -> body-size -> handler
 
-CORS is not reimplemented -- Starlette's :class:`CORSMiddleware` is reused, and
+CORS is not reimplemented: Starlette's :class:`CORSMiddleware` is reused, and
 it sits outside auth so a browser preflight is answered without a token.
 
 **The body-size guard is the load-bearing one.** ``POST /predict/audio`` reads
@@ -29,6 +29,7 @@ worker enforces the limit independently (documented, not a bug).
 
 from __future__ import annotations
 
+import abc
 import hmac
 import json
 import time
@@ -83,17 +84,36 @@ def _header(scope: Scope, name: bytes) -> str | None:
     return None
 
 
-class BodySizeLimitMiddleware:
-    """Reject request bodies larger than ``max_bytes`` before buffering them."""
+class _ScopedMiddleware(abc.ABC):
+    """ASGI middleware base that guards http scopes and passes the rest through.
 
-    def __init__(self, app: Any, *, max_bytes: int) -> None:
+    Every guard acts only on http requests, so this base performs the common
+    non-http passthrough once and dispatches http scopes to :meth:`handle_http`,
+    which each subclass implements with its own guard logic.
+    """
+
+    def __init__(self, app: Any) -> None:
         self.app = app
-        self.max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        await self.handle_http(scope, receive, send)
+
+    @abc.abstractmethod
+    async def handle_http(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Handle one http request, applying this guard before the wrapped app."""
+
+
+class BodySizeLimitMiddleware(_ScopedMiddleware):
+    """Reject request bodies larger than ``max_bytes`` before buffering them."""
+
+    def __init__(self, app: Any, *, max_bytes: int) -> None:
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def handle_http(self, scope: Scope, receive: Receive, send: Send) -> None:
         declared = _header(scope, b"content-length")
         if declared is not None and declared.isdigit() and int(declared) > self.max_bytes:
             await _send_json(send, 413, "request body too large")
@@ -130,16 +150,16 @@ class _BodyTooLargeError(Exception):
     """Internal signal that a streamed body exceeded the limit."""
 
 
-class AuthMiddleware:
+class AuthMiddleware(_ScopedMiddleware):
     """Require a bearer token on every request except the exempt paths."""
 
     def __init__(self, app: Any, *, token: str, exempt_paths: Iterable[str]) -> None:
-        self.app = app
+        super().__init__(app)
         self._expected = f"Bearer {token}"
         self._exempt = frozenset(exempt_paths)
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope.get("path") in self._exempt:
+    async def handle_http(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get("path") in self._exempt:
             await self.app(scope, receive, send)
             return
         provided = _header(scope, b"authorization") or ""
@@ -151,21 +171,18 @@ class AuthMiddleware:
         await self.app(scope, receive, send)
 
 
-class RateLimitMiddleware:
+class RateLimitMiddleware(_ScopedMiddleware):
     """Per-client token-bucket rate limit (``per_minute`` requests, refilled continuously)."""
 
     def __init__(self, app: Any, *, per_minute: int) -> None:
-        self.app = app
+        super().__init__(app)
         self.capacity = float(per_minute)
         self.refill_per_second = per_minute / 60.0
         # client -> (tokens, last_seen_monotonic). No lock needed: the update runs
         # to completion between awaits on the single-threaded event loop.
         self._buckets: dict[str, tuple[float, float]] = {}
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
+    async def handle_http(self, scope: Scope, receive: Receive, send: Send) -> None:
         if not self._take(_client(scope)):
             await _send_json(send, 429, "rate limit exceeded")
             return
@@ -182,18 +199,15 @@ class RateLimitMiddleware:
         return True
 
 
-class ConcurrencyLimitMiddleware:
+class ConcurrencyLimitMiddleware(_ScopedMiddleware):
     """Reject requests once ``max_concurrency`` are already in flight."""
 
     def __init__(self, app: Any, *, max_concurrency: int) -> None:
-        self.app = app
+        super().__init__(app)
         self.max = max_concurrency
         self._in_flight = 0
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
+    async def handle_http(self, scope: Scope, receive: Receive, send: Send) -> None:
         if self._in_flight >= self.max:
             await _send_json(send, 503, "server at capacity")
             return
@@ -204,11 +218,11 @@ class ConcurrencyLimitMiddleware:
             self._in_flight -= 1
 
 
-class SecurityHeadersMiddleware:
+class SecurityHeadersMiddleware(_ScopedMiddleware):
     """Add standard security headers to every response."""
 
     def __init__(self, app: Any, *, hsts: bool) -> None:
-        self.app = app
+        super().__init__(app)
         headers = [
             (b"x-content-type-options", b"nosniff"),
             (b"x-frame-options", b"DENY"),
@@ -226,11 +240,7 @@ class SecurityHeadersMiddleware:
             headers.append((b"strict-transport-security", b"max-age=31536000; includeSubDomains"))
         self._headers = headers
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
+    async def handle_http(self, scope: Scope, receive: Receive, send: Send) -> None:
         async def send_with_headers(message: dict[str, Any]) -> None:
             if message["type"] == "http.response.start":
                 message = dict(message)

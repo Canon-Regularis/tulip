@@ -84,11 +84,6 @@ class MetricsRegistry:
             self._duration_sum_ms[path] = self._duration_sum_ms.get(path, 0.0) + duration_ms
             self._duration_count[path] = self._duration_count.get(path, 0) + 1
 
-    def total_requests(self) -> int:
-        """Return the summed request count across every label combination."""
-        with self._lock:
-            return sum(self._request_counts.values())
-
     def render(self) -> str:
         """Serialise the current tallies as Prometheus text exposition format.
 

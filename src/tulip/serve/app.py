@@ -3,12 +3,12 @@
 ``create_app`` loads a saved :class:`~tulip.pipeline.DialectClassifier` once and
 exposes it over an observable, self-documenting API:
 
-* ``GET /`` -- a self-contained demo web page (see :mod:`tulip.serve._demo`).
-* ``GET /health`` -- liveness plus model identity and abstention config.
-* ``GET /metrics`` -- Prometheus text exposition (see :mod:`tulip.serve._metrics`).
-* ``POST /predict/text`` -- JSON body ``{"text": ..., "top_k": ...}``.
-* ``POST /predict/text/batch`` -- JSON body ``{"texts": [...], "top_k": ...}``.
-* ``POST /predict/audio`` -- multipart file upload (audio-trained models).
+* ``GET /``: a self-contained demo web page (see :mod:`tulip.serve._demo`).
+* ``GET /health``: liveness plus model identity and abstention config.
+* ``GET /metrics``: Prometheus text exposition (see :mod:`tulip.serve._metrics`).
+* ``POST /predict/text``: JSON body ``{"text": ..., "top_k": ...}``.
+* ``POST /predict/text/batch``: JSON body ``{"texts": [...], "top_k": ...}``.
+* ``POST /predict/audio``: multipart file upload (audio-trained models).
 
 Every request flows through one ASGI middleware that assigns a correlation ID,
 times the handler, stamps ``X-Request-ID`` / ``X-Process-Time-Ms`` response
@@ -88,8 +88,8 @@ class BatchTextRequest(BaseModel):
 
     ``texts`` is capped at :data:`_MAX_BATCH` at the schema level (an oversized
     list is a 422). Emptiness and per-item blankness are enforced in the handler
-    so they surface as a 400 -- the same "your content is unusable" semantics as
-    the single-text endpoint -- rather than a schema-shaped 422.
+    so they surface as a 400, the same "your content is unusable" semantics as
+    the single-text endpoint, rather than a schema-shaped 422.
     """
 
     model_config = ConfigDict(
@@ -185,8 +185,8 @@ def create_app(
 
     # FastAPI resolves endpoint annotations (``response: Response``) against this
     # module's globals at route-registration time. ``Response`` cannot be a
-    # top-level import (fastapi is optional), so publish it now -- before any
-    # endpoint below is defined -- rather than annotating with the lazily
+    # top-level import (fastapi is optional), so publish it now, before any
+    # endpoint below is defined, rather than annotating with the lazily
     # imported type, which the NOTE on the audio endpoint forbids.
     globals()["Response"] = fastapi.Response
     # Used only inside the middleware closure (not an endpoint annotation), so a
@@ -222,7 +222,7 @@ def create_app(
         """Stamp model-identity headers so a client sees the model without /health.
 
         HTTP header values are latin-1 only, but dialect class labels are Polish
-        and routinely carry diacritics (``śląsk``, ``kaszëby``) -- a raw
+        and routinely carry diacritics (``śląsk``, ``kaszëby``). A raw
         ``",".join`` would raise ``UnicodeEncodeError`` and 500 *every* response.
         Each label is percent-encoded (RFC 3986), which is ASCII-safe, keeps
         plain ASCII labels readable, and makes the comma an unambiguous separator
@@ -246,7 +246,7 @@ def create_app(
     async def observability(request: Request, call_next: Any) -> Any:
         """Assign a correlation ID, time the handler, record metrics, and log once.
 
-        A handler that raises an *unhandled* exception (a genuine 500 -- handled
+        A handler that raises an *unhandled* exception (a genuine 500; handled
         HTTPExceptions are already turned into responses inside ``call_next``)
         must not slip past observability: it is still timed, counted as a 500,
         logged with its traceback and correlation ID, and answered with a clean
@@ -305,7 +305,7 @@ def create_app(
         description="A self-contained HTML page that classifies text and maps the result.",
     )
     def demo() -> str:
-        return demo_page(title="tulip -- Polish dialect detection")
+        return demo_page(title="tulip: Polish dialect detection")
 
     @app.get(
         "/health",
@@ -342,6 +342,14 @@ def create_app(
     def metrics() -> Response:
         return fastapi.Response(content=registry.render(), media_type=CONTENT_TYPE)
 
+    def _require_text_task() -> None:
+        """Reject a non-text model with the 400 the text endpoints share."""
+        if classifier.task is not TaskType.TEXT:
+            raise fastapi.HTTPException(
+                status_code=400,
+                detail=f"this model classifies {classifier.task.value}, not text",
+            )
+
     @app.post(
         "/predict/text",
         response_model=Prediction,
@@ -351,11 +359,7 @@ def create_app(
         "(text-trained models only).",
     )
     def predict_text(request: TextRequest, response: Response) -> Prediction:
-        if classifier.task is not TaskType.TEXT:
-            raise fastapi.HTTPException(
-                status_code=400,
-                detail=f"this model classifies {classifier.task.value}, not text",
-            )
+        _require_text_task()
         if not request.text.strip():
             raise fastapi.HTTPException(status_code=400, detail="text must not be blank")
         result = _truncated(classifier.predict(request.text), request.top_k)
@@ -371,11 +375,7 @@ def create_app(
         f"{_MAX_BATCH} texts in one call, returning one prediction per input in order.",
     )
     def predict_text_batch(request: BatchTextRequest, response: Response) -> list[Prediction]:
-        if classifier.task is not TaskType.TEXT:
-            raise fastapi.HTTPException(
-                status_code=400,
-                detail=f"this model classifies {classifier.task.value}, not text",
-            )
+        _require_text_task()
         if not request.texts:
             raise fastapi.HTTPException(status_code=400, detail="texts must not be empty")
         if len(request.texts) > settings.max_batch:
@@ -391,7 +391,7 @@ def create_app(
 
     # NOTE: endpoint annotations must resolve from module globals (FastAPI
     # calls get_type_hints under `from __future__ import annotations`), so
-    # only builtins and module-level names appear in the signatures below --
+    # only builtins and module-level names appear in the signatures below,
     # never the lazily imported fastapi types. `Response` satisfies this via
     # the globals() injection at the top of create_app.
     @app.post(
