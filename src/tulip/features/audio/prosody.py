@@ -40,7 +40,7 @@ __all__ = ["FormantExtractor", "PitchExtractor", "lpc_formant_frames"]
 _PITCH_FEATURE_NAMES = ("f0_mean", "f0_std", "f0_min", "f0_max", "f0_range", "voiced_ratio")
 
 
-@AUDIO_FEATURES.register("pitch")
+@AUDIO_FEATURES.register("pitch", metadata={"extra": "audio"})
 class PitchExtractor(TransformerMixin, BaseEstimator):
     """Voiced-frame F0 statistics from librosa's probabilistic YIN tracker.
 
@@ -261,7 +261,7 @@ def _lpc_resonances(frame: np.ndarray, sample_rate: int, order: int) -> np.ndarr
     return np.column_stack([freqs, bandwidths])
 
 
-@AUDIO_FEATURES.register("formants")
+@AUDIO_FEATURES.register("formants", metadata={"extra": "audio"})
 class FormantExtractor(PooledFrameExtractor):
     """Pooled F1..Fn formant-frequency tracks.
 

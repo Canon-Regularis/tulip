@@ -51,7 +51,7 @@ def _librosa() -> ModuleType:
     )
 
 
-@AUDIO_FEATURES.register("mfcc")
+@AUDIO_FEATURES.register("mfcc", metadata={"extra": "audio"})
 class MfccExtractor(PooledFrameExtractor):
     """Pooled MFCCs, optionally augmented with delta and delta-delta tracks.
 
@@ -104,7 +104,7 @@ class MfccExtractor(PooledFrameExtractor):
         return names
 
 
-@AUDIO_FEATURES.register("mel_spectrogram")
+@AUDIO_FEATURES.register("mel_spectrogram", metadata={"extra": "audio"})
 class MelSpectrogramExtractor(PooledFrameExtractor):
     """Pooled log-mel spectrogram (power spectrogram in dB on a mel scale).
 
@@ -154,7 +154,7 @@ class MelSpectrogramExtractor(PooledFrameExtractor):
         return [f"mel_{i}" for i in range(self.n_mels)]
 
 
-@AUDIO_FEATURES.register("energy")
+@AUDIO_FEATURES.register("energy", metadata={"extra": "audio"})
 class RmsEnergyExtractor(PooledFrameExtractor):
     """Pooled frame-wise RMS energy.
 
@@ -188,7 +188,7 @@ class RmsEnergyExtractor(PooledFrameExtractor):
         return ["rms"]
 
 
-@AUDIO_FEATURES.register("zero_crossing_rate")
+@AUDIO_FEATURES.register("zero_crossing_rate", metadata={"extra": "audio"})
 class ZeroCrossingRateExtractor(PooledFrameExtractor):
     """Pooled frame-wise zero-crossing rate (crossings per sample).
 
@@ -222,7 +222,7 @@ class ZeroCrossingRateExtractor(PooledFrameExtractor):
         return ["zcr"]
 
 
-@AUDIO_FEATURES.register("spectral_centroid")
+@AUDIO_FEATURES.register("spectral_centroid", metadata={"extra": "audio"})
 class SpectralCentroidExtractor(PooledFrameExtractor):
     """Pooled spectral centroid (the spectrum's centre of mass, in Hz).
 
@@ -255,7 +255,7 @@ class SpectralCentroidExtractor(PooledFrameExtractor):
         return ["spectral_centroid"]
 
 
-@AUDIO_FEATURES.register("chroma")
+@AUDIO_FEATURES.register("chroma", metadata={"extra": "audio"})
 class ChromaExtractor(PooledFrameExtractor):
     """Pooled chromagram (energy per pitch class).
 

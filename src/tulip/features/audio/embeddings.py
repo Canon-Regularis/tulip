@@ -36,7 +36,7 @@ _MIN_SAMPLES = 640
 __all__ = ["DEFAULT_CHECKPOINT", "Wav2Vec2EmbeddingExtractor"]
 
 
-@AUDIO_FEATURES.register("wav2vec2_embeddings")
+@AUDIO_FEATURES.register("wav2vec2_embeddings", metadata={"extra": "speech"})
 class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
     """Mean-pooled wav2vec2 hidden states, one embedding row per audio file.
 
