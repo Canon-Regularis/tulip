@@ -7,7 +7,7 @@ name = "tulip"
 version = "0.1.0"
 description = "Polish Dialect Typology and Regional Speech Classification Analysis System"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Matthew Miezaniec", email = "matthewmiezaniec1@gmail.com" }]
 keywords = [

@@ -32,12 +32,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # tulip is developed on 3.14, so 3.14 is tested here.
-        #
-        # KNOWN GAP: pyproject declares `requires-python = ">=3.10"`, but 3.10 is
-        # not in this matrix -- the declared floor is untested. Do not paper over
-        # it by silently raising requires-python; either add "3.10" below or
-        # raise the floor deliberately, as a decision.
+        # tulip is developed on 3.14, so 3.14 is tested here. The floor is 3.11,
+        # matching `requires-python` in pyproject: the code imports tomllib, a
+        # standard-library module only from 3.11, so 3.10 cannot run it. The
+        # floor was raised to 3.11 deliberately (not by papering over an untested
+        # 3.10), and 3.11 is the lowest matrix entry, so the declared floor is
+        # exercised on every run.
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
