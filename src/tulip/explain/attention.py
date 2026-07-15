@@ -136,7 +136,7 @@ def _merge_by_markers(
     return merged
 
 
-@EXPLAINERS.register("attention")
+@EXPLAINERS.register("attention", metadata={"extra": "transformers"})
 class AttentionExplainer:
     """Per-word attention mass from the classification anchor token.
 

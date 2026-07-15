@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 __all__ = ["ShapExplainer"]
 
 
-@EXPLAINERS.register("shap")
+@EXPLAINERS.register("shap", metadata={"extra": "explain"})
 class ShapExplainer:
     """SHAP token attributions towards the predicted class.
 

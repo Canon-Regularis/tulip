@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 __all__ = ["LimeExplainer"]
 
 
-@EXPLAINERS.register("lime")
+@EXPLAINERS.register("lime", metadata={"extra": "explain"})
 class LimeExplainer:
     """Local surrogate (LIME) word attributions for the predicted class.
 
