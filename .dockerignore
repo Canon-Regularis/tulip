@@ -1,0 +1,22 @@
+# Keep the build context small and clean: only the packaging metadata, source,
+# and the benchmark configs/board are needed to reproduce the leaderboard.
+.git
+.github
+.venv
+**/__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+coverage.xml
+site
+docs
+tests
+# The gitignored build tree (splits, trained models); the image rebuilds it.
+artifacts
+# The excluded raw dump is regenerated; the committed md/provenance stay.
+benchmarks/results/**/leaderboard.json
