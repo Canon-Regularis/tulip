@@ -50,6 +50,12 @@ from tulip.evaluation.error_analysis import (
     slice_metrics,
     top_confused_pairs,
 )
+from tulip.evaluation.fairness import (
+    DisparityMetric,
+    FairnessReport,
+    fairness_report,
+    worst_group_gap,
+)
 from tulip.evaluation.hierarchical_metrics import HierarchicalReport, hierarchical_metrics
 from tulip.evaluation.leaderboard import (
     LeaderboardSuite,
@@ -93,9 +99,11 @@ __all__ = [
     "ClassMetrics",
     "ConfusedPair",
     "CrossCorpusReport",
+    "DisparityMetric",
     "ErrorReport",
     "EvaluationReport",
     "Exemplar",
+    "FairnessReport",
     "HierarchicalReport",
     "LeaderboardSuite",
     "LocoResult",
@@ -119,6 +127,7 @@ __all__ = [
     "dataset_card_from_splits",
     "decompose_uncertainty",
     "error_report",
+    "fairness_report",
     "hierarchical_metrics",
     "load_benchmark",
     "load_suite",
@@ -142,6 +151,7 @@ __all__ = [
     "top_confused_pairs",
     "transfer_matrix",
     "uncertainty_report",
+    "worst_group_gap",
     "write_leaderboard",
     "write_significance",
 ]
