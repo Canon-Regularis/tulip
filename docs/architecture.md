@@ -59,6 +59,7 @@ src/tulip/
     neural_text.py # HerBERT, Polish RoBERTa, mBERT, XLM-R fine-tuning
     neural_audio.py# wav2vec2, HuBERT, Whisper-encoder, ECAPA-TDNN, x-vectors
     fasttext_model.py
+    llm_baseline.py# constrained-choice Claude baseline (cached, offline-reproducible)
     persistence.py # save/load trained pipelines with metadata
   evaluation/    # metrics, EvaluationReport, confusion, calibration, leaderboard,
                  # significance/selective/error-analysis, dataset/model cards
@@ -105,8 +106,8 @@ docs, and tests refer to them.
 - `tulip.models.MODELS`:
   `naive_bayes`, `logistic_regression`, `linear_svm`, `random_forest`,
   `xgboost`, `lightgbm`, `voting`, `stacking`, `herbert`, `polish_roberta`,
-  `mbert`, `xlm_roberta`, `fasttext`, `wav2vec2`, `hubert`, `whisper`,
-  `ecapa_tdnn`, `xvector`.
+  `mbert`, `xlm_roberta`, `fasttext`, `llm_zeroshot`, `llm_fewshot`, `wav2vec2`,
+  `hubert`, `whisper`, `ecapa_tdnn`, `xvector`.
 - `tulip.explain.EXPLAINERS`:
   `top_tfidf`, `lime`, `shap`, `attention`, `nearest_examples`,
   `dialect_evidence`.
@@ -193,6 +194,16 @@ LPC-based estimate (scipy) when parselmouth is unavailable. A shared
   `facebook/wav2vec2-xls-r-300m`, hubert, whisper encoder. `ecapa_tdnn` /
   `xvector` via speechbrain embeddings + a light classification head. Accept
   audio paths in `fit(X, y)`.
+- `llm_baseline.py`: `LLMClassifier`, a constrained-choice Claude baseline
+  registered `llm_zeroshot` and `llm_fewshot` (raw-input, `extra=anthropic`).
+  `fit` records the labels and, for few-shot, a seeded set of per-class
+  examples; `predict` asks the model for exactly one label id per text.
+  Determinism is the hard problem here: an API call is network-bound and current
+  models take no temperature, so reproducibility comes from a content-addressed
+  `LLMResponseCache` keyed by a digest of the model id, system prompt, and
+  messages. A populated cache replays every response byte-identically and
+  offline; a cache miss is non-deterministic, so the baseline is kept out of the
+  committed suite and never feeds `leaderboard.md`. `anthropic` imports lazily.
 - `persistence.py`: `save_model(pipeline, path, metadata)` /
   `load_model(path)` using joblib, storing a JSON sidecar (tulip version,
   config, classes, metrics).
