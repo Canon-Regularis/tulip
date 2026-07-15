@@ -11,8 +11,8 @@ decay, linear warmup + linear decay schedule, ``CrossEntropyLoss`` with
 optional balanced class weights) rather than the Hugging Face ``Trainer``.
 This keeps the dependency surface small (no ``accelerate`` requirement at
 runtime), makes seeding and class weighting fully explicit, and keeps the
-training loop short enough to audit. The loop itself — and every other piece
-of machinery shared with the speech and fastText wrappers — lives in
+training loop short enough to audit. The loop itself, and every other piece
+of machinery shared with the speech and fastText wrappers, lives in
 :mod:`tulip.models._common`.
 
 All heavy dependencies (torch, transformers) are imported lazily inside
@@ -29,10 +29,11 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from tulip.core.exceptions import ConfigurationError
 from tulip.models._common import (
     ArgmaxPredictMixin,
-    balanced_class_weights,
     batched_softmax_probabilities,
     checkpoint_factory,
+    label_id_maps,
     require_fitted,
+    resolve_class_weights,
     resolve_device,
     train_torch_classifier,
     validate_common_training_params,
@@ -164,13 +165,13 @@ class TransformerTextClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
         # the new classification head from the ambient RNG, so seeding only
         # inside the training loop would leave fit() non-reproducible.
         torch.manual_seed(self.seed)
-        id2label = {index: str(label) for index, label in enumerate(classes)}
+        id2label, label2id = label_id_maps(classes)
         tokenizer = transformers.AutoTokenizer.from_pretrained(self.checkpoint)
         model = transformers.AutoModelForSequenceClassification.from_pretrained(
             self.checkpoint,
             num_labels=len(classes),
             id2label=id2label,
-            label2id={label: index for index, label in id2label.items()},
+            label2id=label2id,
         )
         logger.info(
             "fine-tuning %s on %d texts / %d classes (device=%s)",
@@ -188,9 +189,7 @@ class TransformerTextClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
             targets = torch.as_tensor(encoded[indices], dtype=torch.long, device=device)
             return inputs, targets
 
-        class_weights = None
-        if self.class_weight == "balanced":
-            class_weights = balanced_class_weights(encoded, len(classes))
+        class_weights = resolve_class_weights(self, encoded, len(classes))
         train_torch_classifier(
             torch,
             model,
@@ -258,7 +257,7 @@ def _register_factories() -> None:
             # knobs (batch_size/epochs/learning_rate), so the experiment runner
             # may merge them into the model params.
             # raw_input: tokenises raw texts itself, so it needs no feature
-            # extractors -- DialectClassifier checks this before fitting.
+            # extractors; DialectClassifier checks this before fitting.
             # extra: torch + transformers, installed by the `transformers` extra.
             metadata={"training_aware": True, "raw_input": True, "extra": "transformers"},
         )

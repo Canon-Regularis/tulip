@@ -9,8 +9,8 @@ an object satisfying :class:`tulip.core.interfaces.Classifier`
 
 All factories accept ``random_state`` (or its alias ``seed``); estimators
 without a stochastic component ignore it. scikit-learn estimators are imported
-inside the factories so that importing this module — and therefore registering
-the models — stays cheap; the gradient-boosting factories additionally guard
+inside the factories so that importing this module, and therefore registering
+the models, stays cheap; the gradient-boosting factories additionally guard
 their optional dependencies via :func:`tulip.utils.optional.optional_import`.
 """
 
@@ -142,7 +142,7 @@ def naive_bayes(**params: Any) -> Any:
     """Multinomial naive Bayes baseline (default ``alpha=0.1``).
 
     Works well on TF-IDF term matrices. Caveat: :class:`MultinomialNB`
-    requires non-negative features — it is suitable for counts and TF-IDF but
+    requires non-negative features: it is suitable for counts and TF-IDF but
     not for standardised/dense feature sets containing negative values (e.g.
     z-scored stylometry or neural embeddings).
 

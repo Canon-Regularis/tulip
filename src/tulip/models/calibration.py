@@ -2,9 +2,9 @@
 
 Raw neural and boosted class probabilities are systematically miscalibrated: a
 model that reports ``0.9`` is usually right far less than 90% of the time. Any
-decision rule phrased in probability terms -- above all
+decision rule phrased in probability terms, above all
 :attr:`~tulip.pipeline.classifier.DialectClassifier.abstain_threshold`, which is
-meant to abstain "below 0.9" -- is meaningless until the probabilities are
+meant to abstain "below 0.9", is meaningless until the probabilities are
 mapped onto the scale they claim to live on. These calibrators perform that map.
 
 Design
@@ -13,12 +13,12 @@ Every calibrator implements the narrow :class:`ProbabilityCalibrator` protocol
 (ISP: two methods, nothing more) and is interchangeable behind it (DIP:
 consumers depend on the protocol, never on a concrete class, so adding a new
 calibrator never edits the code that uses one). :class:`IdentityCalibrator` is
-the Null Object -- a consumer configured with "no calibration" still holds a
+the Null Object: a consumer configured with "no calibration" still holds a
 real calibrator and never writes ``if calibrator is None``.
 
 The shared contract, checked against *every* implementation in
 ``tests/test_pipeline_calibrated.py`` (this is the Liskov substitution principle
-made concrete -- no implementation may weaken it):
+made concrete, no implementation may weaken it):
 
 * the output has the same shape as the input;
 * every output row is a probability distribution (sums to 1, no ``NaN``/``inf``);
@@ -187,7 +187,7 @@ class TemperatureScaling(_FittableCalibrator):
     logits. That is exact, not an approximation. With true logits ``z``,
     ``log(softmax(z)) = z - c`` for the per-row constant ``c = logsumexp(z)``,
     and softmax is invariant to a per-row additive constant, so
-    ``softmax(log(p) / T) = softmax((z - c) / T) = softmax(z / T)`` -- textbook
+    ``softmax(log(p) / T) = softmax((z - c) / T) = softmax(z / T)``: textbook
     temperature scaling. ``p`` is clipped away from 0 before the logarithm.
 
     ``T`` is fitted by minimising the negative log-likelihood of the true
@@ -229,7 +229,7 @@ class IsotonicCalibrator(_FittableCalibrator):
     :class:`~sklearn.isotonic.IsotonicRegression` (``out_of_bounds="clip"``) per
     class, mapping that class's raw probability onto its empirical frequency,
     then renormalises each row back into a distribution. More flexible than
-    temperature scaling -- it can correct non-uniform miscalibration -- at the
+    temperature scaling: it can correct non-uniform miscalibration, at the
     cost of needing more data and being able to reorder classes. A row whose
     per-class outputs all fall to 0 is replaced by the uniform distribution, so
     the output never contains ``NaN``.

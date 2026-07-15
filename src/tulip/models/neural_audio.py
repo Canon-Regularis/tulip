@@ -16,13 +16,13 @@ Both wrappers follow scikit-learn conventions (``fit(paths, y)`` /
 ``predict`` / ``predict_proba`` / ``classes_``) over sequences of audio file
 paths. Decoding goes through the canonical shared loader
 (:func:`tulip.features.audio.loading.load_audio`), so speech models and audio
-feature extractors treat files identically — mono float32 at the configured
+feature extractors treat files identically: mono float32 at the configured
 sample rate. (An earlier local decode path here drifted from the shared one
 and silently ignored ``sample_rate``; a single decoder prevents that class of
 bug.)
 
 Fine-tuning reuses the plain torch loop from :mod:`tulip.models.neural_text`
-(AdamW + linear warmup, optional balanced class weights) — see that module
+(AdamW + linear warmup, optional balanced class weights). See that module
 for why tulip avoids the Hugging Face ``Trainer``. All heavy dependencies
 (torch, transformers, speechbrain, soundfile) are imported lazily inside
 methods via :func:`tulip.utils.optional.optional_import`; importing this
@@ -42,12 +42,15 @@ from tulip.core.exceptions import ConfigurationError, DataError, TulipError
 from tulip.features.audio.loading import DEFAULT_SAMPLE_RATE, load_audio
 from tulip.models._common import (
     ArgmaxPredictMixin,
-    balanced_class_weights,
     batched_softmax_probabilities,
     checkpoint_factory,
+    empty_proba,
+    label_id_maps,
     require_fitted,
+    resolve_class_weights,
     resolve_device,
     train_torch_classifier,
+    validate_class_weight,
     validate_common_training_params,
     validate_fit_inputs,
 )
@@ -142,7 +145,7 @@ class FinetunedSpeechClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
     ``predict_proba`` (softmax over logits, batched, under ``no_grad``), and a
     ``classes_`` attribute after fitting. Waveforms are decoded per batch
     (never all at once), keeping memory bounded on large corpora at the cost
-    of re-decoding each epoch — decoding is cheap next to a transformer
+    of re-decoding each epoch; decoding is cheap next to a transformer
     forward/backward pass.
 
     Whisper checkpoints are detected from their feature extractor and loaded
@@ -267,7 +270,7 @@ class FinetunedSpeechClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
         # inside the training loop would leave fit() non-reproducible.
         torch.manual_seed(self.seed)
         feature_extractor = transformers.AutoFeatureExtractor.from_pretrained(self.checkpoint)
-        id2label = {index: str(label) for index, label in enumerate(classes)}
+        id2label, label2id = label_id_maps(classes)
         model_cls = (
             transformers.WhisperForAudioClassification
             if is_whisper_extractor(feature_extractor)
@@ -277,7 +280,7 @@ class FinetunedSpeechClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
             self.checkpoint,
             num_labels=len(classes),
             id2label=id2label,
-            label2id={label: index for index, label in id2label.items()},
+            label2id=label2id,
         )
         if self.freeze_feature_encoder and hasattr(model, "freeze_feature_encoder"):
             model.freeze_feature_encoder()
@@ -299,9 +302,7 @@ class FinetunedSpeechClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
             targets = torch.as_tensor(encoded[indices], dtype=torch.long, device=device)
             return inputs, targets
 
-        class_weights = None
-        if self.class_weight == "balanced":
-            class_weights = balanced_class_weights(encoded, len(classes))
+        class_weights = resolve_class_weights(self, encoded, len(classes))
         train_torch_classifier(
             torch,
             model,
@@ -436,10 +437,7 @@ class EmbeddingSpeechClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
             raise ConfigurationError(f"head_c must be > 0, got {self.head_c}")
         if self.head_max_iter < 1:
             raise ConfigurationError(f"head_max_iter must be >= 1, got {self.head_max_iter}")
-        if self.class_weight not in (None, "balanced"):
-            raise ConfigurationError(
-                f'class_weight must be None or "balanced", got {self.class_weight!r}'
-            )
+        validate_class_weight(self)
 
     def _load_encoder(self, torch: Any) -> tuple[Any, str]:
         """Download/load the pretrained speechbrain encoder onto the device."""
@@ -550,7 +548,7 @@ class EmbeddingSpeechClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
         torch = optional_import("torch", extra="speech", purpose="speaker embedding inference")
         paths = [Path(path) for path in X]
         if not paths:
-            return np.zeros((0, len(self.classes_)), dtype=np.float64)
+            return empty_proba(len(self.classes_))
         embeddings = self._embed(torch, self.embedder_, paths, self.device_)
         return np.asarray(self.head_.predict_proba(embeddings), dtype=np.float64)
 

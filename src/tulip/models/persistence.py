@@ -3,13 +3,13 @@
 A trained model (or full sklearn ``Pipeline``) is saved as a directory
 artifact with two files:
 
-* ``model.joblib`` — the estimator, serialised with joblib.
-* ``metadata.json`` — a deterministic JSON sidecar recording the environment
+* ``model.joblib``: the estimator, serialised with joblib.
+* ``metadata.json``: a deterministic JSON sidecar recording the environment
   (tulip and Python versions), the model class, the fitted class labels when
   available, and arbitrary user metadata (resolved config, metrics, ...).
 
-The sidecar is deterministic by construction — keys are sorted and no
-timestamps are written — so saving the same model twice produces
+The sidecar is deterministic by construction: keys are sorted and no
+timestamps are written, so saving the same model twice produces
 byte-identical metadata, keeping artifacts diff-friendly and content-hashable
 for experiment tracking.
 """
@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 import joblib
 
-from tulip._serialize import sorted_json_text
+from tulip._serialize import sorted_json_text, tulip_version
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.utils.logging import get_logger
 
@@ -46,13 +46,6 @@ __all__ = [
     "load_model",
     "save_model",
 ]
-
-
-def _tulip_version() -> str:
-    """Return the installed tulip version (dev fallback handled by the package)."""
-    import tulip
-
-    return getattr(tulip, "__version__", "unknown")
 
 
 def _json_default(value: Any) -> Any:
@@ -114,7 +107,7 @@ def save_model(model: Any, path: Path | str, metadata: Mapping[str, Any] | None 
     sidecar: dict[str, Any] = {
         "format_version": FORMAT_VERSION,
         "model_class": f"{type(model).__module__}.{type(model).__qualname__}",
-        "tulip_version": _tulip_version(),
+        "tulip_version": tulip_version(),
         "python_version": platform.python_version(),
         "classes": _classes_of(model),
         "metadata": dict(metadata or {}),

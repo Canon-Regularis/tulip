@@ -2,9 +2,9 @@
 
 Registers two factories in :data:`tulip.models.MODELS`:
 
-* ``voting`` — a soft- (or hard-) voting ensemble that averages the base models'
+* ``voting``: a soft- (or hard-) voting ensemble that averages the base models'
   probabilities.
-* ``stacking`` — out-of-fold stacking, where the base models' cross-validated
+* ``stacking``: out-of-fold stacking, where the base models' cross-validated
   probabilities train a meta-learner.
 
 Both combine several registered models that share one feature matrix into a

@@ -29,6 +29,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.models._common import (
     ArgmaxPredictMixin,
+    empty_proba,
     reconcile_seed_param,
     require_fitted,
     validate_fit_inputs,
@@ -297,7 +298,7 @@ class FastTextClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
         require_fitted(self, "model_")
         texts = [sanitise_fasttext_text(text) for text in X]
         if not texts:
-            return np.zeros((0, len(self.classes_)), dtype=np.float64)
+            return empty_proba(len(self.classes_))
         rows: list[np.ndarray] = []
         for text in texts:
             labels, probabilities = self.model_.predict(text, k=-1, threshold=0.0)
@@ -345,8 +346,8 @@ def make_fasttext(**params: Any) -> FastTextClassifier:
     """Create a :class:`FastTextClassifier`.
 
     Accepts the toolkit-standard spellings as aliases for fastText's native
-    ones — ``epochs`` -> ``epoch``, ``learning_rate`` -> ``lr``, and
-    ``random_state`` -> ``seed`` — so a config can swap ``model.name``
+    ones: ``epochs`` -> ``epoch``, ``learning_rate`` -> ``lr``, and
+    ``random_state`` -> ``seed``, so a config can swap ``model.name``
     between fasttext and any other trainable model without renaming params.
 
     Raises:

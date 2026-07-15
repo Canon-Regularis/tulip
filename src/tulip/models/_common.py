@@ -6,7 +6,7 @@ hyperparameter checks, seed-spelling reconciliation, checkpoint-bound registry
 factories, the argmax ``predict`` mixin, and the two torch loops (training
 and batched softmax inference).
 
-The module is import-cheap: torch is never imported here — the torch loops
+The module is import-cheap: torch is never imported here; the torch loops
 receive the already-imported module from their callers, which keeps every
 heavy dependency lazy and this module fully importable (and its pure-Python
 helpers fully testable) without any optional extra installed.
@@ -32,13 +32,17 @@ __all__ = [
     "balanced_class_weights",
     "batched_softmax_probabilities",
     "checkpoint_factory",
+    "empty_proba",
     "encode_labels",
+    "label_id_maps",
     "linear_warmup_factor",
     "optimizer_param_groups",
     "reconcile_seed_param",
     "require_fitted",
+    "resolve_class_weights",
     "resolve_device",
     "train_torch_classifier",
+    "validate_class_weight",
     "validate_common_training_params",
     "validate_fit_inputs",
 ]
@@ -107,6 +111,45 @@ def balanced_class_weights(encoded: np.ndarray, n_classes: int) -> np.ndarray:
     return len(encoded) / (n_classes * counts.astype(np.float64))
 
 
+def label_id_maps(classes: Sequence[Any] | np.ndarray) -> tuple[dict[int, str], dict[str, int]]:
+    """Build the ``id2label`` / ``label2id`` maps a Hugging Face head expects.
+
+    Both fine-tuning wrappers pass these to ``from_pretrained`` so the fitted
+    model carries human-readable labels. The label keys use the same
+    ``str(label)`` coercion as :func:`encode_labels`, so the maps stay aligned
+    with the ``classes`` array.
+
+    Args:
+        classes: The sorted class array from :func:`encode_labels`.
+
+    Returns:
+        ``(id2label, label2id)``: mutually inverse dicts over the class ids.
+    """
+    id2label = {index: str(label) for index, label in enumerate(classes)}
+    label2id = {label: index for index, label in id2label.items()}
+    return id2label, label2id
+
+
+def resolve_class_weights(estimator: Any, encoded: np.ndarray, n_classes: int) -> np.ndarray | None:
+    """Return balanced loss weights when the estimator asks for them, else ``None``.
+
+    Centralises the ``class_weight == "balanced"`` branch every torch wrapper
+    runs before training, so the loss-weighting policy lives in one place.
+
+    Args:
+        estimator: The wrapper whose ``class_weight`` selects the policy.
+        encoded: Integer label ids in ``[0, n_classes)``.
+        n_classes: Total number of classes.
+
+    Returns:
+        Per-class weights from :func:`balanced_class_weights`, or ``None`` when
+        ``class_weight`` is not ``"balanced"``.
+    """
+    if estimator.class_weight == "balanced":
+        return balanced_class_weights(encoded, n_classes)
+    return None
+
+
 # ----------------------------------------------------------------- estimators
 
 
@@ -125,6 +168,22 @@ def require_fitted(estimator: Any, *attributes: str) -> None:
             raise TulipError(
                 f"{type(estimator).__name__} is not fitted yet; call fit(X, y) before predicting"
             )
+
+
+def validate_class_weight(estimator: Any) -> None:
+    """Validate the shared ``class_weight`` knob (``None`` or ``"balanced"``).
+
+    Split out so wrappers that do not share the full training-param set (the
+    embedding speech head) can run the identical check on their own.
+
+    Raises:
+        ConfigurationError: if ``class_weight`` is neither ``None`` nor
+            ``"balanced"``.
+    """
+    if estimator.class_weight not in (None, "balanced"):
+        raise ConfigurationError(
+            f'class_weight must be None or "balanced", got {estimator.class_weight!r}'
+        )
 
 
 def validate_common_training_params(estimator: Any) -> None:
@@ -149,10 +208,7 @@ def validate_common_training_params(estimator: Any) -> None:
         raise ConfigurationError(
             f"gradient_accumulation_steps must be >= 1, got {estimator.gradient_accumulation_steps}"
         )
-    if estimator.class_weight not in (None, "balanced"):
-        raise ConfigurationError(
-            f'class_weight must be None or "balanced", got {estimator.class_weight!r}'
-        )
+    validate_class_weight(estimator)
 
 
 def reconcile_seed_param(params: dict[str, Any]) -> None:
@@ -375,6 +431,22 @@ def train_torch_classifier(
     model.eval()
 
 
+def empty_proba(n_classes: int) -> np.ndarray:
+    """Return the empty ``(0, n_classes)`` probability matrix for empty input.
+
+    Every ``predict_proba`` short-circuits on an empty batch to this shape, so
+    callers still get a well-formed two-dimensional array with the right column
+    count to stack or index.
+
+    Args:
+        n_classes: Number of probability columns.
+
+    Returns:
+        A ``float64`` array of shape ``(0, n_classes)``.
+    """
+    return np.zeros((0, n_classes), dtype=np.float64)
+
+
 def batched_softmax_probabilities(
     torch: Any,
     model: Any,
@@ -406,7 +478,7 @@ def batched_softmax_probabilities(
     """
     items = list(inputs)
     if not items:
-        return np.zeros((0, n_classes), dtype=np.float64)
+        return empty_proba(n_classes)
     model.eval()
     rows: list[np.ndarray] = []
     with torch.no_grad():
