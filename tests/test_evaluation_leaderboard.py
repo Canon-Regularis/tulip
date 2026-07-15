@@ -176,8 +176,45 @@ def test_provenance_has_sorted_keys_and_no_timestamp(
     assert config_entry["seed"] == 7
     assert config_entry["sizes"] is None  # no build manifest on disk
     assert config_entry["class_distribution"] is None
+    assert config_entry["dataset_digest"] is None  # no split lock on disk
     # Every result is tagged with its experiment for disambiguation.
     assert {row["experiment"] for row in provenance["results"]} == {"synthetic-char-baseline"}
+
+
+def test_provenance_surfaces_the_dataset_digest_when_a_split_lock_exists(
+    results: list[BenchmarkResult], tmp_path: Path
+) -> None:
+    suite = _suite_with_config(tmp_path)
+    # The split lock lives beside the (absent) build manifest, under the config's
+    # output_dir/<name>/splits; write one so provenance can surface its digest.
+    splits_dir = tmp_path / "artifacts" / "test-track" / "splits"
+    splits_dir.mkdir(parents=True)
+    (splits_dir / "split_lock.json").write_text(
+        json.dumps({"combined": "blake2b-abc123", "digests": {}, "sizes": {}}),
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "out"
+    write_leaderboard(results, out_dir, suite=suite)
+
+    provenance = json.loads((out_dir / PROVENANCE_JSON).read_text(encoding="utf-8"))
+    (config_entry,) = provenance["configs"]
+    assert config_entry["dataset_digest"] == "blake2b-abc123"
+
+
+def test_a_malformed_split_lock_degrades_the_dataset_digest_to_null(
+    results: list[BenchmarkResult], tmp_path: Path
+) -> None:
+    suite = _suite_with_config(tmp_path)
+    splits_dir = tmp_path / "artifacts" / "test-track" / "splits"
+    splits_dir.mkdir(parents=True)
+    (splits_dir / "split_lock.json").write_text("{ not valid json", encoding="utf-8")
+    out_dir = tmp_path / "out"
+
+    # A corrupt lock must not abort the run after training; it degrades to null.
+    write_leaderboard(results, out_dir, suite=suite)
+    provenance = json.loads((out_dir / PROVENANCE_JSON).read_text(encoding="utf-8"))
+    (config_entry,) = provenance["configs"]
+    assert config_entry["dataset_digest"] is None
 
 
 def test_provenance_is_byte_identical_across_runs(
