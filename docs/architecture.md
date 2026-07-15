@@ -271,7 +271,9 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
 (standalone; the command group the contract lists), `benchmark`, `leaderboard`
 (also emits significance), `analyze` (selective + error report from a saved
-`predictions_<split>.json`), `crossval`, `transfer`, `conformal`, `openset`
+`predictions_<split>.json`; `--hierarchical` adds family/dialect partial credit,
+`--power` the minimum detectable effect), `crossval`, `transfer`, `conformal`,
+`openset`
 (flag inputs unlike any known dialect), `robustness`
 (score a model as its inputs are perturbed), `repro verify`
 (regenerate a suite and fail on drift from the committed board), `registry`
@@ -387,6 +389,15 @@ satisfies the protocol via a `predict_samples` adapter.
   member-probability array. It is a pure function; `member_probabilities`
   extracts the array from a fitted voting or stacking ensemble, whose members
   already share the class order. Reachable as `predict --uncertainty`.
+- `hierarchical_metrics.py`: `hierarchical_metrics` credits partial
+  family-to-dialect correctness using `family_for`. A wrong dialect in the right
+  family earns `PARTIAL_CREDIT_WEIGHT`; it also reports family accuracy and the
+  hierarchical F1 (micro-F1 over each label augmented with its family). Labels
+  outside the taxonomy score credit only on an exact match. Reachable as
+  `analyze --hierarchical`.
+- `power.py`: `minimum_detectable_effect` inverts the exact McNemar test over
+  discordant pairs (via `math.comb`, no SciPy) to report the smallest paired
+  accuracy gap detectable at a sample size. Reachable as `analyze --power`.
 
 ### tulip.serve (FastAPI)
 

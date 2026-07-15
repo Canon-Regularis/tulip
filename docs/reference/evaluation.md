@@ -125,3 +125,23 @@ fitted voting or stacking ensemble.
 ::: tulip.evaluation.uncertainty_report
 
 ::: tulip.evaluation.UncertaintyReport
+
+## Hierarchical metrics
+
+Credit partial family-to-dialect correctness. A wrong dialect in the right
+family scores partial credit, which a flat accuracy cannot see. Exact, family,
+partial-credit accuracy, and the hierarchical F1.
+
+::: tulip.evaluation.hierarchical_metrics
+
+::: tulip.evaluation.HierarchicalReport
+
+## Statistical power
+
+The smallest paired accuracy gap detectable at a given sample size. Inverts the
+exact McNemar test, so on small corpora a reader knows which deltas are below
+the noise floor.
+
+::: tulip.evaluation.minimum_detectable_effect
+
+::: tulip.evaluation.PowerReport
