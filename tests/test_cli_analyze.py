@@ -60,3 +60,15 @@ def test_analyze_hierarchical_and_power_json(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert "hierarchical" in payload
     assert "power" in payload
+
+
+def test_analyze_fairness(tmp_path: Path) -> None:
+    path = tmp_path / "predictions_test.json"
+    _save_predictions(path)
+    result = runner.invoke(app, ["analyze", str(path), "--fairness"])
+    assert result.exit_code == 0, result.output
+    assert "Fairness" in result.output
+
+    result_json = runner.invoke(app, ["analyze", str(path), "--fairness", "--json"])
+    assert result_json.exit_code == 0, result_json.output
+    assert "fairness" in json.loads(result_json.output)
