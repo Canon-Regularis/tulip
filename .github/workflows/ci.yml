@@ -136,6 +136,20 @@ jobs:
       - run: pip install -e ".[docs]"
       - run: mkdocs build --strict
 
+  metadata:
+    # A published benchmark must cite a consistent version. This fails when
+    # CITATION.cff or .zenodo.json drifts from the pyproject version, so a
+    # release cannot ship a citation that names the wrong version.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e "."
+      - run: tulip cite --check
+
   build:
     # Catches packaging regressions that an editable install hides -- a missing
     # py.typed marker, or the dialect-marker lexicon not shipped as package data.
