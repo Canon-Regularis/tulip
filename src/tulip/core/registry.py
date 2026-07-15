@@ -3,7 +3,7 @@
 Registries are how tulip stays modular: datasets, feature extractors, models,
 and explainers are all registered under canonical string names, and experiment
 configs refer to components purely by name. Adding a new model or feature is a
-matter of writing one module and registering it -- no core code changes.
+matter of writing one module and registering it; no core code changes.
 """
 
 from __future__ import annotations

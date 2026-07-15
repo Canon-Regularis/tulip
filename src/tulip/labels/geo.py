@@ -1,7 +1,7 @@
 """Approximate geography for Polish dialect regions and voivodeships.
 
 Coordinates are representative centroids (WGS84 lat/lon) intended for map
-visualisation -- highlighting a predicted region, drawing confidence heatmaps,
+visualisation: highlighting a predicted region, drawing confidence heatmaps,
 and placing markers. They are deliberately approximate; dialect boundaries are
 gradients, not lines.
 """

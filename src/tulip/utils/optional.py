@@ -1,8 +1,8 @@
 """Controlled access to optional heavy dependencies.
 
 tulip keeps its core installation light; torch, librosa, shap, folium, etc.
-are optional extras. Modules must import such dependencies lazily -- inside
-functions or methods -- through :func:`optional_import`, which converts an
+are optional extras. Modules must import such dependencies lazily, inside
+functions or methods, through :func:`optional_import`, which converts an
 ``ImportError`` into an actionable :class:`MissingDependencyError` naming the
 pip extra to install.
 """
