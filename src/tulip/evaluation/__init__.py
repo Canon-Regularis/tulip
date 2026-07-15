@@ -50,6 +50,7 @@ from tulip.evaluation.error_analysis import (
     slice_metrics,
     top_confused_pairs,
 )
+from tulip.evaluation.hierarchical_metrics import HierarchicalReport, hierarchical_metrics
 from tulip.evaluation.leaderboard import (
     LeaderboardSuite,
     load_suite,
@@ -59,6 +60,7 @@ from tulip.evaluation.leaderboard import (
     write_significance,
 )
 from tulip.evaluation.metrics import compute_metrics
+from tulip.evaluation.power import PowerReport, minimum_detectable_effect
 from tulip.evaluation.predictions import PredictionRecord, SplitPredictions
 from tulip.evaluation.report import ClassMetrics, EvaluationReport
 from tulip.evaluation.selective import (
@@ -94,11 +96,13 @@ __all__ = [
     "ErrorReport",
     "EvaluationReport",
     "Exemplar",
+    "HierarchicalReport",
     "LeaderboardSuite",
     "LocoResult",
     "MetricCI",
     "ModelSignificance",
     "PairwiseTest",
+    "PowerReport",
     "PredictionRecord",
     "SelectivePoint",
     "SelectiveReport",
@@ -115,10 +119,12 @@ __all__ = [
     "dataset_card_from_splits",
     "decompose_uncertainty",
     "error_report",
+    "hierarchical_metrics",
     "load_benchmark",
     "load_suite",
     "mcnemar_exact",
     "member_probabilities",
+    "minimum_detectable_effect",
     "model_card",
     "paired_significance",
     "partition_by_source",
