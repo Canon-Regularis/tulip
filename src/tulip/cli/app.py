@@ -445,6 +445,9 @@ def analyze(
     power: bool = typer.Option(
         False, "--power", help="Also report the minimum detectable effect at this sample size."
     ),
+    fairness: bool = typer.Option(
+        False, "--fairness", help="Also report subgroup disparity across slices."
+    ),
 ) -> None:
     """Analyse a saved per-sample predictions dump: selective prediction + errors.
 
@@ -452,9 +455,11 @@ def analyze(
     operator's diagnosis: a risk-coverage curve (accuracy at each coverage, AURC)
     and an error report (most-confused pairs, hardest mistakes, and per-slice
     fairness metrics). ``--hierarchical`` adds partial credit for a family-correct
-    dialect miss; ``--power`` reports the smallest detectable accuracy gap.
+    dialect miss; ``--power`` reports the smallest detectable accuracy gap;
+    ``--fairness`` reports the worst-versus-best subgroup gap per slice.
     """
     from tulip.evaluation.error_analysis import error_report
+    from tulip.evaluation.fairness import fairness_report
     from tulip.evaluation.hierarchical_metrics import hierarchical_metrics
     from tulip.evaluation.power import minimum_detectable_effect
     from tulip.evaluation.predictions import SplitPredictions
@@ -469,6 +474,7 @@ def analyze(
         else None
     )
     mde = minimum_detectable_effect(len(predictions)) if power else None
+    fair = fairness_report(predictions) if fairness else None
 
     if json_output:
         payload: dict[str, Any] = {
@@ -479,17 +485,17 @@ def analyze(
             payload["hierarchical"] = hier.model_dump()
         if mde is not None:
             payload["power"] = mde.model_dump()
+        if fair is not None:
+            payload["fairness"] = fair.model_dump()
         _console.print_json(data=payload)
         return
     _console.print(selective.to_markdown())
     _console.print()
     _console.print(errors.to_markdown())
-    if hier is not None:
-        _console.print()
-        _console.print(hier.to_markdown())
-    if mde is not None:
-        _console.print()
-        _console.print(mde.to_markdown())
+    for extra in (hier, mde, fair):
+        if extra is not None:
+            _console.print()
+            _console.print(extra.to_markdown())
 
 
 _DEFAULT_REGISTRY_ROOT = Path("artifacts/registry")
