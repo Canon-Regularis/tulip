@@ -110,3 +110,18 @@ partitioned by sample source.
 ::: tulip.evaluation.transfer_matrix
 
 ::: tulip.evaluation.TransferMatrix
+
+## Uncertainty decomposition
+
+Split predictive uncertainty into aleatoric (data noise) and epistemic (model
+doubt) from ensemble members. `decompose_uncertainty` is a pure function over a
+member-probability array; `member_probabilities` extracts that array from a
+fitted voting or stacking ensemble.
+
+::: tulip.evaluation.decompose_uncertainty
+
+::: tulip.evaluation.member_probabilities
+
+::: tulip.evaluation.uncertainty_report
+
+::: tulip.evaluation.UncertaintyReport

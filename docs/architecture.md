@@ -271,7 +271,8 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
 (standalone; the command group the contract lists), `benchmark`, `leaderboard`
 (also emits significance), `analyze` (selective + error report from a saved
-`predictions_<split>.json`), `crossval`, `transfer`, `conformal`, `robustness`
+`predictions_<split>.json`), `crossval`, `transfer`, `conformal`, `openset`
+(flag inputs unlike any known dialect), `robustness`
 (score a model as its inputs are perturbed), `repro verify`
 (regenerate a suite and fail on drift from the committed board), `registry`
 (add/promote/rollback/ls/resolve), `card` (dataset/model), `selftrain`, `serve`.
@@ -354,6 +355,12 @@ satisfies the protocol via a `predict_samples` adapter.
   held-out split and emits a `ConformalPrediction` label set that covers the
   truth at least `1 - alpha` of the time. `mondrian=True` uses a per-class
   threshold for class-conditional coverage.
+- `openset.py`: `OpenSetClassifier` composes over a fitted `ConformalClassifier`
+  and reuses its `thresholds()`: a row whose every class is excluded from the
+  conformal set conforms to no known dialect and is flagged novel. `evaluate`
+  treats a test sample whose gold dialect is not in the training vocabulary as
+  truly novel, so the ground truth is built in, and reports known coverage,
+  false-novelty and detection rates, and the novelty AUROC.
 - `crossval.py`: `run_cross_validation` runs grouped, stratified K-fold CV over
   several seeds and aggregates each metric to a mean and a confidence interval.
   Folds are speaker-disjoint. The folding reuses sklearn's
@@ -375,6 +382,11 @@ satisfies the protocol via a `predict_samples` adapter.
 - `tulip.models.calibration`: `TemperatureScaling` (on `log p` as surrogate
   logits: softmax is invariant to the additive constant), `IsotonicCalibrator`,
   and `IdentityCalibrator` as a Null Object.
+- `uncertainty.py`: `decompose_uncertainty` splits predictive entropy into
+  aleatoric (mean member entropy) and epistemic (mutual information, BALD) from a
+  member-probability array. It is a pure function; `member_probabilities`
+  extracts the array from a fitted voting or stacking ensemble, whose members
+  already share the class order. Reachable as `predict --uncertainty`.
 
 ### tulip.serve (FastAPI)
 

@@ -55,3 +55,15 @@ Distribution-free prediction sets. The set covers the true label at least
 ::: tulip.pipeline.ConformalPrediction
 
 ::: tulip.pipeline.ConformalReport
+
+## Open-set novelty
+
+Flag inputs unlike any known dialect. A row whose every class is excluded from
+the conformal set conforms to no known dialect and is novel. A test sample whose
+gold dialect was never trained on is the ground truth for evaluation.
+
+::: tulip.pipeline.OpenSetClassifier
+
+::: tulip.pipeline.OpenSetPrediction
+
+::: tulip.pipeline.OpenSetReport
