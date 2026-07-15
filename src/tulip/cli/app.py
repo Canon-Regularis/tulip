@@ -829,6 +829,64 @@ def openset(
 
 @app.command()
 @_tulip_errors
+def acquire(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    unlabeled: Path = typer.Argument(..., help="Unlabeled pool: split .jsonl or manifest."),
+    strategy: str = typer.Option(
+        "entropy",
+        "--strategy",
+        help="Acquisition strategy name; an unknown value lists the registered options.",
+    ),
+    budget: int | None = typer.Option(
+        None, "--budget", min=1, help="Keep only the top-N candidates (default all)."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the ranking as JSON."),
+) -> None:
+    """Rank an unlabeled pool by which samples to label first.
+
+    A model trained on a labeled seed set scores each unlabeled sample by an
+    acquisition strategy, so a fixed annotation budget buys the most signal. The
+    dialect-aware ``intensity_gated`` strategy keeps budget off standard Polish
+    the model merely happens to be unsure about. Ranking only; labeling is a
+    human step.
+    """
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.core.registry import UnknownComponentError
+    from tulip.data import read_samples
+    from tulip.pipeline import STRATEGIES, DialectClassifier, rank_for_labeling
+
+    classifier = DialectClassifier.load(model_path)
+    try:
+        candidates = rank_for_labeling(
+            classifier, list(read_samples(unlabeled)), strategy=strategy, budget=budget
+        )
+    except UnknownComponentError as exc:
+        # The valid set is derived from the registry, never a hardcoded list, so a
+        # newly registered strategy is discoverable without editing the CLI.
+        options = ", ".join(STRATEGIES.names())
+        raise ConfigurationError(f"unknown strategy {strategy!r}; choose from: {options}") from exc
+    if json_output:
+        _console.print_json(data=[candidate.model_dump() for candidate in candidates])
+        return
+    table = Table(title=f"acquisition ranking ({strategy})")
+    table.add_column("#", justify="right")
+    table.add_column("sample")
+    table.add_column("predicted")
+    table.add_column("confidence", justify="right")
+    table.add_column("score", justify="right")
+    for rank, candidate in enumerate(candidates, start=1):
+        table.add_row(
+            str(rank),
+            candidate.sample_id,
+            candidate.predicted_label,
+            f"{candidate.confidence:.1%}",
+            f"{candidate.score:.4f}",
+        )
+    _console.print(table)
+
+
+@app.command()
+@_tulip_errors
 def evaluate(
     model_path: Path = typer.Argument(..., help="Saved model directory."),
     data: Path = typer.Argument(
