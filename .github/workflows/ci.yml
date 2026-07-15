@@ -169,3 +169,22 @@ jobs:
           /tmp/wheelcheck/bin/python -m pip install --quiet dist/*.whl
           /tmp/wheelcheck/bin/python -c "import importlib.resources as r, tulip; root = r.files('tulip'); lex = root / 'features' / 'text' / 'lexicons'; assert (root / 'py.typed').is_file(), 'py.typed missing from the wheel'; assert (lex / 'dialect_markers.yaml').is_file(), 'dialect lexicon not shipped as package data'; assert (lex / 'isoglosses.yaml').is_file(), 'isogloss lexicon not shipped as package data'; print('wheel ok:', tulip.__version__)"
           /tmp/wheelcheck/bin/tulip --version
+
+  docker:
+    # The Dockerised reproduce-from-scratch container must build and run. Byte-
+    # exact matching against the committed board is platform sensitive (the board
+    # is generated on the maintainer's platform, and BLAS differences across OSes
+    # perturb the last ULP of a probability-derived metric), so this proves the
+    # image builds and the whole pipeline builds the dataset, trains, and renders
+    # the board end to end in a clean room, not a match against the committed
+    # numbers. `tulip repro from-scratch` performs the stricter match-the-committed
+    # check on the platform that produced the board.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the reproduce image
+        run: docker build -t tulip-repro .
+      - name: Smoke the CLI and regenerate the board in the container
+        run: |
+          docker run --rm tulip-repro tulip --version
+          docker run --rm tulip-repro tulip leaderboard benchmarks/suite.yaml --out /tmp/board
