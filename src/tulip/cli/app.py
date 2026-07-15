@@ -925,6 +925,47 @@ def explain(
     _print_explanation(classifier, raw, method)
 
 
+@app.command("explain-global")
+@_tulip_errors
+def explain_global(
+    data: Path = typer.Argument(..., help="A labelled corpus to summarise (jsonl/csv/...)."),
+    level: str = typer.Option(
+        "dialect", "--level", help="Gold label level for the lift axis: dialect | family."
+    ),
+    top_k: int = typer.Option(20, "--top-k", min=1, help="Phenomena to display."),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+    out: Path | None = typer.Option(None, "--out", help="Also write the report JSON here."),
+) -> None:
+    """Summarise the dialectal evidence across a whole labelled corpus.
+
+    Where ``explain`` justifies one prediction, this rolls the marker and
+    isogloss evidence up over the corpus: which phenomena occur, which gold
+    dialect their carriers belong to, and how concentrated that link is by
+    class-conditional lift. A high-lift isogloss is one that genuinely separates
+    a dialect. The evidence is resource-defined, so no model is needed and the
+    report is the same regardless of which classifier you trained.
+    """
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.data import read_samples
+    from tulip.explain import dataset_evidence
+    from tulip.labels.taxonomy import LabelLevel
+
+    try:
+        label_level = LabelLevel(level)
+    except ValueError as exc:
+        allowed = ", ".join(member.value for member in LabelLevel)
+        raise ConfigurationError(f"unknown level {level!r}; use one of: {allowed}") from exc
+
+    report = dataset_evidence(read_samples(data), level=label_level, name=str(data))
+    if out is not None:
+        report.save(out)
+        _console.print(f"[green]evidence report written to {out}[/green]")
+    if json_output:
+        _console.print_json(report.model_dump_json())
+    else:
+        _console.print(report.to_markdown(top_k=top_k))
+
+
 def _require_input_matches_task(classifier: Any, *, text: str | None, audio: Path | None) -> None:
     """Reject a text/audio input that mismatches the model's modality.
 
