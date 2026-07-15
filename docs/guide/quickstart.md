@@ -22,6 +22,9 @@ pip install -e ".[dev]"           # core + tooling
 Add extras only for the stacks you use. For example: `.[boosting]`,
 `.[transformers]`, `.[audio]`, `.[speech]`, `.[explain]`, `.[viz]`, `.[serve]`.
 
+Run `tulip doctor` to see which models, features, and explainers run on your
+install, and the exact `pip install` for anything still blocked.
+
 ## 1. Train
 
 Train a text pipeline on the synthetic corpus. One command does it all. It

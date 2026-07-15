@@ -271,10 +271,20 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
 (standalone; the command group the contract lists), `benchmark`, `leaderboard`
 (also emits significance), `analyze` (selective + error report from a saved
-`predictions_<split>.json`), `repro verify` (regenerate a suite and fail on
-drift from the committed board), `card` (dataset/model), `selftrain`, `serve`.
-Rich tables for human output. `--json` for machine output. `data validate` and
-`repro verify` exit non-zero on failure so they can gate CI.
+`predictions_<split>.json`), `crossval`, `transfer`, `conformal`, `repro verify`
+(regenerate a suite and fail on drift from the committed board), `registry`
+(add/promote/rollback/ls/resolve), `card` (dataset/model), `selftrain`, `serve`.
+Discovery and metadata: `doctor` reports which components run now and what to
+install; `models list` / `features list` / `explainers list` show each registry
+with availability; `cite` prints BibTeX or APA. Rich tables for human output.
+`--json` for machine output. `data validate`, `repro verify`, and `cite
+--check` exit non-zero on failure so they can gate CI.
+
+Each component declares its optional extra once, in its registration `metadata`
+(for example `metadata={"extra": "transformers"}`). `_doctor.py` reads it back
+with `Registry.metadata`, so the availability report holds no per-component
+knowledge. `_cite.py` reads `CITATION.cff` and `.zenodo.json` and checks both
+against the `pyproject.toml` version, which is the single source of truth.
 
 ### tulip.evaluation (benchmark surface)
 
