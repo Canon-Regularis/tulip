@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use tulip, please cite it as below."
+title: "tulip: Polish Dialect Typology and Regional Speech Classification Analysis System"
+abstract: >-
+  tulip detects Polish dialects from written text, transcribed speech, and raw
+  audio. It offers classical and deep-learning models behind one API, per
+  prediction explanations, and reproducible speaker-disjoint benchmark splits
+  with a committed leaderboard.
+type: software
+authors:
+  - family-names: Miezaniec
+    given-names: Matthew
+    email: matthewmiezaniec1@gmail.com
+version: 0.1.0
+date-released: 2026-07-15
+license: MIT
+repository-code: "https://github.com/Canon-Regularis/tulip"
+url: "https://github.com/Canon-Regularis/tulip"
+keywords:
+  - nlp
+  - dialectology
+  - polish
+  - speech-processing
+  - text-classification
+  - machine-learning

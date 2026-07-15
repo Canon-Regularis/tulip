@@ -1,0 +1,21 @@
+{
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Miezaniec, Matthew"
+    }
+  ],
+  "description": "tulip detects Polish dialects from written text, transcribed speech, and raw audio. It offers classical and deep-learning models behind one API, per prediction explanations, and reproducible speaker-disjoint benchmark splits with a committed leaderboard.",
+  "keywords": [
+    "nlp",
+    "dialectology",
+    "polish",
+    "speech-processing",
+    "text-classification",
+    "machine-learning"
+  ],
+  "license": "MIT",
+  "title": "tulip: Polish Dialect Typology and Regional Speech Classification Analysis System",
+  "upload_type": "software",
+  "version": "0.1.0"
+}
