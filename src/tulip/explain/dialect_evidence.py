@@ -11,7 +11,7 @@ dialect call justifiable in domain terms, and produces a serialisable
 :class:`~tulip.core.types.Explanation` that model cards, error analysis, and the
 demo UI can render.
 
-It is pure composition over the shared resources -- it re-implements no
+It is pure composition over the shared resources; it re-implements no
 detection. Lexical evidence comes from the marker lexicon
 (:func:`tulip.features.text.keywords.load_lexicon`, mapped to families by
 :func:`~tulip.features.text.keywords.family_for_lexicon_key`); phonological
@@ -20,7 +20,7 @@ evidence comes from the rewrite rules
 their own ``fired_matches`` / ``applicable_matches``.
 
 Honesty caveat (carried in the explanation ``details``, mirroring the attention
-explainer): this evidence is *resource-defined* -- it is what the lexicon and
+explainer): this evidence is *resource-defined*: it is what the lexicon and
 isogloss rules find in the text, not a proof of what the model actually keyed on.
 The model's own prediction is reported alongside so the two can be compared.
 """
@@ -30,7 +30,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from tulip.core.types import Explanation, TokenAttribution
-from tulip.explain._shared import as_text
+from tulip.explain._shared import as_text, predicted_label_or_none
 from tulip.explain.registry import EXPLAINERS
 from tulip.features.text._tokenize import word_tokens
 from tulip.features.text.keywords import family_for_lexicon_key, load_lexicon
@@ -237,10 +237,8 @@ def _family_tally(markers: list[_Evidence], fired: list[_Evidence]) -> dict[str,
 
 def _predicted_label(pipeline: Any, text: str) -> str | None:
     """The model's own predicted label, or ``None`` if the pipeline cannot predict."""
-    if not hasattr(pipeline, "predict"):
-        return None
     try:
-        return str(pipeline.predict([text])[0])
+        return predicted_label_or_none(pipeline, text)
     except Exception:
         # The evidence stands even if prediction fails; report it without a label.
         logger.debug("dialect_evidence: pipeline.predict failed; omitting predicted label")

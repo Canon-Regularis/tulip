@@ -89,8 +89,7 @@ class ShapExplainer:
         top_k = int(kwargs.get("top_k", self.top_k))
         algorithm = str(kwargs.get("algorithm", self.algorithm))
         text = as_text(raw_input)
-        class_index, predicted_label, _ = predicted_class(pipeline, text)
-        class_names = [str(label) for label in np.asarray(pipeline.classes_)]
+        class_index, predicted_label, class_names = predicted_class(pipeline, text)
 
         def probability_fn(texts: Any) -> np.ndarray:
             return np.asarray(pipeline.predict_proba([str(t) for t in texts]), dtype=np.float64)
@@ -129,6 +128,6 @@ class ShapExplainer:
                 "class_names": class_names,
                 "max_evals": max_evals,
                 "base_value": base_value,
-                "algorithm": self.algorithm,
+                "algorithm": algorithm,
             },
         )

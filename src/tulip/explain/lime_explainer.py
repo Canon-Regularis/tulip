@@ -2,8 +2,8 @@
 
 LIME fits a sparse local linear surrogate around the input by perturbing it
 (removing words) and observing how ``predict_proba`` responds. It is
-model-agnostic — the only requirement on the pipeline is ``predict_proba``
-over raw texts — which makes it the right tool for non-linear models where
+model-agnostic: the only requirement on the pipeline is ``predict_proba``
+over raw texts. This makes it the right tool for non-linear models where
 ``top_tfidf`` refuses to run.
 
 The ``lime`` package is an optional dependency (extra ``explain``) imported
@@ -87,8 +87,7 @@ class LimeExplainer:
         num_samples = int(kwargs.get("num_samples", self.num_samples))
         seed = int(kwargs.get("seed", self.seed))
         text = as_text(raw_input)
-        class_index, predicted_label, _ = predicted_class(pipeline, text)
-        class_names = [str(label) for label in np.asarray(pipeline.classes_)]
+        class_index, predicted_label, class_names = predicted_class(pipeline, text)
 
         def probability_fn(texts: Any) -> np.ndarray:
             return np.asarray(pipeline.predict_proba(list(texts)), dtype=np.float64)

@@ -17,7 +17,7 @@ from scipy import sparse
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.core.types import Explanation, NeighborExample, Sample
-from tulip.explain._shared import as_text
+from tulip.explain._shared import as_text, predicted_label_or_none
 from tulip.explain.registry import EXPLAINERS
 from tulip.utils.logging import get_logger
 
@@ -190,9 +190,7 @@ class NearestExamplesExplainer:
             )
             for i in top
         )
-        predicted_label: str | None = None
-        if pipeline is not None and hasattr(pipeline, "predict"):
-            predicted_label = str(pipeline.predict([text])[0])
+        predicted_label = predicted_label_or_none(pipeline, text)
         return Explanation(
             method="nearest_examples",
             predicted_label=predicted_label,

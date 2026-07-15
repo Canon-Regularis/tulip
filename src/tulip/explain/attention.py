@@ -7,11 +7,11 @@ heads. Subword pieces are merged into whole words (weights summed) so the
 output is readable to a dialectologist rather than a tokenizer.
 
 Caveat, stated up front: attention weights show what the model *looked at*,
-not a causal attribution of the decision — treat them as a complementary
+not a causal attribution of the decision. Treat them as a complementary
 signal next to ``lime``/``shap``, not a replacement.
 
 Works with any object exposing fitted ``model_`` (a Hugging Face sequence
-classifier) and ``tokenizer_`` attributes — in tulip that is
+classifier) and ``tokenizer_`` attributes. In tulip that is
 :class:`tulip.models.neural_text.TransformerTextClassifier`. torch is an
 optional dependency imported lazily inside ``explain``.
 """
@@ -160,8 +160,8 @@ class AttentionExplainer:
 
         Args:
             pipeline: A fitted transformer classifier exposing ``model_`` (a
-                Hugging Face sequence-classification model) and ``tokenizer_``
-                — e.g. :class:`tulip.models.neural_text.TransformerTextClassifier`.
+                Hugging Face sequence-classification model) and ``tokenizer_``,
+                e.g. :class:`tulip.models.neural_text.TransformerTextClassifier`.
             raw_input: The raw document to explain.
             **kwargs: ``layer`` overrides the constructor value.
 

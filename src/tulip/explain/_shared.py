@@ -32,7 +32,7 @@ def as_text(raw_input: Any) -> str:
     return text
 
 
-def predicted_class(pipeline: Any, text: str) -> tuple[int, str, np.ndarray]:
+def predicted_class(pipeline: Any, text: str) -> tuple[int, str, list[str]]:
     """Return the predicted class for ``text`` under a probabilistic pipeline.
 
     Args:
@@ -40,9 +40,9 @@ def predicted_class(pipeline: Any, text: str) -> tuple[int, str, np.ndarray]:
         text: The raw input document.
 
     Returns:
-        ``(index, label, probabilities)`` where ``index`` is the argmax column,
+        ``(index, label, class_names)`` where ``index`` is the argmax column,
         ``label`` the corresponding entry of ``classes_`` as ``str``, and
-        ``probabilities`` the full probability row.
+        ``class_names`` every entry of ``classes_`` as ``str``.
 
     Raises:
         ConfigurationError: if the pipeline lacks ``predict_proba``/``classes_``.
@@ -54,5 +54,26 @@ def predicted_class(pipeline: Any, text: str) -> tuple[int, str, np.ndarray]:
         )
     probabilities = np.asarray(pipeline.predict_proba([text]))[0]
     index = int(np.argmax(probabilities))
-    label = str(np.asarray(pipeline.classes_)[index])
-    return index, label, probabilities
+    class_names = [str(label) for label in np.asarray(pipeline.classes_)]
+    return index, class_names[index], class_names
+
+
+def predicted_label_or_none(pipeline: Any, text: str) -> str | None:
+    """Return ``pipeline``'s predicted label for ``text``, or ``None``.
+
+    Returns ``None`` when ``pipeline`` is ``None`` or does not expose
+    ``predict``. The prediction call itself is left unguarded; callers that
+    need to tolerate a failing ``predict`` should wrap this in their own
+    try/except.
+
+    Args:
+        pipeline: An optional fitted classifier exposing ``predict``.
+        text: The raw input document.
+
+    Returns:
+        The predicted label as ``str``, or ``None`` if no prediction is
+        available.
+    """
+    if pipeline is None or not hasattr(pipeline, "predict"):
+        return None
+    return str(pipeline.predict([text])[0])

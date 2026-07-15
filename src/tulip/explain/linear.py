@@ -189,7 +189,7 @@ class TopTfidfExplainer:
     For the predicted class, each feature contributes exactly
     ``feature_value * class_coefficient`` to the decision score, so the
     returned attributions are an exact decomposition of the (uncalibrated)
-    linear score — positive weights pushed towards the predicted class,
+    linear score: positive weights pushed towards the predicted class,
     negative weights pushed away from it.
 
     Attributes:
