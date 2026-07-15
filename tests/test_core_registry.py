@@ -73,11 +73,19 @@ class TestMetadata:
     def test_neural_models_declare_training_awareness(self) -> None:
         from tulip.models import MODELS
 
-        assert MODELS.metadata("herbert") == {"training_aware": True, "raw_input": True}
-        assert MODELS.metadata("wav2vec2") == {"training_aware": True, "raw_input": True}
+        assert MODELS.metadata("herbert") == {
+            "training_aware": True,
+            "raw_input": True,
+            "extra": "transformers",
+        }
+        assert MODELS.metadata("wav2vec2") == {
+            "training_aware": True,
+            "raw_input": True,
+            "extra": "speech",
+        }
         assert MODELS.metadata("logistic_regression") == {}
         # Frozen encoder + sklearn head: not training_aware, but still raw-input.
-        assert MODELS.metadata("ecapa_tdnn") == {"raw_input": True}
+        assert MODELS.metadata("ecapa_tdnn") == {"raw_input": True, "extra": "speech"}
 
     def test_raw_input_capability_partitions_the_model_zoo(self) -> None:
         """Consumers query this flag instead of hardcoding which models take features.
