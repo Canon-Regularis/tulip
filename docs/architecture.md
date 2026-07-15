@@ -290,7 +290,9 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 (standalone; the command group the contract lists), `explain-global`
 (corpus-level dialect-evidence roll-up ranked by class-conditional lift),
 `benchmark`, `leaderboard`
-(also emits significance), `analyze` (selective + error report from a saved
+(also emits significance; `--tracks` reads a multi-track suite and ranks each
+modality separately), `efficiency` (latency/size/params, an excluded artifact),
+`analyze` (selective + error report from a saved
 `predictions_<split>.json`; `--hierarchical` adds family/dialect partial credit,
 `--power` the minimum detectable effect, `--fairness` the worst-versus-best
 subgroup gap), `crossval`, `transfer`, `conformal`, `openset`
@@ -318,7 +320,22 @@ against the `pyproject.toml` version, which is the single source of truth.
   deterministic (no timestamps, no `wall_seconds`), so a committed leaderboard
   regenerates byte-identically. Rows are keyed by `(experiment, model)`. The
   board carries ECE/Brier columns when the suite sets `calibration_bins`, and
-  `write_significance` emits per-experiment paired-significance artifacts.
+  `write_significance` emits per-experiment paired-significance artifacts. Each
+  config's provenance also carries a `dataset_digest`: the committed split lock's
+  combined content hash, so a silent change to the underlying data is caught the
+  same way an edited config or lexicon is (deterministic, so it does not threaten
+  the byte-stable guarantee; `null` when no split lock is on disk).
+- `tracks.py`: `TrackedSuite`/`Track` layer one ranking per input modality (text,
+  audio, transcribed speech) on top of the leaderboard machinery, reusing
+  `run_leaderboard` and `render_leaderboard_markdown` unchanged. The combined
+  `leaderboard-tracks.md` keys every row by `(track, experiment, model)` and is
+  byte-stable like the single table. Reachable as `tulip leaderboard --tracks`.
+- `efficiency.py`: `measure_efficiency` records the cost of a win (median
+  per-sample inference latency, saved model size, best-effort parameter count) as
+  an `EfficiencyRecord`. These are machine dependent, so they are written only to
+  an excluded `efficiency.json`, decoupled from the leaderboard run: nothing
+  machine dependent can leak into `leaderboard.md` or `provenance.json`. Reachable
+  as `tulip efficiency`.
 - `_provenance_env.py`: the deterministic `environment` block for provenance:
   Python floor + key dependency versions read from the committed `uv.lock` (not
   the live interpreter) + content digests of the configs and lexicons.

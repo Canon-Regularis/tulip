@@ -47,6 +47,35 @@ be compared and saved. Leaderboards and cards render byte-stable markdown.
 
 ::: tulip.evaluation.write_significance
 
+## Multi-track leaderboards
+
+One ranking per input modality. A text model and an audio model never compete on
+the same input, so a track is one modality-homogeneous competition, and the
+combined artifact keys every row by track, experiment, and model. Running and
+rendering reuse the leaderboard machinery, so each track's ranking is
+byte-stable exactly as the single table is.
+
+::: tulip.evaluation.TrackedSuite
+
+::: tulip.evaluation.Track
+
+::: tulip.evaluation.run_tracked_leaderboard
+
+::: tulip.evaluation.write_tracked_leaderboard
+
+## Efficiency
+
+The cost of a win, alongside its accuracy: median per-sample inference latency,
+saved model size, and parameter count. These are machine dependent, so an
+`EfficiencyRecord` is written only to its own excluded `efficiency.json` and
+never touches the byte-stable leaderboard or provenance.
+
+::: tulip.evaluation.measure_efficiency
+
+::: tulip.evaluation.EfficiencyRecord
+
+::: tulip.evaluation.count_parameters
+
 ::: tulip.evaluation.dataset_card
 
 ::: tulip.evaluation.model_card
