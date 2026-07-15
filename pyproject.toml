@@ -25,7 +25,6 @@ classifiers = [
     "Natural Language :: Polish",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -103,6 +102,9 @@ packages = ["src/tulip"]
 
 [tool.ruff]
 line-length = 100
+# Below the >=3.11 runtime floor on purpose: a conservative lint target is
+# harmless, and raising it to py311 only surfaces StrEnum rewrite suggestions for
+# the frozen (str, Enum) taxonomy classes, which must not change.
 target-version = "py310"
 src = ["src", "tests"]
 
@@ -176,8 +178,9 @@ markers = [
 
 [tool.mypy]
 # Type-checked under 3.12 semantics: numpy's bundled stubs use PEP 695 "type"
-# statements, which mypy rejects under an older python_version pin. The 3.10
-# runtime floor is still enforced by ruff (target-version) and the CI matrix.
+# statements, which mypy rejects under an older python_version pin. The runtime
+# floor is 3.11 (see requires-python), exercised by the CI test matrix whose
+# lowest entry is 3.11.
 python_version = "3.12"
 mypy_path = "src"
 packages = ["tulip"]
