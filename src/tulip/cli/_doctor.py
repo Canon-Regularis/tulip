@@ -47,6 +47,7 @@ __all__ = [
 #: runtime capabilities are listed; ``docs`` and ``dev`` are tooling and have
 #: no bearing on what the toolkit can run.
 _EXTRAS: dict[str, tuple[tuple[str, ...], str]] = {
+    "anthropic": (("anthropic",), "the constrained-choice LLM baseline"),
     "audio": (("librosa", "soundfile", "parselmouth"), "classical audio features"),
     "boosting": (("xgboost", "lightgbm"), "gradient-boosting baselines"),
     "explain": (("shap", "lime"), "SHAP and LIME explanations"),
