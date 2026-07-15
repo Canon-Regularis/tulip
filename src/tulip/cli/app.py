@@ -496,6 +496,37 @@ def repro_verify(
 
     with tempfile.TemporaryDirectory(prefix="tulip-repro-") as scratch:
         drift = verify_reproduction(suite_path, against, Path(scratch))
+    _report_repro_drift(drift)
+
+
+@repro_app.command("from-scratch")
+@_tulip_errors
+def repro_from_scratch(
+    suite_path: Path = typer.Argument(..., help="Leaderboard suite YAML to reproduce."),
+    against: Path = typer.Option(
+        Path("benchmarks/results"), "--against", help="Committed artifact root to compare with."
+    ),
+) -> None:
+    """Reproduce the committed board in full isolation, then match it byte-for-byte.
+
+    Stronger than ``repro verify``: every build artifact (splits, trained models)
+    is redirected into a throwaway directory too, so the run reads and writes
+    nothing outside it. This proves the committed board depends only on the
+    committed source, exactly as a fresh checkout in a clean container does, and
+    is the command the Dockerfile runs. Byte-exact matching is platform sensitive,
+    so run it on the platform that produced the committed board.
+    """
+    import tempfile
+
+    from tulip.cli._repro import reproduce_from_scratch
+
+    with tempfile.TemporaryDirectory(prefix="tulip-scratch-") as scratch:
+        drift = reproduce_from_scratch(suite_path, against, Path(scratch))
+    _report_repro_drift(drift)
+
+
+def _report_repro_drift(drift: list[str]) -> None:
+    """Print a reproduction result and exit non-zero on any drift."""
     if drift:
         _errors.print(f"reproduction FAILED: {len(drift)} artifact(s) drifted:")
         for line in drift:
