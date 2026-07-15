@@ -41,6 +41,7 @@ from tulip.pipeline.hierarchical import (
     MarginThreshold,
     NotAbstained,
 )
+from tulip.pipeline.openset import OpenSetClassifier, OpenSetPrediction, OpenSetReport
 from tulip.pipeline.protocols import SamplePredictor
 from tulip.pipeline.selftrain import SelfTrainConfig, SelfTrainResult, self_train
 
@@ -69,6 +70,9 @@ __all__ = [
     "MetricSummary",
     "MultimodalClassifier",
     "NotAbstained",
+    "OpenSetClassifier",
+    "OpenSetPrediction",
+    "OpenSetReport",
     "ProbabilisticClassifier",
     "SamplePredictor",
     "SelfTrainConfig",

@@ -216,6 +216,18 @@ class ConformalClassifier:
             mean_set_size=float(np.mean(sizes)),
         )
 
+    def thresholds(self) -> np.ndarray:
+        """Per-class nonconformity thresholds aligned to ``classes_`` (fit first).
+
+        A class ``c`` is in the conformal set when ``1 - p(c) <= thresholds[c]``.
+        Exposed for open-set detection, where a row whose every class is excluded
+        is unlike any known dialect.
+
+        Raises:
+            ConfigurationError: if called before :meth:`fit_conformal`.
+        """
+        return self._thresholds()
+
     # ----------------------------------------------------------- internal
 
     def _thresholds(self) -> np.ndarray:
