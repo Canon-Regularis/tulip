@@ -67,6 +67,8 @@ speech = [
 ]
 # fastText text classification baseline.
 fasttext = ["fasttext-wheel>=0.9.2"]
+# Constrained-choice LLM baseline (Claude via the Anthropic SDK).
+anthropic = ["anthropic>=0.40"]
 # Loading datasets hosted on the Hugging Face Hub (Common Voice, BIGOS).
 hf = ["datasets>=2.19"]
 # Model explainability (SHAP, LIME).
