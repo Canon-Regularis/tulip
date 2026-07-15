@@ -75,6 +75,12 @@ from tulip.evaluation.significance import (
     mcnemar_exact,
     paired_significance,
 )
+from tulip.evaluation.uncertainty import (
+    UncertaintyReport,
+    decompose_uncertainty,
+    member_probabilities,
+    uncertainty_report,
+)
 
 __all__ = [
     "BENCHMARK_SCHEMA_VERSION",
@@ -100,16 +106,19 @@ __all__ = [
     "SliceMetric",
     "SplitPredictions",
     "TransferMatrix",
+    "UncertaintyReport",
     "comparison_table",
     "compute_calibration",
     "compute_metrics",
     "confusion_from_report",
     "dataset_card",
     "dataset_card_from_splits",
+    "decompose_uncertainty",
     "error_report",
     "load_benchmark",
     "load_suite",
     "mcnemar_exact",
+    "member_probabilities",
     "model_card",
     "paired_significance",
     "partition_by_source",
@@ -126,6 +135,7 @@ __all__ = [
     "to_markdown_table",
     "top_confused_pairs",
     "transfer_matrix",
+    "uncertainty_report",
     "write_leaderboard",
     "write_significance",
 ]
