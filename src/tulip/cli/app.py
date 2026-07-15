@@ -693,6 +693,52 @@ def transfer(
 
 @app.command()
 @_tulip_errors
+def robustness(
+    config_path: Path = typer.Argument(..., help="Experiment config YAML."),
+    perturbation: list[str] | None = typer.Option(
+        None,
+        "--perturbation",
+        "-p",
+        help="Perturbation name, repeatable (default dialect_intensity_dial). "
+        "Options: dialect_intensity_dial, standardize, asr_noise, typo_noise.",
+    ),
+    levels: str = typer.Option(
+        "0,0.25,0.5,0.75,1.0", "--levels", help="Comma-separated intensity levels in [0, 1]."
+    ),
+    seed: int = typer.Option(0, "--seed", help="Seed for the perturbation draws."),
+    out: Path | None = typer.Option(
+        None, "--out", help="Directory to write robustness-<name>.md and .json."
+    ),
+) -> None:
+    """Score a model as its inputs are perturbed along a linguistic intensity axis.
+
+    Trains once on the clean split, then re-scores the test split perturbed at
+    each level. The grounded perturbations (dialect_intensity_dial, standardize)
+    move text along the standard-to-dialect axis; asr_noise and typo_noise stress
+    the surface channel.
+    """
+    from tulip._serialize import write_markdown
+    from tulip.config import load_experiment_config
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.robustness import PerturbationConfig, run_robustness
+
+    level_tuple = tuple(float(part) for part in levels.split(",") if part.strip())
+    if not level_tuple or any(not 0.0 <= level <= 1.0 for level in level_tuple):
+        raise ConfigurationError("--levels must be non-empty and within [0, 1]")
+    names = perturbation or ["dialect_intensity_dial"]
+    specs = [PerturbationConfig(name=name, levels=level_tuple, seed=seed) for name in names]
+
+    config = load_experiment_config(config_path)
+    report = run_robustness(config, perturbations=specs)
+    _console.print(report.to_markdown())
+    if out is not None:
+        write_markdown(out / f"robustness-{config.name}.md", report.to_markdown())
+        report.save(out / f"robustness-{config.name}.json")
+        _console.print(f"[green]wrote robustness artifacts to {out}[/green]")
+
+
+@app.command()
+@_tulip_errors
 def conformal(
     model_path: Path = typer.Argument(..., help="Saved model directory."),
     calibration: Path = typer.Argument(..., help="Held-out calibration samples."),
