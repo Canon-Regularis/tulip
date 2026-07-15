@@ -769,6 +769,32 @@ def conformal(
 
 @app.command()
 @_tulip_errors
+def openset(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    calibration: Path = typer.Argument(..., help="Held-out calibration samples."),
+    test: Path = typer.Argument(..., help="Test samples, possibly including unseen dialects."),
+    alpha: float = typer.Option(0.1, "--alpha", min=0.0, max=1.0, help="Miscoverage rate."),
+    mondrian: bool = typer.Option(False, "--mondrian", help="Per-class conformal thresholds."),
+) -> None:
+    """Flag inputs unlike any known dialect, and report open-set quality.
+
+    Fits split conformal on the calibration split, then evaluates novelty
+    detection on the test split. A test sample whose gold dialect was never
+    trained on counts as truly novel, which is the deployment question of
+    meeting a new region.
+    """
+    from tulip.data import read_samples
+    from tulip.pipeline import ConformalClassifier, DialectClassifier, OpenSetClassifier
+
+    classifier = DialectClassifier.load(model_path)
+    conformal = ConformalClassifier(classifier, alpha=alpha, mondrian=mondrian)
+    conformal.fit_conformal(list(read_samples(calibration)))
+    report = OpenSetClassifier(conformal).evaluate(list(read_samples(test)))
+    _console.print(report.to_markdown())
+
+
+@app.command()
+@_tulip_errors
 def evaluate(
     model_path: Path = typer.Argument(..., help="Saved model directory."),
     data: Path = typer.Argument(
@@ -821,6 +847,9 @@ def predict(
     explain: str | None = typer.Option(
         None, "--explain", help="Explainer name (e.g. top_tfidf, lime, nearest_examples)."
     ),
+    uncertainty: bool = typer.Option(
+        False, "--uncertainty", help="Show the aleatoric/epistemic split (ensemble models only)."
+    ),
 ) -> None:
     """Classify one text (argument) or one audio file (--audio)."""
     classifier, raw, prediction = _load_and_predict(model_path, text, audio)
@@ -830,6 +859,8 @@ def predict(
     else:
         _print_prediction(prediction, top_k)
 
+    if uncertainty:
+        _print_uncertainty(classifier, raw)
     if map_out is not None:
         _export_map(prediction, map_out)
     if explain is not None:
@@ -894,6 +925,19 @@ def _print_prediction(prediction: Prediction, top_k: int) -> None:
     for entry in prediction.top_k(top_k):
         table.add_row(entry.label, f"{entry.probability:.1%}")
     _console.print(table)
+
+
+def _print_uncertainty(classifier: Any, raw: Any) -> None:
+    """Show the aleatoric/epistemic split for one input (ensemble models only)."""
+    from tulip.evaluation import decompose_uncertainty, member_probabilities
+
+    members = member_probabilities(classifier, [raw])
+    total, aleatoric, epistemic = decompose_uncertainty(members)
+    _console.print(
+        f"uncertainty (nats over {members.shape[0]} members): "
+        f"total [bold]{float(total[0]):.3f}[/bold], "
+        f"aleatoric {float(aleatoric[0]):.3f}, epistemic {float(epistemic[0]):.3f}"
+    )
 
 
 def _export_map(prediction: Prediction, destination: Path) -> None:
