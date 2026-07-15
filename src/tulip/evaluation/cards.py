@@ -1,8 +1,8 @@
 """Deterministic markdown dataset and model cards.
 
 These helpers render human-readable *cards* from the artifacts the toolkit
-already writes -- the ``build_manifest.json`` of a dataset build and the
-``metadata.json`` sidecar of a saved model -- so a published benchmark ships
+already writes: the ``build_manifest.json`` of a dataset build and the
+``metadata.json`` sidecar of a saved model, so a published benchmark ships
 with committable, diff-friendly documentation of exactly what was built and
 trained.
 
@@ -13,9 +13,9 @@ Two properties are load-bearing and deliberately enforced:
   re-deriving them from the corpus; only :func:`dataset_card_from_splits`
   computes (from in-memory splits) the few facts a manifest omits, notably
   speaker counts.
-* **Byte-stability.** The same inputs always render the identical string --
+* **Byte-stability.** The same inputs always render the identical string:
   no timestamps, no dependence on ``dict`` iteration order (every key set is
-  sorted explicitly) -- because these cards are committed to the repository
+  sorted explicitly), because these cards are committed to the repository
   and must diff cleanly.
 
 Missing or absent optional fields degrade to ``"n/a"`` and never raise: a
@@ -100,7 +100,7 @@ def _format_params(params: Any) -> str:
     """Render a component's params as a compact, key-sorted ``k=v; ...`` string."""
     params = _as_mapping(params)
     if not params:
-        return "—"
+        return "n/a"
     return "; ".join(f"{key}={_format_value(params[key])}" for key in sorted(params))
 
 
@@ -113,7 +113,7 @@ def dataset_card(info: DatasetInfo, build_manifest: Mapping[str, Any]) -> str:
     Reuses the sizes, per-label class distribution, and source counts already
     written to ``build_manifest.json`` (see :class:`tulip.data.DatasetBuilder`);
     nothing is recomputed. Speaker counts are not in the manifest and therefore
-    render as ``"n/a"`` -- use :func:`dataset_card_from_splits` when they matter.
+    render as ``"n/a"``; use :func:`dataset_card_from_splits` when they matter.
 
     Args:
         info: Static metadata for the corpus (name, license, label levels, ...).
@@ -144,7 +144,7 @@ def dataset_card_from_splits(
     """Render a dataset card by computing counts directly from in-memory splits.
 
     Unlike :func:`dataset_card`, this derives the per-label class distribution,
-    source counts, and -- crucially -- the distinct-speaker count per split from
+    source counts, and, crucially, the distinct-speaker count per split from
     the actual samples, so the card documents leakage-relevant speaker coverage.
 
     Args:
@@ -189,7 +189,7 @@ def _render_dataset_card(
     speaker_counts: Mapping[str, int] | None,
 ) -> str:
     """Assemble the dataset card from already-extracted counts (shared renderer)."""
-    parts = [f"# Dataset card — {_na(info.name)}"]
+    parts = [f"# Dataset card: {_na(info.name)}"]
     if str(info.description).strip():
         parts.append(str(info.description).strip())
     parts.append(_dataset_overview(info))
@@ -307,7 +307,7 @@ def model_card(sidecar: Mapping[str, Any], reports: Mapping[str, EvaluationRepor
     model_cfg = _as_mapping(meta.get("model"))
     title = model_cfg.get("name") or sidecar.get("model_class") or meta.get("kind") or "model"
 
-    parts = [f"# Model card — {_na(title)}"]
+    parts = [f"# Model card: {_na(title)}"]
     parts.append(_model_overview(sidecar, meta))
     parts.append(_components_section(meta, model_cfg))
     parts.append(_classes_section(sidecar.get("classes")))
@@ -366,7 +366,7 @@ def _classes_section(classes: Any) -> str:
         return "## Classes\n\nClasses: n/a (model unfitted or exposes no classes)."
     labels = sorted(str(label) for label in classes)
     lines = [f"Trained on **{len(labels)}** classes:", ""]
-    lines.extend(f"- `{label}` — {_humanize_label(label)}" for label in labels)
+    lines.extend(f"- `{label}`: {_humanize_label(label)}" for label in labels)
     return "## Classes\n\n" + "\n".join(lines)
 
 

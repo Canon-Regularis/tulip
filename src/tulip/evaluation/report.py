@@ -111,7 +111,7 @@ class EvaluationReport(BaseModel):
         """
         title = "Evaluation report"
         if self.metadata.get("model"):
-            title += f" — {self.metadata['model']}"
+            title += f": {self.metadata['model']}"
         if self.metadata.get("split"):
             title += f" ({self.metadata['split']})"
         parts = [f"# {title}"]

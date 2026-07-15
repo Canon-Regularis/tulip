@@ -1,14 +1,14 @@
 """Deterministic environment provenance for the reproducible leaderboard.
 
 The leaderboard guarantee reads "for a fixed seed *and environment*", yet
-``provenance.json`` records only ``tulip_version`` — the environment half is
+``provenance.json`` records only ``tulip_version``: the environment half is
 unstated. This module fills it with a block that is itself byte-identical across
 machines, because every value is read from a *committed* file rather than the
 live interpreter:
 
 * the Python floor from ``pyproject.toml``;
 * the locked versions of the numerically load-bearing dependencies (numpy,
-  scipy, scikit-learn, pandas) from ``uv.lock`` — the packages whose version can
+  scipy, scikit-learn, pandas) from ``uv.lock``, the packages whose version can
   actually move a metric;
 * content digests (BLAKE2b) of the exact configs and shipped lexicons that fed
   the run, so a silent edit to an input is caught.
@@ -16,7 +16,7 @@ live interpreter:
 Reading resolved versions from the lockfile, not ``importlib.metadata``, is the
 point: two machines with the same commit produce the same block regardless of
 what happens to be installed. If one of these inputs changes, the block changes
-and the reproducibility gate flags it — which is correct, because a numpy bump
+and the reproducibility gate flags it, which is correct, because a numpy bump
 or an edited config can legitimately move the numbers.
 """
 

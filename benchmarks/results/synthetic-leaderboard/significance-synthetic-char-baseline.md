@@ -1,4 +1,4 @@
-# Significance — test (n=144)
+# Significance: test (n=144)
 
 Best by F1 (macro): **linear_svm**. Statistically tied with best (Holm-corrected McNemar, alpha=0.05): linear_svm, naive_bayes, logistic_regression.
 

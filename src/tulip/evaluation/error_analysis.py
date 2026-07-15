@@ -3,13 +3,13 @@
 A single macro-F1 says *how much* a model is wrong, never *where*. This module
 derives the diagnosis a confusion matrix alone cannot give:
 
-* **Top confused pairs** — which dialects are systematically merged (the
+* **Top confused pairs**: which dialects are systematically merged (the
   off-diagonal, ranked), so a linguist can see *podhale <-> spisz* rather than a
   grid of counts.
-* **Hard exemplars** — the highest-confidence mistakes (the model was sure and
+* **Hard exemplars**: the highest-confidence mistakes (the model was sure and
   wrong) and the least-confident calls, by sample id, so they can be pulled and
   inspected.
-* **Slice metrics** — accuracy and macro-F1 recomputed per source corpus,
+* **Slice metrics**: accuracy and macro-F1 recomputed per source corpus,
   speaker, modality, and length band, exposing the fairness/leakage skew a
   pooled number hides. Low-support slices are flagged, never reported as
   headline.
@@ -114,7 +114,7 @@ class ErrorReport(BaseModel):
     def to_markdown(self) -> str:
         """Render the report as markdown sections."""
         parts = [
-            f"# Error analysis — {self.model} ({self.split})",
+            f"# Error analysis: {self.model} ({self.split})",
             markdown_table(
                 ("Metric", "Value"),
                 [("Samples", str(self.n_samples)), ("Accuracy", format_metric(self.accuracy))],
@@ -123,7 +123,7 @@ class ErrorReport(BaseModel):
             markdown_table(
                 ("True", "Predicted", "Count"),
                 [(p.true_label, p.pred_label, str(p.count)) for p in self.confused_pairs]
-                or [("—", "—", "0")],
+                or [("n/a", "n/a", "0")],
             ),
             "## Highest-confidence errors",
             markdown_table(
@@ -132,7 +132,7 @@ class ErrorReport(BaseModel):
                     (e.id, e.y_true, e.y_pred, format_metric(e.confidence))
                     for e in self.hardest_errors
                 ]
-                or [("—", "—", "—", "n/a")],
+                or [("n/a", "n/a", "n/a", "n/a")],
             ),
             "## Slice metrics (low-support marked *)",
             markdown_table(

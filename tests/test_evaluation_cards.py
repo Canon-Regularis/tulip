@@ -83,7 +83,7 @@ def test_dataset_card_from_manifest_contains_key_facts(tmp_path: Path) -> None:
     manifest = _build_manifest(tmp_path)
     card = dataset_card(_INFO, manifest)
 
-    assert card.startswith("# Dataset card — synthetic")
+    assert card.startswith("# Dataset card: synthetic")
     assert "A tiny synthetic dialect corpus." in card
     assert "https://example.org/synthetic" in card
     assert "CC0-1.0" in card
@@ -123,7 +123,7 @@ def test_dataset_card_is_byte_stable(tmp_path: Path) -> None:
 
 def test_dataset_card_degrades_gracefully_on_empty_manifest() -> None:
     card = dataset_card(DatasetInfo(name="bare"), {})
-    assert card.startswith("# Dataset card — bare")
+    assert card.startswith("# Dataset card: bare")
     assert "n/a" in card  # empty url/tasks/label-levels render as n/a
     assert "No class distribution recorded." in card
     assert "No source corpora recorded." in card
@@ -137,7 +137,7 @@ def test_model_card_contains_key_facts(tmp_path: Path) -> None:
     sidecar, report = _trained_report(tmp_path)
     card = model_card(sidecar, {"test": report})
 
-    assert card.startswith("# Model card — logistic_regression")
+    assert card.startswith("# Model card: logistic_regression")
     assert sidecar["model_class"] in card
     assert sidecar["tulip_version"] in card
     assert sidecar["python_version"] in card
@@ -165,7 +165,7 @@ def test_model_card_is_byte_stable(tmp_path: Path) -> None:
 
 def test_model_card_degrades_gracefully_on_empty_sidecar() -> None:
     card = model_card({}, {})
-    assert card.startswith("# Model card — model")
+    assert card.startswith("# Model card: model")
     assert "Raw-input model (no feature components)." in card
     assert "Classes: n/a" in card
     assert "No evaluation reports available." in card

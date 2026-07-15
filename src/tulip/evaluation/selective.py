@@ -8,11 +8,11 @@ it: sweep the confidence threshold from "answer everything" down to "answer only
 the surest few" and, at each coverage, report the selective *risk* (error rate
 among the answered). From that curve come three operator-facing numbers:
 
-* **AURC** — area under the risk-coverage curve; a single lower-is-better summary
+* **AURC**: area under the risk-coverage curve; a single lower-is-better summary
   of how well the model's confidence ranks its own correctness.
-* **accuracy @ coverage** — "if I answer the most-confident 90%, how accurate am
-  I?" — the number you set an SLA against.
-* **coverage @ error** — "to stay under 10% error, how much can I answer?".
+* **accuracy @ coverage**: "if I answer the most-confident 90%, how accurate am
+  I?", the number you set an SLA against.
+* **coverage @ error**: "to stay under 10% error, how much can I answer?".
 
 A model whose confidence is meaningless has a flat curve (AURC ≈ base error); a
 model that knows when it is right earns accuracy far above its base rate at low
@@ -121,7 +121,7 @@ class SelectiveReport(BaseModel):
             )
             for point in self.targets
         ]
-        title = f"# Selective prediction — {self.model} ({self.split})"
+        title = f"# Selective prediction: {self.model} ({self.split})"
         return "\n\n".join(
             [
                 title,

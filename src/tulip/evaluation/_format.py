@@ -4,8 +4,8 @@ Markdown rendering is kept dependency-free so it never requires ``tabulate`` or
 any other optional package. The deterministic JSON writer that every committed
 evaluation artifact shares (leaderboard provenance, prediction dumps,
 significance/selective reports) lives at the package root in
-:mod:`tulip._serialize` -- so ``data`` and ``models`` can share the one writer
-too -- and is re-exported here for the evaluation callers that already import it.
+:mod:`tulip._serialize`, so ``data`` and ``models`` can share the one writer
+too. It is re-exported here for the evaluation callers that already import it.
 """
 
 from __future__ import annotations

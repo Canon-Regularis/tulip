@@ -9,9 +9,9 @@ Design choices worth knowing:
   present in ``y_true``); otherwise it is ``None`` with a debug log line.
 - A ``labels`` superset (classes the model knows but the split lacks) shapes
   only the per-class table and the confusion matrix. The macro averages are
-  computed over the classes actually observed in ``y_true``/``y_pred`` --
-  averaging in zero-support padding classes would silently deflate macro
-  precision/recall/F1 -- and balanced accuracy likewise uses only classes
+  computed over the classes actually observed in ``y_true``/``y_pred``.
+  Averaging in zero-support padding classes would silently deflate macro
+  precision/recall/F1. Balanced accuracy likewise uses only classes
   present in ``y_true`` (identical to scikit-learn's definition).
 """
 
@@ -190,7 +190,7 @@ def _guarded_roc_auc(
     """Macro one-vs-rest ROC AUC, or ``None`` (with a debug log) when not computable.
 
     Only a row-count mismatch raises (it means predictions and probabilities
-    describe different samples — a caller bug); every other shortfall simply
+    describe different samples, a caller bug); every other shortfall simply
     disables the metric.
     """
     if y_proba is None:

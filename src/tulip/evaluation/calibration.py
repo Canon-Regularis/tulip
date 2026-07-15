@@ -3,7 +3,7 @@
 A model can top the leaderboard on macro-F1 yet still be badly *overconfident*:
 when it says 0.9 it may be right only 0.6 of the time. That gap matters because
 :class:`~tulip.pipeline.classifier.DialectClassifier` abstains on a threshold
-over these very probabilities -- a cutoff on a number that does not mean what it
+over these very probabilities, a cutoff on a number that does not mean what it
 looks like unless the model is calibrated.
 
 This module reports that gap without touching the standard metrics:
@@ -72,7 +72,7 @@ class CalibrationReport(BaseModel):
     ``ece`` and ``mce`` are the standard *top-label* calibration errors: samples
     are grouped by their maximum predicted probability and, per bin, the mean
     confidence is compared with the observed accuracy. ``brier`` is the
-    multiclass Brier score, which ranges over ``[0, 2]`` (not ``[0, 1]``) -- the
+    multiclass Brier score, which ranges over ``[0, 2]`` (not ``[0, 1]``): the
     extra unit comes from summing the squared error across every class column.
 
     Attributes:
@@ -269,7 +269,7 @@ def _as_proba_matrix(y_proba: Any, *, n_samples: int, n_labels: int) -> np.ndarr
         )
     # Validate the VALUES too, not just the shape. A NaN row makes argmax select
     # the NaN slot, and the bin's mean confidence then fails CalibrationBin's
-    # Field(ge=0, le=1) -- surfacing as a cryptic pydantic error about an
+    # Field(ge=0, le=1), surfacing as a cryptic pydantic error about an
     # internal value object rather than about the caller's bad probabilities.
     if not np.all(np.isfinite(proba)):
         raise ConfigurationError("y_proba contains non-finite values (NaN or inf)")

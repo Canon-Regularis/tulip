@@ -159,7 +159,7 @@ def run_loco(
     Raises:
         DataError: if fewer than two source corpora carry a target-level label.
     """
-    from tulip.pipeline.experiment import _build_classifier, evaluate_samples
+    from tulip.pipeline.experiment import build_classifier, evaluate_samples
 
     by_source = _require_multi_source(config, samples)
     sources = sorted(by_source)
@@ -167,7 +167,7 @@ def run_loco(
     for held_out in sources:
         test = by_source[held_out]
         train = [sample for source in sources if source != held_out for sample in by_source[source]]
-        classifier = _build_classifier(config)
+        classifier = build_classifier(config)
         classifier.fit(train)
         report = evaluate_samples(classifier, test, name=held_out)
         results.append(
@@ -203,13 +203,13 @@ def transfer_matrix(
     Raises:
         DataError: if fewer than two source corpora carry a target-level label.
     """
-    from tulip.pipeline.experiment import _build_classifier, evaluate_samples
+    from tulip.pipeline.experiment import build_classifier, evaluate_samples
 
     by_source = _require_multi_source(config, samples)
     sources = sorted(by_source)
     grid: dict[str, dict[str, float]] = {}
     for train_source in sources:
-        classifier = _build_classifier(config)
+        classifier = build_classifier(config)
         classifier.fit(by_source[train_source])
         grid[train_source] = {
             test_source: evaluate_samples(

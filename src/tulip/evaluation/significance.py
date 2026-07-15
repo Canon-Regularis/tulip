@@ -1,11 +1,11 @@
 """Statistical significance for the leaderboard: CIs and paired model tests.
 
 A leaderboard that ranks 0.833 / 0.812 / 0.799 on one small split invites a false
-reading — that the order is real. On n≈144 it may be noise. This module turns the
+reading: that the order is real. On n≈144 it may be noise. This module turns the
 ranking into *claims a reader can trust*:
 
 * **Bootstrap confidence intervals** per metric (seeded percentile bootstrap over
-  a shared resample, so every model is judged on the same draws — common random
+  a shared resample, so every model is judged on the same draws; common random
   numbers reduce comparison variance).
 * **Exact McNemar tests** between every pair of models. Because the benchmark
   trains all competitors on the *identical* frozen split, their per-sample
@@ -16,8 +16,8 @@ ranking into *claims a reader can trust*:
 * A **"tied with best"** grouping: models whose corrected difference from the top
   model is not significant, so a reader sees the true front-runner *set*.
 
-Everything is deterministic — a fixed seed drives a fixed resample in fixed
-order — so a committed significance report regenerates byte-for-byte.
+Everything is deterministic: a fixed seed drives a fixed resample in fixed
+order, so a committed significance report regenerates byte-for-byte.
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ class SignificanceReport(BaseModel):
         tied = [m.model for m in self.models if m.tied_with_best]
         return "\n\n".join(
             [
-                f"# Significance — {self.split} (n={self.n_samples})",
+                f"# Significance: {self.split} (n={self.n_samples})",
                 f"Best by {_pretty(self.ranking_metric)}: **{self.best_model}**. "
                 f"Statistically tied with best (Holm-corrected McNemar, alpha={self.alpha}): "
                 f"{', '.join(tied)}.",

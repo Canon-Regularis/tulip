@@ -125,7 +125,7 @@ def plot_confusion(
     ax.set_ylabel("True label")
     title = "Confusion matrix" if normalize == "none" else f"Confusion matrix ({normalize}-norm)"
     if report.metadata.get("model"):
-        title += f" — {report.metadata['model']}"
+        title += f": {report.metadata['model']}"
     ax.set_title(title)
 
     if annotate is None:

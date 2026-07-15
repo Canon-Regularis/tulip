@@ -83,7 +83,7 @@ class SplitPredictions(BaseModel):
 
     Positionally comparable to another model's :class:`SplitPredictions` on the
     *same* split: the benchmark trains every competitor on the identical frozen,
-    speaker-disjoint split, so both share the same surviving-sample order — which
+    speaker-disjoint split, so both share the same surviving-sample order, which
     is what makes the significance tests genuinely paired.
     """
 

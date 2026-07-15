@@ -1,6 +1,6 @@
 """Reproducible public leaderboard: a byte-for-byte regenerable ranking.
 
-A leaderboard is the project's headline deliverable -- a single, comparable
+A leaderboard is the project's headline deliverable: a single, comparable
 ranking of models on identical frozen splits that anyone can regenerate and
 diff. This module is a thin, deterministic layer over the existing benchmark
 machinery:
@@ -178,7 +178,7 @@ def render_leaderboard_markdown(
 
     Rows are ranked by descending macro F1, with ties broken by
     ``(experiment, model)`` so the ordering is total and independent of the
-    order ``results`` arrives in -- a committed artifact must not change because
+    order ``results`` arrives in: a committed artifact must not change because
     a suite listed its configs differently.
 
     It never emits ``wall_seconds``: wall-clock time is machine dependent and
@@ -232,12 +232,12 @@ def write_leaderboard(
 
     Emits three files:
 
-    * ``leaderboard.md`` -- the deterministic ranking table.
-    * ``leaderboard.json`` -- the full raw benchmark dump (via
+    * ``leaderboard.md``: the deterministic ranking table.
+    * ``leaderboard.json``: the full raw benchmark dump (via
       :func:`~tulip.evaluation.benchmark.save_benchmark`); it retains raw
       per-model timings for reference and is therefore *not* part of the
       byte-identical guarantee.
-    * ``provenance.json`` -- deterministic audit record with sorted keys, no
+    * ``provenance.json``: deterministic audit record with sorted keys, no
       timestamps and no timings: ``tulip_version``, per-config seed and split
       seed, the competitor model list, per-config split sizes and class
       distribution read from each run's ``build_manifest.json`` (``null`` when
