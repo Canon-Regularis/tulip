@@ -145,3 +145,18 @@ the noise floor.
 ::: tulip.evaluation.minimum_detectable_effect
 
 ::: tulip.evaluation.PowerReport
+
+## Fairness
+
+Subgroup disparity across slices. For each dimension (source, speaker, modality,
+length), the best-versus-worst group accuracy gap and ratio, tested with an
+unpaired two-proportion test and Holm-corrected. A low-support worst group is
+flagged and never headlines.
+
+::: tulip.evaluation.fairness_report
+
+::: tulip.evaluation.FairnessReport
+
+::: tulip.evaluation.DisparityMetric
+
+::: tulip.evaluation.worst_group_gap

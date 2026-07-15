@@ -272,8 +272,8 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 (standalone; the command group the contract lists), `benchmark`, `leaderboard`
 (also emits significance), `analyze` (selective + error report from a saved
 `predictions_<split>.json`; `--hierarchical` adds family/dialect partial credit,
-`--power` the minimum detectable effect), `crossval`, `transfer`, `conformal`,
-`openset`
+`--power` the minimum detectable effect, `--fairness` the worst-versus-best
+subgroup gap), `crossval`, `transfer`, `conformal`, `openset`
 (flag inputs unlike any known dialect), `robustness`
 (score a model as its inputs are perturbed), `repro verify`
 (regenerate a suite and fail on drift from the committed board), `registry`
@@ -398,6 +398,12 @@ satisfies the protocol via a `predict_samples` adapter.
 - `power.py`: `minimum_detectable_effect` inverts the exact McNemar test over
   discordant pairs (via `math.comb`, no SciPy) to report the smallest paired
   accuracy gap detectable at a sample size. Reachable as `analyze --power`.
+- `fairness.py`: `fairness_report` extends `slice_metrics` into a disparity
+  summary, the best-versus-worst group accuracy gap and ratio per dimension. The
+  two groups are disjoint, so the gap is tested with an unpaired two-proportion
+  z-test (`math.erfc`, no SciPy), Holm-corrected across dimensions. A worst group
+  below the support floor is flagged and never headlines (`worst_group_gap` and
+  `max_gap` prefer a reliable dimension). Reachable as `analyze --fairness`.
 
 ### tulip.serve (FastAPI)
 
