@@ -142,7 +142,9 @@ def load_suite(path: Path | str) -> LeaderboardSuite:
         raise ConfigurationError(f"invalid leaderboard suite {path}:\n{exc}") from exc
 
 
-def run_leaderboard(suite: LeaderboardSuite) -> list[BenchmarkResult]:
+def run_leaderboard(
+    suite: LeaderboardSuite, *, output_dir: Path | None = None
+) -> list[BenchmarkResult]:
     """Run every ``(config, model)`` pair in ``suite`` on its frozen split.
 
     Each config is loaded and benchmarked with the identical, untouched
@@ -153,6 +155,11 @@ def run_leaderboard(suite: LeaderboardSuite) -> list[BenchmarkResult]:
 
     Args:
         suite: The leaderboard declaration.
+        output_dir: When set, overrides every config's ``output_dir`` so all
+            build artifacts (splits, models) land here instead of each config's
+            declared tree. A from-scratch reproduction passes a throwaway
+            directory, so the run depends only on the committed source and never
+            reads or writes the developer's own artifacts tree.
 
     Returns:
         One :class:`BenchmarkResult` per ``(config, model)`` pair.
@@ -165,6 +172,8 @@ def run_leaderboard(suite: LeaderboardSuite) -> list[BenchmarkResult]:
     results: list[BenchmarkResult] = []
     for config_path in suite.configs:
         config = load_experiment_config(config_path)
+        if output_dir is not None:
+            config = config.model_copy(update={"output_dir": Path(output_dir)})
         _logger.info("leaderboard %r: benchmarking config %r", suite.name, config.name)
         results.extend(run_benchmark(config, models, calibration_bins=suite.calibration_bins))
     _logger.info("leaderboard %r: produced %d result(s)", suite.name, len(results))
@@ -226,7 +235,11 @@ def render_leaderboard_markdown(
 
 
 def write_leaderboard(
-    results: Sequence[BenchmarkResult], out_dir: Path | str, *, suite: LeaderboardSuite
+    results: Sequence[BenchmarkResult],
+    out_dir: Path | str,
+    *,
+    suite: LeaderboardSuite,
+    build_dir: Path | None = None,
 ) -> None:
     """Write the leaderboard artifacts into ``out_dir``.
 
@@ -251,6 +264,13 @@ def write_leaderboard(
         out_dir: Directory to write into (created if needed).
         suite: The suite that produced ``results`` (its configs are re-read for
             provenance).
+        build_dir: Where the run built its splits, when that differs from each
+            config's declared ``output_dir`` (an isolated from-scratch run passes
+            the throwaway build root here). Provenance reads the per-split sizes
+            and dataset digest from ``build_dir/<name>/splits`` instead, so the
+            audit record reflects the splits that actually fed the run rather than
+            a stale developer artifacts tree. ``None`` uses each config's declared
+            ``output_dir``, the normal case.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -260,7 +280,7 @@ def write_leaderboard(
 
     save_benchmark(results, out_dir / LEADERBOARD_JSON)
 
-    provenance = _build_provenance(results, suite)
+    provenance = _build_provenance(results, suite, build_dir=build_dir)
     write_sorted_json(out_dir / PROVENANCE_JSON, provenance)
     _logger.info("wrote leaderboard artifacts to %s", out_dir)
 
@@ -316,11 +336,11 @@ def write_significance(
 
 
 def _build_provenance(
-    results: Sequence[BenchmarkResult], suite: LeaderboardSuite
+    results: Sequence[BenchmarkResult], suite: LeaderboardSuite, *, build_dir: Path | None = None
 ) -> dict[str, Any]:
     """Assemble the deterministic provenance payload (see :func:`write_leaderboard`)."""
     config_entries = [
-        _config_provenance(config_path, load_experiment_config(config_path))
+        _config_provenance(config_path, load_experiment_config(config_path), build_dir=build_dir)
         for config_path in suite.configs
     ]
     result_entries = [
@@ -342,12 +362,24 @@ def _build_provenance(
     }
 
 
-def _config_provenance(config_path: Path, config: ExperimentConfig) -> dict[str, Any]:
-    """Provenance for one experiment: seeds, split sizes/distribution, and a data digest."""
-    manifest = _read_manifest(config)
+def _config_provenance(
+    config_path: Path, config: ExperimentConfig, *, build_dir: Path | None = None
+) -> dict[str, Any]:
+    """Provenance for one experiment: seeds, split sizes/distribution, and a data digest.
+
+    The manifest and split lock are read from where the run actually built its
+    splits: ``build_dir/<name>/splits`` for an isolated run, else the config's
+    declared ``output_dir/<name>/splits``. Reading them from the build location
+    keeps a from-scratch reproduction honest, rather than picking up a stale
+    developer artifacts tree.
+    """
+    splits_dir = (
+        (build_dir if build_dir is not None else config.output_dir) / config.name / "splits"
+    )
+    manifest = _read_manifest(splits_dir)
     return {
         "class_distribution": manifest.get("class_distribution") if manifest else None,
-        "dataset_digest": _dataset_digest(config),
+        "dataset_digest": _dataset_digest(splits_dir),
         "name": config.name,
         "path": Path(config_path).as_posix(),
         "seed": config.seed,
@@ -356,8 +388,8 @@ def _config_provenance(config_path: Path, config: ExperimentConfig) -> dict[str,
     }
 
 
-def _dataset_digest(config: ExperimentConfig) -> str | None:
-    """The committed split lock's combined content digest, or ``None`` if absent.
+def _dataset_digest(splits_dir: Path) -> str | None:
+    """The split lock's combined content digest under ``splits_dir``, or ``None``.
 
     Ties the leaderboard to the exact dataset content that fed it: the split
     lock's ``combined`` digest changes if any sample in any split is added,
@@ -367,7 +399,7 @@ def _dataset_digest(config: ExperimentConfig) -> str | None:
     """
     from tulip.data.fingerprint import SPLIT_LOCK_NAME
 
-    path = config.output_dir / config.name / "splits" / SPLIT_LOCK_NAME
+    path = splits_dir / SPLIT_LOCK_NAME
     if not path.is_file():
         _logger.debug("no split lock at %s; dataset digest omitted from provenance", path)
         return None
@@ -404,16 +436,16 @@ def _result_provenance(result: BenchmarkResult, split: str) -> dict[str, Any] | 
     }
 
 
-def _read_manifest(config: ExperimentConfig) -> dict[str, Any] | None:
-    """Read a run's ``build_manifest.json``, or ``None`` if it is not on disk.
+def _read_manifest(splits_dir: Path) -> dict[str, Any] | None:
+    """Read the ``build_manifest.json`` under ``splits_dir``, or ``None`` if absent.
 
     The manifest is written by :meth:`tulip.data.builder.DatasetBuilder.build`
-    under ``<output_dir>/<name>/splits/``; it is absent until the suite is
-    actually run, so provenance degrades to ``null`` sizes rather than failing.
+    into the run's ``splits/`` directory; it is absent until the suite is actually
+    run, so provenance degrades to ``null`` sizes rather than failing.
     """
     from tulip.data.builder import BUILD_MANIFEST_NAME
 
-    path = config.output_dir / config.name / "splits" / BUILD_MANIFEST_NAME
+    path = splits_dir / BUILD_MANIFEST_NAME
     if not path.is_file():
         _logger.debug("no build manifest at %s; provenance sizes omitted", path)
         return None
