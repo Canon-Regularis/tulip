@@ -299,7 +299,9 @@ subgroup gap), `crossval`, `transfer`, `conformal`, `openset`
 (flag inputs unlike any known dialect), `acquire`
 (rank an unlabelled pool for annotation), `robustness`
 (score a model as its inputs are perturbed), `repro verify`
-(regenerate a suite and fail on drift from the committed board), `registry`
+(regenerate a suite and fail on drift from the committed board) and
+`repro from-scratch` (the same, but isolating every build output so the run
+depends only on committed source, as the Dockerfile does), `registry`
 (add/promote/rollback/ls/resolve), `card` (dataset/model), `selftrain`, `serve`.
 Discovery and metadata: `doctor` reports which components run now and what to
 install; `models list` / `features list` / `explainers list` show each registry

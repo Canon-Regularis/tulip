@@ -66,12 +66,24 @@ non-zero on any drift.
 tulip repro verify benchmarks/suite.yaml
 ```
 
-CI runs the same suite twice and diffs the outputs. A hidden nondeterminism (an
+For a clean-room check, `tulip repro from-scratch` does the same but redirects
+every build output (splits, trained models) into a throwaway directory too, so
+the run reads and writes nothing outside it. An exact match then proves the board
+depends only on the committed source, not on any pre-existing artifacts tree. The
+provided `Dockerfile` runs exactly this in a fresh container:
+
+```bash
+docker build -t tulip-repro .
+docker run --rm tulip-repro            # reproduce from scratch and diff
+```
+
+CI runs the same suite twice and diffs the outputs, and separately builds the
+container and regenerates the board inside it. A hidden nondeterminism (an
 unseeded RNG, a dict-ordering leak, a moved generator default) fails the build.
 CI checks same-run determinism, not a match against the committed board. BLAS
 differences across operating systems can perturb the last ULP of a
-probability-derived metric. `tulip repro verify` performs the stricter match on
-the platform that produced the board.
+probability-derived metric, so `tulip repro from-scratch` performs the stricter
+match on the platform that produced the board.
 
 The guarantee holds by construction:
 
