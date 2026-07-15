@@ -294,7 +294,8 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 `predictions_<split>.json`; `--hierarchical` adds family/dialect partial credit,
 `--power` the minimum detectable effect, `--fairness` the worst-versus-best
 subgroup gap), `crossval`, `transfer`, `conformal`, `openset`
-(flag inputs unlike any known dialect), `robustness`
+(flag inputs unlike any known dialect), `acquire`
+(rank an unlabelled pool for annotation), `robustness`
 (score a model as its inputs are perturbed), `repro verify`
 (regenerate a suite and fail on drift from the committed board), `registry`
 (add/promote/rollback/ls/resolve), `card` (dataset/model), `selftrain`, `serve`.
@@ -347,6 +348,14 @@ against the `pyproject.toml` version, which is the single source of truth.
   confident pseudo-labels, so label-less corpora (e.g. `bigos`) contribute.
   Knobs live in a module-owned `SelfTrainConfig`. `ExperimentConfig` is frozen
   and forbids extra fields.
+- `active.py`: `rank_for_labeling` ranks an unlabelled pool by acquisition score
+  so a fixed annotation budget buys the most signal (ranking only, not a
+  labelling UI). Strategies self-register in a `STRATEGIES` registry, each owning
+  its own parameters, so a new strategy is a class plus a decorator with nothing
+  central to edit: `least_confidence`, `margin`, `entropy`, and the dialect-aware
+  `intensity_gated` (uncertainty times dialect intensity, to skip standard
+  Polish). Ranking is pure over the fitted model and the pool, ties broken by
+  sample id. Reachable as `tulip acquire`.
 
 ### tulip.pipeline (classifier composition)
 

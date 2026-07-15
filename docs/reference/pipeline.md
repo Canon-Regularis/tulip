@@ -32,6 +32,23 @@ These are the objects most users touch.
 
 ::: tulip.pipeline.SelfTrainConfig
 
+## Active learning
+
+Rank an unlabeled pool by which samples to label first, so a fixed annotation
+budget buys the most signal. Strategies are a registry, each owning its own
+parameters: the uncertainty measures `least_confidence`, `margin`, and
+`entropy`, plus the dialect-aware `intensity_gated`, which multiplies uncertainty
+by dialect intensity so budget is not spent on standard Polish. Ranking is a pure
+function of the model and pool, ties broken by sample id.
+
+::: tulip.pipeline.rank_for_labeling
+
+::: tulip.pipeline.AcquisitionCandidate
+
+::: tulip.pipeline.STRATEGIES
+
+::: tulip.pipeline.AcquisitionStrategy
+
 ## Cross-validation
 
 Grouped, stratified K-fold cross-validation. Folds are speaker-disjoint. Each
