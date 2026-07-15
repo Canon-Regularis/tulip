@@ -563,13 +563,14 @@ def _register_factories() -> None:
             # training_aware: accepts the shared TrainingConfig knobs; the
             # embedding models below do not (frozen encoder + sklearn head).
             # raw_input: decodes audio paths itself, so it needs no extractors.
-            metadata={"training_aware": True, "raw_input": True},
+            # extra: torch + transformers + speechbrain, from the `speech` extra.
+            metadata={"training_aware": True, "raw_input": True, "extra": "speech"},
         )
     for name, checkpoint in EMBEDDING_CHECKPOINTS.items():
         MODELS.add(
             name,
             checkpoint_factory(EmbeddingSpeechClassifier, checkpoint),
-            metadata={"raw_input": True},
+            metadata={"raw_input": True, "extra": "speech"},
         )
 
 

@@ -259,7 +259,8 @@ def _register_factories() -> None:
             # may merge them into the model params.
             # raw_input: tokenises raw texts itself, so it needs no feature
             # extractors -- DialectClassifier checks this before fitting.
-            metadata={"training_aware": True, "raw_input": True},
+            # extra: torch + transformers, installed by the `transformers` extra.
+            metadata={"training_aware": True, "raw_input": True, "extra": "transformers"},
         )
 
 

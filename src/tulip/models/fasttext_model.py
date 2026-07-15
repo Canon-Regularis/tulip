@@ -340,7 +340,7 @@ _KNOB_ALIASES = {"epochs": "epoch", "learning_rate": "lr"}
 
 
 # raw_input: fastText consumes raw texts directly, so it takes no extractors.
-@MODELS.register("fasttext", metadata={"raw_input": True})
+@MODELS.register("fasttext", metadata={"raw_input": True, "extra": "fasttext"})
 def make_fasttext(**params: Any) -> FastTextClassifier:
     """Create a :class:`FastTextClassifier`.
 

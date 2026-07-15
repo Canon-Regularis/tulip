@@ -244,7 +244,7 @@ def random_forest(**params: Any) -> Any:
     return RandomForestClassifier(random_state=seed, **merged)
 
 
-@MODELS.register("xgboost")
+@MODELS.register("xgboost", metadata={"extra": "boosting"})
 def xgboost(**params: Any) -> Any:
     """XGBoost gradient-boosting baseline (optional extra ``boosting``).
 
@@ -277,7 +277,7 @@ def xgboost(**params: Any) -> Any:
     return LabelEncodedClassifier(xgb.XGBClassifier(random_state=seed, **merged))
 
 
-@MODELS.register("lightgbm")
+@MODELS.register("lightgbm", metadata={"extra": "boosting"})
 def lightgbm(**params: Any) -> Any:
     """LightGBM gradient-boosting baseline (optional extra ``boosting``).
 
