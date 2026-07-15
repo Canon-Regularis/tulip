@@ -9,6 +9,13 @@ with heavy dependencies (lime, shap, torch) import them lazily inside
 
 from __future__ import annotations
 
+from tulip.explain.aggregate import (
+    ClassCount,
+    FamilyEvidence,
+    GlobalEvidenceReport,
+    PhenomenonFrequency,
+    dataset_evidence,
+)
 from tulip.explain.registry import EXPLAINERS, get_explainer
 
 
@@ -25,4 +32,12 @@ def _register_builtins() -> None:
 
 _register_builtins()
 
-__all__ = ["EXPLAINERS", "get_explainer"]
+__all__ = [
+    "EXPLAINERS",
+    "ClassCount",
+    "FamilyEvidence",
+    "GlobalEvidenceReport",
+    "PhenomenonFrequency",
+    "dataset_evidence",
+    "get_explainer",
+]
