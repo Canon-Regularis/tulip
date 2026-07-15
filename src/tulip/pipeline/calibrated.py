@@ -13,7 +13,7 @@ Why composition, not subclassing (LSP)
 **not** a subclass of it. Subclassing would advertise substitutability that does
 not hold: a caller holding a ``DialectClassifier`` expects
 :meth:`~tulip.pipeline.classifier.DialectClassifier.predict_proba` to return the
-*model's own* probabilities, whereas this class returns *calibrated* ones -- a
+*model's own* probabilities, whereas this class returns *calibrated* ones, a
 silently different postcondition. Instead, ``CalibratedClassifier`` relates to
 its base and to its siblings (hierarchical, multimodal) only through the narrow
 :class:`~tulip.pipeline.protocols.SamplePredictor` protocol, and additionally
@@ -29,17 +29,21 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.core.types import TaskType
+from tulip.core.exceptions import DataError
 from tulip.models.calibration import IdentityCalibrator
-from tulip.pipeline._assembly import predictions_from_proba
+from tulip.pipeline._assembly import (
+    align_in_vocab_rows,
+    predictions_from_proba,
+    raws_for_task,
+    validate_abstain_threshold,
+)
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Any, Self
 
-    from tulip.core.types import Prediction, Sample
+    from tulip.core.types import Prediction, Sample, TaskType
     from tulip.labels.taxonomy import LabelLevel
     from tulip.models.calibration import ProbabilityCalibrator
     from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
@@ -74,10 +78,7 @@ class CalibratedClassifier:
         *,
         abstain_threshold: float | None = None,
     ) -> None:
-        if abstain_threshold is not None and not 0.0 <= abstain_threshold <= 1.0:
-            raise ConfigurationError(
-                f"abstain_threshold must be within [0, 1], got {abstain_threshold}"
-            )
+        validate_abstain_threshold(abstain_threshold)
         self.base = base
         self.calibrator: ProbabilityCalibrator = (
             IdentityCalibrator() if calibrator is None else calibrator
@@ -96,7 +97,7 @@ class CalibratedClassifier:
         buys nothing on unseen data. Pass a disjoint split.
 
         Rows whose gold label is unknown to the base classifier (labels it
-        never saw at training time) are dropped with a logged count -- they
+        never saw at training time) are dropped with a logged count: they
         carry no valid class index to calibrate against.
 
         Raises:
@@ -111,15 +112,7 @@ class CalibratedClassifier:
                 f"fit_calibration needs held-out, labelled validation data"
             )
         proba = self.base.predict_proba(batch.raws)
-        index_of = {label: index for index, label in enumerate(self.base.classes_)}
-        kept_rows: list[int] = []
-        y_index: list[int] = []
-        for row, label in enumerate(batch.labels):
-            class_index = index_of.get(label)
-            if class_index is None:
-                continue
-            kept_rows.append(row)
-            y_index.append(class_index)
+        kept_rows, y_index = align_in_vocab_rows(batch.labels, self.base.classes_)
         if not kept_rows:
             raise DataError(
                 "calibration set has no samples whose gold label is known to the base "
@@ -171,20 +164,8 @@ class CalibratedClassifier:
         return self.predict_batch(self._raws_of(samples))
 
     def _raws_of(self, samples: Sequence[Sample]) -> list[Any]:
-        """Extract the base's raw model inputs, erroring on a missing modality.
-
-        Mirrors the modality switch in :meth:`DialectClassifier.predict_samples`
-        rather than reaching into the base's private ``_raw_of``.
-        """
-        task = self.base.task
-        raws = [sample.text if task is TaskType.TEXT else sample.audio_path for sample in samples]
-        missing = [sample.id for sample, raw in zip(samples, raws, strict=True) if raw is None]
-        if missing:
-            raise DataError(
-                f"{len(missing)} sample(s) carry no {task.value} input and cannot be "
-                f"classified (first: {missing[0]!r})"
-            )
-        return raws
+        """Extract the base's raw model inputs, erroring on a missing modality."""
+        return raws_for_task(samples, self.base.task)
 
     # ----------------------------------------------------------- delegates
 

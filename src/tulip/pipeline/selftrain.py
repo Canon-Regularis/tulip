@@ -1,6 +1,6 @@
 """Semi-supervised self-training (pseudo-labeling) for unlabeled corpora.
 
-Some corpora carry substantial audio/text volume but no dialect labels --
+Some corpora carry substantial audio/text volume but no dialect labels.
 ``bigos`` (catalog ``label_levels=()``) is the motivating case. Self-training
 turns that volume into training signal: a classifier trained on the labeled
 seed set labels the unlabeled pool, its most confident guesses become
@@ -12,7 +12,7 @@ The knobs live in a module-owned :class:`SelfTrainConfig` rather than on
 :class:`~tulip.config.schemas.ExperimentConfig`: that schema is frozen and
 ``extra="forbid"``, so self-training parameters cannot be bolted onto it
 without editing the frozen config contract (reported as friction). Everything
-here is fully seeded and deterministic -- identical inputs and seed yield
+here is fully seeded and deterministic: identical inputs and seed yield
 identical pseudo counts and an identical final classifier.
 """
 
@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from tulip.core.exceptions import DataError
 from tulip.core.types import DialectLabels, Prediction, Sample, TaskType
 from tulip.labels.taxonomy import LabelLevel
+from tulip.pipeline._assembly import raw_input_of
 from tulip.pipeline.classifier import ComponentLike, DialectClassifier
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
@@ -39,7 +40,7 @@ _logger = get_logger(__name__)
 class SelfTrainConfig(BaseModel):
     """Parameters governing one self-training run.
 
-    This is a standalone, module-owned schema -- *not* an extension of
+    This is a standalone, module-owned schema, *not* an extension of
     :class:`~tulip.config.schemas.ExperimentConfig`, which is frozen and
     forbids extra fields.
 
@@ -95,18 +96,6 @@ class SelfTrainResult:
     n_pseudo_per_iteration: tuple[int, ...]
     classifier: DialectClassifier
     pseudo_samples: tuple[Sample, ...]
-
-
-def _raw_of(sample: Sample, task: TaskType) -> Any | None:
-    """Extract a sample's raw model input for ``task``, mirroring DialectClassifier.
-
-    Matches :meth:`DialectClassifier._raw_of` without reaching into its
-    internals, so unlabeled samples missing the modality are filtered here
-    exactly as the classifier would skip them.
-    """
-    if task is TaskType.TEXT:
-        return sample.text
-    return sample.audio_path
 
 
 def _fit_fresh(
@@ -187,7 +176,7 @@ def self_train(
     # modality (they can never be predicted or pseudo-labeled).
     candidates: list[tuple[Sample, Any]] = []
     for sample in unlabeled:
-        raw = _raw_of(sample, config.task)
+        raw = raw_input_of(sample, config.task)
         if raw is not None:
             candidates.append((sample, raw))
     if len(candidates) < len(unlabeled):

@@ -4,7 +4,7 @@
 (:class:`~tulip.config.schemas.ExperimentConfig`) end to end: seed, build
 leakage-free splits, train, evaluate, and persist every artifact needed to
 audit or reproduce the run. :func:`run_benchmark` trains several models over
-the *identical* frozen split -- the reproducible-benchmark deliverable: there
+the *identical* frozen split, the reproducible-benchmark deliverable: there
 is currently no widely adopted benchmark for Polish dialect identification,
 and comparable numbers require byte-identical splits.
 """
@@ -98,7 +98,7 @@ def run_experiment(
         )
 
     started = time.perf_counter()
-    classifier = _build_classifier(config)
+    classifier = build_classifier(config)
     classifier.fit(splits.train)
 
     reports: dict[str, EvaluationReport] = {}
@@ -171,7 +171,7 @@ def run_benchmark(
         candidate_config = config.model_copy(update={"model": entry})
         _logger.info("benchmark %r: training %s", config.name, entry.name)
         started = time.perf_counter()
-        classifier = _build_classifier(candidate_config)
+        classifier = build_classifier(candidate_config)
         classifier.fit(splits.train)
         reports: dict[str, EvaluationReport] = {}
         predictions: dict[str, SplitPredictions] = {}
@@ -201,11 +201,11 @@ def run_benchmark(
     return results
 
 
-def _build_classifier(config: ExperimentConfig) -> DialectClassifier:
+def build_classifier(config: ExperimentConfig) -> DialectClassifier:
     """Instantiate the classifier declared by an experiment config.
 
     For raw-input models (empty ``features``) registered as ``training_aware``
-    -- i.e. whose constructors accept the shared TrainingConfig knobs --
+    (i.e. whose constructors accept the shared TrainingConfig knobs),
     ``config.training`` values are merged into the model params; explicit
     per-model params always win. The capability is declared at each model's
     registration site (see :meth:`tulip.core.registry.Registry.add`), so new
@@ -219,7 +219,7 @@ def _build_classifier(config: ExperimentConfig) -> DialectClassifier:
     if not training_aware and config.training != TrainingConfig():
         _logger.warning(
             "experiment %r sets a training block, but model %r is not training-aware; "
-            "the block is ignored — pass hyperparameters via model.params instead",
+            "the block is ignored; pass hyperparameters via model.params instead",
             config.name,
             model.name,
         )
@@ -403,6 +403,7 @@ def _evaluate_split(
 
 __all__ = [
     "ExperimentResult",
+    "build_classifier",
     "collect_predictions",
     "evaluate_samples",
     "run_benchmark",

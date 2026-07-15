@@ -39,14 +39,14 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.core.types import TaskType
+from tulip.pipeline._assembly import align_in_vocab_rows, raws_for_task
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Any, Self
 
-    from tulip.core.types import Sample
+    from tulip.core.types import Sample, TaskType
     from tulip.labels.taxonomy import LabelLevel
     from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
 
@@ -232,14 +232,7 @@ class ConformalClassifier:
         """Probabilities and true-class indices for in-vocabulary calibration rows."""
         batch = self._require_labelled(samples)
         proba = self.base.predict_proba(batch.raws)
-        index_of = {label: index for index, label in enumerate(self.base.classes_)}
-        kept_rows: list[int] = []
-        y_index: list[int] = []
-        for row, label in enumerate(batch.labels):
-            class_index = index_of.get(label)
-            if class_index is not None:
-                kept_rows.append(row)
-                y_index.append(class_index)
+        kept_rows, y_index = align_in_vocab_rows(batch.labels, self.base.classes_)
         if not kept_rows:
             raise DataError(
                 "calibration set has no samples whose gold label is known to the base "
@@ -266,15 +259,7 @@ class ConformalClassifier:
 
     def _raws_of(self, samples: Sequence[Sample]) -> list[Any]:
         """Extract the base's raw inputs, erroring on a missing modality."""
-        task = self.base.task
-        raws = [sample.text if task is TaskType.TEXT else sample.audio_path for sample in samples]
-        missing = [sample.id for sample, raw in zip(samples, raws, strict=True) if raw is None]
-        if missing:
-            raise DataError(
-                f"{len(missing)} sample(s) carry no {task.value} input and cannot be "
-                f"classified (first: {missing[0]!r})"
-            )
-        return raws
+        return raws_for_task(samples, self.base.task)
 
     # ----------------------------------------------------------- delegates
 

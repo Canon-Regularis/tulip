@@ -203,7 +203,7 @@ def run_cross_validation(config: ExperimentConfig, cv: CVConfig) -> CVReport:
             :func:`grouped_stratified_kfold`).
     """
     from tulip.data.builder import DatasetBuilder
-    from tulip.pipeline.experiment import _build_classifier, evaluate_samples
+    from tulip.pipeline.experiment import build_classifier, evaluate_samples
 
     samples = DatasetBuilder(config.data).load_samples()
     fold_results: list[CVFoldResult] = []
@@ -214,7 +214,7 @@ def run_cross_validation(config: ExperimentConfig, cv: CVConfig) -> CVReport:
                 samples, k=cv.k, seed=seed, target=config.target, group_by=cv.group_by
             )
         ):
-            classifier = _build_classifier(candidate)
+            classifier = build_classifier(candidate)
             classifier.fit(train)
             report = evaluate_samples(classifier, test, name=f"seed{seed}-fold{fold}")
             fold_results.append(

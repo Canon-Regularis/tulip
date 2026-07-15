@@ -17,6 +17,7 @@ from tulip.pipeline.crossval import (
 )
 from tulip.pipeline.experiment import (
     ExperimentResult,
+    collect_predictions,
     evaluate_samples,
     run_benchmark,
     run_experiment,
@@ -73,6 +74,7 @@ __all__ = [
     "SelfTrainConfig",
     "SelfTrainResult",
     "WeightedAverageFusion",
+    "collect_predictions",
     "evaluate_samples",
     "grouped_stratified_kfold",
     "run_benchmark",

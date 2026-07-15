@@ -40,7 +40,7 @@ class PredictionExplainer:
     this object.
 
     Args:
-        pipeline: The fitted prediction object — an sklearn
+        pipeline: The fitted prediction object, an sklearn
             :class:`~sklearn.pipeline.Pipeline` (features + model) or a
             raw-input model taking texts/audio paths directly.
         task: Input modality of the pipeline.
@@ -95,8 +95,8 @@ class PredictionExplainer:
         """Build (once) and return the nearest-examples explainer.
 
         Depends on the concrete class rather than the ``Explainer`` protocol
-        because this is exactly the site that needs its extra capability —
-        building the index — which the protocol deliberately does not carry.
+        because this is exactly the site that needs its extra capability,
+        building the index, which the protocol deliberately does not carry.
         """
         if self._neighbor_explainer is not None:
             return self._neighbor_explainer

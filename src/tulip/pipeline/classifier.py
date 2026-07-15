@@ -23,13 +23,19 @@ from tulip.core.types import Explanation, Prediction, Sample, TaskType
 from tulip.labels.taxonomy import LabelLevel
 from tulip.models import MODELS
 from tulip.models.persistence import load_model, save_model
-from tulip.pipeline._assembly import predictions_from_proba
+from tulip.pipeline._assembly import (
+    predictions_from_proba,
+    raw_input_of,
+    raws_for_task,
+    validate_abstain_threshold,
+)
 from tulip.pipeline.explaining import PredictionExplainer
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import Self
 
 _logger = get_logger(__name__)
 
@@ -87,7 +93,7 @@ class DialectClassifier:
             are used.
         target: Label granularity to train against (see LabelLevel).
         abstain_threshold: When set, predictions whose top probability falls
-            below it abstain (``label=None``) instead of guessing --
+            below it abstain (``label=None``) instead of guessing;
             uncertainty-aware classification for out-of-scope inputs.
         seed: Seed applied before fitting (numpy/random/torch when present).
     """
@@ -102,10 +108,7 @@ class DialectClassifier:
         abstain_threshold: float | None = None,
         seed: int = 42,
     ) -> None:
-        if abstain_threshold is not None and not 0.0 <= abstain_threshold <= 1.0:
-            raise ConfigurationError(
-                f"abstain_threshold must be within [0, 1], got {abstain_threshold}"
-            )
+        validate_abstain_threshold(abstain_threshold)
         self.model_config = _coerce_component(model)
         self.feature_configs = tuple(_coerce_component(entry) for entry in features)
         self.task = TaskType(task)
@@ -120,11 +123,11 @@ class DialectClassifier:
 
     # ------------------------------------------------------------------ fit
 
-    def fit(self, samples: Sequence[Sample]) -> DialectClassifier:
+    def fit(self, samples: Sequence[Sample]) -> Self:
         """Train on the samples that carry both the input modality and the label.
 
         Samples missing text/audio for the configured task, or missing a label
-        at the target level, are skipped with a logged count -- corpora are
+        at the target level, are skipped with a logged count: corpora are
         heterogeneous and partial labelling is the norm, but training on
         nothing is an error.
 
@@ -165,7 +168,7 @@ class DialectClassifier:
         paths) and dies deep inside scikit-learn with ``could not convert string
         to float``, which tells the user nothing. Raw-capable models declare
         themselves with ``metadata={"raw_input": True}`` at registration, which
-        is the capability mechanism docs/architecture.md prescribes -- consumers
+        is the capability mechanism docs/architecture.md prescribes; consumers
         query the registry rather than hardcoding a list of model names.
 
         Raises:
@@ -196,9 +199,7 @@ class DialectClassifier:
 
     def _raw_of(self, sample: Sample) -> Any | None:
         """Extract the raw model input for one sample, or ``None`` if absent."""
-        if self.task is TaskType.TEXT:
-            return sample.text
-        return sample.audio_path
+        return raw_input_of(sample, self.task)
 
     def labelled_batch(self, samples: Sequence[Sample]) -> LabelledBatch:
         """Pair each sample's raw input with its label at the target level.
@@ -244,14 +245,7 @@ class DialectClassifier:
         Raises:
             DataError: if any sample lacks this classifier's input modality.
         """
-        raws = [self._raw_of(sample) for sample in samples]
-        missing = [sample.id for sample, raw in zip(samples, raws, strict=True) if raw is None]
-        if missing:
-            raise DataError(
-                f"{len(missing)} sample(s) carry no {self.task.value} input and cannot be "
-                f"classified (first: {missing[0]!r})"
-            )
-        return self.predict_batch(raws)
+        return self.predict_batch(raws_for_task(samples, self.task))
 
     def predict_batch(self, raws: Sequence[Any]) -> list[Prediction]:
         """Classify a batch of raw inputs, one :class:`Prediction` each.
@@ -271,7 +265,7 @@ class DialectClassifier:
 
         Models without native probabilities degrade to one-hot rows built from
         their hard predictions (with a logged warning), so downstream code can
-        rely on this method existing — the same guarantee the
+        rely on this method existing, the same guarantee the
         :class:`~tulip.core.interfaces.Classifier` protocol makes.
 
         Raises:

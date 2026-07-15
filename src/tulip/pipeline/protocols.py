@@ -4,7 +4,7 @@
 label level from one fixed modality. Two of its siblings deliberately do not:
 
 * :class:`~tulip.pipeline.hierarchical.HierarchicalDialectClassifier` returns a
-  prediction whose ``level`` varies *per sample* -- fine-grained when the model
+  prediction whose ``level`` varies *per sample*: fine-grained when the model
   is confident, backed off to a coarser level when it is not.
 * :class:`~tulip.pipeline.fusion.MultimodalClassifier` reads *both* ``text`` and
   ``audio_path`` from a sample and fuses two probability distributions.
@@ -14,7 +14,7 @@ Neither can be a subclass of ``DialectClassifier`` without breaking it.
 :class:`~tulip.core.types.Prediction` carries ``level == self.target``, and that
 its input is a sequence of *raw* values (texts or audio paths) for a single
 modality. A subclass that violated either postcondition would not be
-substitutable for its base -- the Liskov substitution principle is precisely the
+substitutable for its base; the Liskov substitution principle is precisely the
 rule being obeyed by *not* subclassing here.
 
 So the three are related by a common protocol rather than a class hierarchy.
@@ -66,7 +66,7 @@ class ProbabilisticClassifier(Protocol):
     vocabulary, a shared label level, a modality tag, and a probability matrix,
     and nothing else. :class:`~tulip.pipeline.classifier.DialectClassifier`
     satisfies it structurally, so no import of the concrete class is required to
-    depend on this behaviour -- which is what lets a test inject a cheap
+    depend on this behaviour, which is what lets a test inject a cheap
     deterministic probability stub instead of training a real model.
 
     It lives here, beside :class:`SamplePredictor`, rather than in any one
