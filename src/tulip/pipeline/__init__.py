@@ -1,5 +1,12 @@
 """High-level pipeline: the DialectClassifier facade and experiment runners."""
 
+from tulip.pipeline.active import (
+    STRATEGIES,
+    AcquisitionCandidate,
+    AcquisitionContext,
+    AcquisitionStrategy,
+    rank_for_labeling,
+)
 from tulip.pipeline.calibrated import CalibratedClassifier
 from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
 from tulip.pipeline.conformal import (
@@ -46,6 +53,10 @@ from tulip.pipeline.protocols import SamplePredictor
 from tulip.pipeline.selftrain import SelfTrainConfig, SelfTrainResult, self_train
 
 __all__ = [
+    "STRATEGIES",
+    "AcquisitionCandidate",
+    "AcquisitionContext",
+    "AcquisitionStrategy",
     "AllOf",
     "AlwaysAccept",
     "AnyOf",
@@ -81,6 +92,7 @@ __all__ = [
     "collect_predictions",
     "evaluate_samples",
     "grouped_stratified_kfold",
+    "rank_for_labeling",
     "run_benchmark",
     "run_cross_validation",
     "run_experiment",
