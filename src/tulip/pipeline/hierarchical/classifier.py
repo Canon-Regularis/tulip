@@ -40,8 +40,8 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from tulip._serialize import write_sorted_json
 from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.core.types import ClassProbability, Prediction, TaskType
-from tulip.labels.taxonomy import LabelLevel, family_for
+from tulip.core.types import Prediction, TaskType
+from tulip.labels.taxonomy import LabelLevel
 from tulip.pipeline.classifier import DialectClassifier
 from tulip.pipeline.hierarchical.policies import (
     AlwaysAccept,
@@ -49,6 +49,7 @@ from tulip.pipeline.hierarchical.policies import (
     _spec_of,
     policy_from_spec,
 )
+from tulip.pipeline.hierarchical.projection import resolve_prediction
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -220,87 +221,17 @@ class HierarchicalDialectClassifier:
             level: classifier.predict_samples(samples)
             for level, classifier in self._classifiers.items()
         }
-        return [self._resolve(index, by_level) for index in range(len(samples))]
-
-    def _resolve(self, index: int, by_level: dict[LabelLevel, list[Prediction]]) -> Prediction:
-        """Walk fine -> coarse for one sample, returning the accepted level."""
-        *backoff_levels, coarsest = self._fine_to_coarse
-        for level in backoff_levels:
-            candidate = self._candidate(level, index, by_level)
-            # ``None`` means this level cannot express the coarser decision at all
-            # (e.g. the family is ``standard``, which has no dialects). That is not
-            # a low-confidence answer; it is no answer, so back off immediately.
-            if candidate is not None and self.policy.accepts(candidate):
-                return candidate
-        coarsest_candidate = self._candidate(coarsest, index, by_level)
-        assert coarsest_candidate is not None  # noqa: S101  # the coarsest level never projects
-        return coarsest_candidate
-
-    def _candidate(
-        self, level: LabelLevel, index: int, by_level: dict[LabelLevel, list[Prediction]]
-    ) -> Prediction | None:
-        """Return the prediction at ``level``, projected onto its coarser neighbour.
-
-        ``None`` signals that ``level`` cannot represent the coarser prediction.
-        """
-        prediction = by_level[level][index]
-        coarser = self._coarser_of.get(level)
-        if self.mask_to_coarse and level is LabelLevel.DIALECT and coarser is LabelLevel.FAMILY:
-            return self._project_onto_family(prediction, by_level[coarser][index])
-        return prediction
-
-    def _project_onto_family(self, fine: Prediction, coarse: Prediction) -> Prediction | None:
-        """Restrict the dialect distribution to the predicted family, by the chain rule.
-
-        The dialect classes outside the coarse prediction's family drop to zero,
-        and the survivors are rescaled to ``P(family) * P(dialect | family)``.
-
-        Rescaling to the *coarse probability* rather than renormalising to 1.0 is
-        the whole point. A family with exactly one dialect (Kashubian -> Kashubia)
-        would otherwise renormalise to a certainty of 1.000 no matter how unsure
-        the family classifier was, which silently defeats every confidence-based
-        backoff policy. Under the chain rule that same case yields exactly
-        ``P(family)``, so the fine prediction can never be more confident than the
-        coarse decision it rests on. The returned distribution therefore sums to
-        ``P(family)``, not to 1; it is a joint, not a conditional.
-
-        Returns:
-            The projected prediction, or ``None`` when the predicted family has no
-            dialect children (``standard``), i.e. the finer level cannot answer.
-        """
-        if coarse.label is None:
-            return fine  # the family classifier abstained; nothing to project onto
-        consistent = {
-            cp.label: cp.probability
-            for cp in fine.probabilities
-            if (family := family_for(cp.label)) is not None and family.value == coarse.label
-        }
-        total = sum(consistent.values())
-        if total <= 0.0:
-            _logger.debug(
-                "family %r has no dialect children; the dialect level cannot answer",
-                coarse.label,
+        return [
+            resolve_prediction(
+                index,
+                by_level,
+                fine_to_coarse=self._fine_to_coarse,
+                coarser_of=self._coarser_of,
+                mask_to_coarse=self.mask_to_coarse,
+                policy=self.policy,
             )
-            return None
-        family_probability = coarse.as_dict().get(coarse.label, 0.0)
-        projected = tuple(
-            ClassProbability(
-                label=cp.label,
-                probability=(
-                    family_probability * consistent[cp.label] / total
-                    if cp.label in consistent
-                    else 0.0
-                ),
-            )
-            for cp in fine.probabilities
-        )
-        top_label = max(consistent, key=lambda label: consistent[label])
-        return Prediction(
-            label=top_label,
-            level=fine.level,
-            probabilities=projected,
-            abstained=fine.abstained,
-        )
+            for index in range(len(samples))
+        ]
 
     # -------------------------------------------------------------- persist
 
