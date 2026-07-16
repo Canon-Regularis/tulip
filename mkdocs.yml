@@ -1,5 +1,8 @@
 site_name: tulip
 site_description: Polish dialect detection from text, transcribed speech, and raw audio.
+site_url: https://canon-regularis.github.io/tulip/
+repo_url: https://github.com/Canon-Regularis/tulip
+repo_name: Canon-Regularis/tulip
 docs_dir: docs
 
 theme:

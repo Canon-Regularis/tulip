@@ -1,0 +1,43 @@
+# Deploys the documentation to GitHub Pages on every push to main.
+#
+# CI already builds the docs with --strict on pull requests, so this workflow
+# only repeats the strict build and publishes the result. Pages must be enabled
+# in the repository settings with "GitHub Actions" as the source.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one in flight: if the superseding push
+# fails its build, the cancelled run's passing content would be lost and the
+# site would go stale.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[docs]"
+      - run: mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/
+      - id: deployment
+        uses: actions/deploy-pages@v4
