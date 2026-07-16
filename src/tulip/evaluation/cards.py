@@ -25,7 +25,7 @@ partial artifact still produces a usable card.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from tulip.evaluation._format import format_metric, markdown_table
@@ -377,7 +377,7 @@ def _metrics_section(reports: Mapping[str, EvaluationReport]) -> str:
         return "## Metrics\n\nNo evaluation reports available."
 
     split_names = _ordered_splits(reports)
-    metric_rows = [
+    metric_rows: list[tuple[str, Callable[[EvaluationReport], str]]] = [
         ("Samples", lambda r: str(r.n_samples)),
         ("Accuracy", lambda r: format_metric(r.accuracy)),
         ("Balanced accuracy", lambda r: format_metric(r.balanced_accuracy)),

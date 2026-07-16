@@ -191,11 +191,64 @@ markers = [
 python_version = "3.12"
 mypy_path = "src"
 packages = ["tulip"]
+strict = true
+# scikit-learn ships no type information, so every estimator/transformer subclass
+# (BaseEstimator, TransformerMixin, ClassifierMixin) would trip
+# disallow_subclassing_any. The toolkit is built on those base classes, so this
+# one strict flag is relaxed globally rather than silenced at dozens of sites.
+disallow_subclassing_any = false
+# numpy and scikit-learn type most array operations as returning Any (a known
+# limitation of their stubs), so `return arr.max(axis=1)` from an `-> np.ndarray`
+# function is a false positive. Casting ~30 such returns would add noise with no
+# bug-catching value, so this one strict flag is relaxed; every other strict
+# check (untyped defs, implicit optional, any-generics, implicit re-export,
+# strict equality) stays on.
+warn_return_any = false
+
+# Precise, per-module missing-import handling instead of a blanket
+# ignore_missing_imports: a mistyped first-party import (tulip.*) is now a real
+# error, while these genuinely untyped third-party libraries stay silent.
+[[tool.mypy.overrides]]
+module = [
+    "sklearn.*",
+    "pandas.*",
+    "joblib.*",
+    "scipy.*",
+    "yaml",
+    "torch.*",
+    "torchaudio.*",
+    "transformers.*",
+    "datasets.*",
+    "accelerate.*",
+    "sentencepiece.*",
+    "speechbrain.*",
+    "fasttext.*",
+    "librosa.*",
+    "soundfile.*",
+    "parselmouth.*",
+    "xgboost.*",
+    "lightgbm.*",
+    "anthropic.*",
+    "huggingface_hub.*",
+    "shap.*",
+    "lime.*",
+    "folium.*",
+    "plotly.*",
+    "matplotlib.*",
+    "umap.*",
+    "fastapi.*",
+    "starlette.*",
+    "uvicorn.*",
+    "multipart.*",
+]
 ignore_missing_imports = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-no_implicit_optional = true
-check_untyped_defs = true
+
+# FastAPI's route decorators are untyped when the serve extra is absent from the
+# type-checking environment, which would make every endpoint "untyped" under
+# strict. The serving layer is optional, so this one flag is relaxed there.
+[[tool.mypy.overrides]]
+module = ["tulip.serve.*"]
+disallow_untyped_decorators = false
 
 [tool.coverage.run]
 source = ["tulip"]

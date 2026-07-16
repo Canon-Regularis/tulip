@@ -164,7 +164,7 @@ def _add_abstention_layer(
         "Prediction abstained: no region reached the confidence threshold."
         "</div>"
     )
-    fmap.get_root().html.add_child(folium_mod.Element(note))  # type: ignore[attr-defined]
+    fmap.get_root().html.add_child(folium_mod.Element(note))
 
 
 def prediction_map(
