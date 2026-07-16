@@ -31,6 +31,11 @@ from tulip.data.synthetic_audio import (
     generate_audio_corpus,
     write_synthetic_audio_manifest,
 )
+from tulip.data.transcribe import (
+    TranscribeConfig,
+    transcribe_samples,
+    write_transcribed_manifest,
+)
 from tulip.data.validation import ManifestIssue, ManifestReport, validate_manifest
 
 __all__ = [
@@ -49,6 +54,7 @@ __all__ = [
     "SplitFingerprint",
     "SyntheticSpec",
     "TextCleaner",
+    "TranscribeConfig",
     "catalog",
     "deduplicate_samples",
     "download_datasets",
@@ -62,8 +68,10 @@ __all__ = [
     "save_splits",
     "speaker_disjoint_split",
     "surrogate_speaker_id",
+    "transcribe_samples",
     "validate_manifest",
     "verify_splits",
     "write_synthetic_audio_manifest",
     "write_synthetic_manifest",
+    "write_transcribed_manifest",
 ]

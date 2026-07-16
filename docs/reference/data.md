@@ -58,3 +58,15 @@ as `split_lock.json` next to the splits.
 ::: tulip.data.SyntheticSpec
 
 ::: tulip.data.write_synthetic_manifest
+
+## Transcription: the ASR bridge
+
+Turn an audio corpus into a text manifest, producing the transcribed-speech
+track the text pipeline trains on directly. Whisper is injectable and results go
+through a content-addressed cache; see [Datasets](../datasets.md) for the CLI.
+
+::: tulip.data.transcribe_samples
+
+::: tulip.data.write_transcribed_manifest
+
+::: tulip.data.TranscribeConfig
