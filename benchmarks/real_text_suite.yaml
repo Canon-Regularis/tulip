@@ -1,0 +1,28 @@
+# Real-text tulip leaderboard suite (dialektarium + dgp).
+#
+# The companion to suite.yaml. Where suite.yaml runs on the offline synthetic
+# corpus and produces the committed, byte-for-byte reproducible board, THIS
+# suite trains on real, locally-acquired dialect prose. That makes its numbers
+# scientifically meaningful but not reproducible from a clean checkout: the
+# dialektarium and dgp corpora must be acquired by hand first (a licence-bound
+# step tulip cannot automate; see benchmarks/README.md and docs/datasets.md).
+#
+# Nothing from this suite is committed. Point --out at a local directory:
+#
+#   tulip leaderboard benchmarks/real_text_suite.yaml --out artifacts/real-text
+#
+# The same classical competitor set as the synthetic suite is used, so once the
+# corpora are present the track needs no heavy or optional dependencies.
+name: real-text-leaderboard
+
+configs:
+  - benchmarks/configs/real_text_char.yaml
+  - benchmarks/configs/real_text_lexical.yaml
+
+models:
+  - naive_bayes
+  - logistic_regression
+  - linear_svm
+  - random_forest
+
+calibration_bins: 10

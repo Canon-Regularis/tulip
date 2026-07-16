@@ -1,0 +1,45 @@
+# Word-level + lexical track of the real-text leaderboard.
+#
+# The contrast with real_text_char.yaml mirrors the synthetic suite: character
+# n-grams pick up sub-word phonology, whereas word-level TF-IDF, dialect
+# keywords, and stylometry only see whole-word markers. Running both on the
+# same real corpora shows which signal each dialect actually carries.
+#
+# Like real_text_char.yaml, this trains on REAL locally-acquired corpora
+# (dialektarium + dgp): it does not run on a clean checkout, its board is not
+# committed, and acquiring the corpora is a manual licence-bound step (see
+# benchmarks/README.md and docs/datasets.md).
+name: real-text-lexical
+seed: 42
+task: text
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: dialektarium
+    - name: dgp
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features:
+  - name: word_tfidf
+  - name: dialect_keywords
+  - name: stylometry
+
+model:
+  name: logistic_regression
+  params:
+    C: 1.0
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  group_by: speaker_id
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts/benchmarks
+abstain_threshold: null

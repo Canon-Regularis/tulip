@@ -1,0 +1,45 @@
+# Character n-gram TF-IDF track of the real-text leaderboard.
+#
+# Unlike the synthetic suite, this track trains on REAL locally-acquired
+# corpora (dialektarium + dgp), so it does not run on a clean checkout and its
+# board is not committed. Acquiring these corpora is a manual, licence-bound
+# step, not something tulip can automate; see benchmarks/README.md and
+# docs/datasets.md for the acquisition instructions. Once the corpora sit under
+# data/raw/, run the real-text suite exactly like the synthetic one.
+#
+# output_dir points into the gitignored artifacts/ tree: this track's numbers
+# are yours to reproduce locally, not a shared reference point.
+name: real-text-char
+seed: 42
+task: text
+target: dialect
+
+data:
+  root: data/raw
+  datasets:
+    - name: dialektarium
+    - name: dgp
+  clean: true
+  deduplicate: true
+  min_text_chars: 20
+
+features:
+  - name: char_tfidf
+    params:
+      ngram_range: [2, 5]
+
+model:
+  name: logistic_regression
+  params:
+    C: 1.0
+
+split:
+  train: 0.70
+  validation: 0.15
+  test: 0.15
+  group_by: speaker_id
+  stratify_by: dialect
+  seed: 42
+
+output_dir: artifacts/benchmarks
+abstain_threshold: null

@@ -129,6 +129,32 @@ artifact):
 tulip benchmark benchmarks/configs/char_baseline.yaml -m naive_bayes -m logistic_regression
 ```
 
+## The real-text track (real corpora, not reproducible)
+
+`suite.yaml` measures the machinery on a generated fixture. `real_text_suite.yaml`
+is its scientific companion: the same classical competitor set and feature tracks,
+trained on real dialect prose (`dialektarium` + `dgp`) instead of `synthetic`.
+
+The trade is deliberate. Real corpora make the numbers meaningful, but they cannot
+be committed or regenerated from a clean checkout, because acquiring them is a
+manual, licence-bound step, not code. tulip cannot fetch either corpus for you:
+`dialektarium` (<https://dialektarium.pl/>) and `dgp`
+(<https://przewodnik.tmjp.pl/>) are published without a licence-clean bulk source.
+Assemble each under `data/raw/<name>/` as a local manifest, following the
+acquisition notes in `docs/datasets.md` and `tulip data list`.
+
+Once both corpora are present, run it exactly like the synthetic suite, but point
+`--out` at a local directory, since nothing here is committed:
+
+```bash
+tulip leaderboard benchmarks/real_text_suite.yaml --out artifacts/real-text
+```
+
+There is no `tulip repro verify` for this suite: its inputs are not part of the
+repository, so byte-for-byte reproducibility across machines is not claimed. The
+two feature tracks (`real_text_char`, `real_text_lexical`) mirror the synthetic
+char-versus-lexical contrast, so the real board reads the same way.
+
 ## Add a competitor or a track
 
 - **New competitor model.** Add its registry name to `suite.yaml`'s `models`.
