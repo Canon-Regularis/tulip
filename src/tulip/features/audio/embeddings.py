@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.exceptions import NotFittedError
 
-from tulip.core.exceptions import TulipError
 from tulip.features.audio.loading import DEFAULT_SAMPLE_RATE, load_audio
 from tulip.features.registries import AUDIO_FEATURES
 from tulip.utils import optional
@@ -131,7 +131,7 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
         del input_features
         hidden_size = getattr(self, "hidden_size_", None)
         if hidden_size is None:
-            raise TulipError(
+            raise NotFittedError(
                 "embedding dimensionality is unknown until the checkpoint config is "
                 "loaded; call fit() first"
             )
