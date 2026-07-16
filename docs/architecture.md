@@ -283,7 +283,14 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
 
 ### tulip.cli (typer)
 
-`tulip.cli.app:main`. Command groups: `data`
+`tulip.cli.app:main` is the entry point. `app.py` is a thin assembler: it imports
+the root app from `cli/_context.py` and imports each command group from
+`cli/commands/` for its registration side effects. `cli/_context.py` owns the
+root app and the seven sub-apps, the consoles, the `_tulip_errors` boundary, and
+the shared render helpers. Each module under `cli/commands/` (data, training,
+leaderboard, analyze, registry, pipeline, predict, cards, serve, inspect) defines
+one cohesive command group and keeps its heavy imports function-local, so `tulip
+--help` never pays for scikit-learn. Command groups: `data`
 (list/download/prepare/synthesize/synthesize-audio/validate), `train`,
 `evaluate`, `predict` (text arg or `--audio` path; `--json`; map export via
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
