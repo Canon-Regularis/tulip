@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
+from tulip._serialize import write_markdown
 from tulip.config.loader import save_experiment_config
 from tulip.config.schemas import ComponentConfig, ExperimentConfig
 from tulip.core.exceptions import DataError
@@ -196,7 +197,7 @@ def run_benchmark(
 
     save_benchmark(results, output_dir / "benchmark.json")
     markdown = to_markdown_table(results)
-    (output_dir / "benchmark.md").write_text(markdown + "\n", encoding="utf-8", newline="\n")
+    write_markdown(output_dir / "benchmark.md", markdown)
     _logger.info("benchmark %r: %d models compared -> %s", config.name, len(results), output_dir)
     return results
 

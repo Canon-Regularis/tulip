@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from tulip._serialize import tulip_version, write_markdown
 from tulip.config.loader import load_experiment_config
 from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation._format import format_metric, markdown_table, write_sorted_json
@@ -276,7 +277,7 @@ def write_leaderboard(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     markdown = render_leaderboard_markdown(results)
-    (out_dir / LEADERBOARD_MD).write_text(markdown + "\n", encoding="utf-8", newline="\n")
+    write_markdown(out_dir / LEADERBOARD_MD, markdown)
 
     save_benchmark(results, out_dir / LEADERBOARD_JSON)
 
@@ -326,9 +327,7 @@ def write_significance(
             continue
         report = paired_significance(experiment_predictions, seed=seed)
         report.save(out_dir / f"significance-{experiment}.json")
-        (out_dir / f"significance-{experiment}.md").write_text(
-            report.to_markdown() + "\n", encoding="utf-8", newline="\n"
-        )
+        write_markdown(out_dir / f"significance-{experiment}.md", report.to_markdown())
         written.append(experiment)
     if written:
         _logger.info("wrote significance for %d experiment(s) to %s", len(written), out_dir)
@@ -358,7 +357,7 @@ def _build_provenance(
         "results": result_entries,
         "split": DEFAULT_SPLIT,
         "suite": suite.name,
-        "tulip_version": _tulip_version(),
+        "tulip_version": tulip_version(),
     }
 
 
@@ -451,10 +450,3 @@ def _read_manifest(splits_dir: Path) -> dict[str, Any] | None:
         return None
     manifest = read_json(path)
     return manifest if isinstance(manifest, dict) else None
-
-
-def _tulip_version() -> str:
-    """Return the installed tulip version (dev fallback handled by the package)."""
-    import tulip
-
-    return getattr(tulip, "__version__", "unknown")

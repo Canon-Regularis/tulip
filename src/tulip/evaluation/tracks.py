@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from tulip._serialize import write_markdown
 from tulip.core.exceptions import ConfigurationError
 from tulip.core.types import TaskType
 from tulip.evaluation.leaderboard import (
@@ -191,7 +192,7 @@ def write_tracked_leaderboard(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     markdown = render_tracked_markdown(track_results, name=suite.name)
-    (out_dir / TRACKS_MD).write_text(markdown + "\n", encoding="utf-8", newline="\n")
+    write_markdown(out_dir / TRACKS_MD, markdown)
 
     for track_result in track_results:
         track_dir = out_dir / track_result.track.name
