@@ -128,7 +128,23 @@ docs, and tests refer to them.
 - `download.py`: `download_datasets(names, root)` fetches corpora whose
   loader is `auto_downloadable` (loaders override `DatasetLoader.download`).
   It returns `MANUAL` reports carrying each remaining corpus's
-  `acquisition` steps. Surfaced as `tulip data download`.
+  `acquisition` steps. Surfaced as `tulip data download`. The batch-wide
+  `--audio` flag reaches every loader but is dropped for those that do not
+  advertise `supports_audio_fetch`, so a mixed run still fetches everyone's
+  text.
+- `loaders/_hub_audio.py`: `write_hub_clip`, the one place that materialises a
+  Hugging Face `datasets` Audio value (raw bytes or a decoded array) to a local
+  WAV. Shared by the `bigos` and `common_voice_pl` `--audio` fetch paths, so the
+  neural-audio models have a first-party real corpus. Uses stdlib `wave`, so
+  fetching needs no audio extra; only reading the clips back does.
+- `transcribe.py`: the ASR bridge. `transcribe_samples` runs each clip through
+  an injectable Whisper engine (default lazily built from the `speech` extra),
+  content-addressed cache included, and `write_transcribed_manifest` writes a
+  read_manifest-compatible corpus whose `text` is the transcript. This produces
+  the transcribed-speech track the text pipeline trains on directly. Surfaced as
+  `tulip data transcribe`.
+- `synthetic.py` / `synthetic_audio.py`: deterministic in-memory corpus
+  generators (text and 16 kHz WAV audio) so a clean checkout runs offline.
 - Loaders subclass `tulip.core.interfaces.DatasetLoader` (`info` property,
   `load(root) -> Iterator[Sample]`). Loaders are generous in what they accept
   (CSV/TSV/JSONL manifests) and strict in what they emit (validated `Sample`s
@@ -280,6 +296,12 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
   substrate, sharing one inference pass), and `run_benchmark(config, models)`
   (several models, one frozen split). All three accept an optional
   `calibration_bins` to populate the report's ECE/MCE/Brier block.
+- `learning_curve.py`: `learning_curve(config, fractions=...)` trains the
+  experiment's model on nested, stratified prefixes of the training split and
+  scores each on the identical held-out test split, isolating training-set size
+  as the only moving part. One seeded per-class shuffle makes the fractions
+  nested and the `LearningCurveReport` deterministic and byte-stable. Surfaced
+  as `tulip learning-curve`.
 
 ### tulip.cli (typer)
 
@@ -291,7 +313,9 @@ the shared render helpers. Each module under `cli/commands/` (data, training,
 leaderboard, analyze, registry, pipeline, predict, cards, serve, inspect) defines
 one cohesive command group and keeps its heavy imports function-local, so `tulip
 --help` never pays for scikit-learn. Command groups: `data`
-(list/download/prepare/synthesize/synthesize-audio/validate), `train`,
+(list/download/prepare/synthesize/synthesize-audio/transcribe/validate; `download
+--audio` materialises clips for the loaders that support it, `transcribe` is the
+ASR bridge to a text manifest), `train`, `learning-curve`,
 `evaluate`, `predict` (text arg or `--audio` path; `--json`; map export via
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
 (standalone; the command group the contract lists), `explain-global`

@@ -48,6 +48,11 @@ from tulip.pipeline.hierarchical import (
     MarginThreshold,
     NotAbstained,
 )
+from tulip.pipeline.learning_curve import (
+    LearningCurvePoint,
+    LearningCurveReport,
+    learning_curve,
+)
 from tulip.pipeline.openset import OpenSetClassifier, OpenSetPrediction, OpenSetReport
 from tulip.pipeline.protocols import SamplePredictor
 from tulip.pipeline.selftrain import SelfTrainConfig, SelfTrainResult, self_train
@@ -75,6 +80,8 @@ __all__ = [
     "HierarchicalConfig",
     "HierarchicalDialectClassifier",
     "LabelledBatch",
+    "LearningCurvePoint",
+    "LearningCurveReport",
     "LogarithmicPoolingFusion",
     "MarginThreshold",
     "MaximumFusion",
@@ -92,6 +99,7 @@ __all__ = [
     "collect_predictions",
     "evaluate_samples",
     "grouped_stratified_kfold",
+    "learning_curve",
     "rank_for_labeling",
     "run_benchmark",
     "run_cross_validation",

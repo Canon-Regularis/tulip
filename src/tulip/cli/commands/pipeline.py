@@ -1,6 +1,7 @@
 """Pipeline analysis commands.
 
-Covers selftrain, crossval, transfer, robustness, conformal, openset, acquire, evaluate.
+Covers selftrain, crossval, learning-curve, transfer, robustness, conformal,
+openset, acquire, evaluate.
 """
 
 from __future__ import annotations
@@ -11,6 +12,47 @@ import typer
 from rich.table import Table
 
 from tulip.cli._context import _console, _tulip_errors, app
+
+
+@app.command("learning-curve")
+@_tulip_errors
+def learning_curve_command(
+    config_path: Path = typer.Argument(..., help="Experiment config YAML."),
+    fractions: str = typer.Option(
+        "0.1,0.25,0.5,0.75,1.0",
+        "--fractions",
+        help="Comma-separated training fractions, each in (0, 1].",
+    ),
+    seed: int | None = typer.Option(
+        None, "--seed", help="Subsampling seed (default: the config's seed)."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+    out: Path | None = typer.Option(None, "--out", help="Also write the report JSON here."),
+) -> None:
+    """Train on nested fractions of the training split and score each on test.
+
+    The curve shows what more annotation would buy: every point trains on a
+    stratified subset of the same training split and evaluates on the identical
+    held-out test split.
+    """
+    from tulip.config import load_experiment_config
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.pipeline import learning_curve
+
+    try:
+        parsed = tuple(float(part) for part in fractions.split(",") if part.strip())
+    except ValueError as exc:
+        raise ConfigurationError(
+            f"--fractions must be comma-separated numbers, got {fractions!r}"
+        ) from exc
+    report = learning_curve(load_experiment_config(config_path), fractions=parsed, seed=seed)
+    if out is not None:
+        report.save(out)
+        _console.print(f"[green]learning curve written to {out}[/green]")
+    if json_output:
+        _console.print_json(report.model_dump_json())
+    else:
+        _console.print(report.to_markdown())
 
 
 @app.command()

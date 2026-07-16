@@ -50,6 +50,12 @@ def data_download(
     limit: int | None = typer.Option(
         None, "--limit", min=1, help="Sample cap forwarded to downloaders that support it."
     ),
+    audio: bool = typer.Option(
+        False,
+        "--audio",
+        help="Also fetch audio clips for loaders that support it (bigos, common_voice_pl); "
+        "pair with --limit, the full corpora are tens of GB.",
+    ),
 ) -> None:
     """Download every corpus that has an automatic source; print exact steps for the rest.
 
@@ -62,11 +68,16 @@ def data_download(
 
     if not names and not all_datasets:
         raise ConfigurationError("name at least one corpus, or pass --all")
+    options: dict[str, object] = {}
+    if limit is not None:
+        options["limit"] = limit
+    if audio:
+        options["audio"] = True
     reports = download_datasets(
         names if names else None,
         root,
         force=force,
-        options={"limit": limit} if limit is not None else None,
+        options=options or None,
     )
 
     table = Table(title="corpus acquisition")
@@ -202,6 +213,51 @@ def data_synthesize_audio(
     )
     path = write_synthetic_audio_manifest(spec, out)
     _report_written_corpus(path, title=f"synthetic audio corpus (seed={seed})", unit="clips")
+
+
+@datasets_app.command("transcribe")
+@_tulip_errors
+def data_transcribe(
+    data: Path = typer.Argument(..., help="Audio corpus: split .jsonl, manifest, or directory."),
+    out: Path = typer.Option(..., "--out", help="Directory for the transcribed manifest."),
+    checkpoint: str = typer.Option(
+        None,
+        "--checkpoint",
+        help="ASR checkpoint (default: the Whisper model the speech classifiers use).",
+    ),
+    language: str = typer.Option("pl", "--language", help="Language forced during decoding."),
+    cache: Path | None = typer.Option(
+        None, "--cache", help="Transcript cache directory; reruns become offline and free."
+    ),
+    limit: int | None = typer.Option(
+        None, "--limit", min=1, help="Transcribe only the first N audio samples."
+    ),
+) -> None:
+    """Transcribe an audio corpus into a text manifest (needs the speech extra).
+
+    This produces the transcribed-speech track: each audio sample gains a
+    Whisper transcript as its text, keeps its labels and audio path, and the
+    result is written as a manifest the text pipeline trains on directly.
+    """
+    from tulip.data.reading import read_samples
+    from tulip.data.transcribe import (
+        DEFAULT_CHECKPOINT,
+        TranscribeConfig,
+        transcribe_samples,
+        write_transcribed_manifest,
+    )
+
+    config = TranscribeConfig(
+        checkpoint=checkpoint or DEFAULT_CHECKPOINT, language=language, cache_dir=cache
+    )
+    samples = [sample for sample in read_samples(data) if sample.audio_path is not None]
+    if limit is not None:
+        samples = samples[:limit]
+    transcribed = transcribe_samples(samples, config)
+    path = write_transcribed_manifest(transcribed, out)
+    _report_written_corpus(
+        path, title=f"transcribed corpus ({config.checkpoint})", unit="transcripts"
+    )
 
 
 @datasets_app.command("validate")

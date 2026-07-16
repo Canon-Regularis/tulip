@@ -26,6 +26,19 @@ These are the objects most users touch.
 
 ::: tulip.pipeline.ExperimentResult
 
+## Learning curves
+
+How metric quality scales with training-set size. The model trains on nested,
+stratified fractions of the training split and scores each on the identical
+held-out test split, so the curve isolates training-set size as the only moving
+part. Deterministic and byte-stable, so a saved report re-runs identically.
+
+::: tulip.pipeline.learning_curve
+
+::: tulip.pipeline.LearningCurveReport
+
+::: tulip.pipeline.LearningCurvePoint
+
 ## Semi-supervised self-training
 
 ::: tulip.pipeline.self_train
