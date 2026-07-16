@@ -126,6 +126,21 @@ class DownloadReport(BaseModel):
     detail: str
 
 
+def _options_for(loader: object, options: dict[str, Any] | None) -> dict[str, Any]:
+    """Per-loader download options, dropping ``audio`` where it is not supported.
+
+    ``audio`` is a batch-wide flag: on ``--all`` it reaches every loader, but
+    only some (bigos, common_voice_pl) can fetch audio. Rather than fail the
+    rest on an unknown option, drop ``audio`` for loaders that do not advertise
+    ``supports_audio_fetch``, so those corpora still acquire their text. A per
+    call copy keeps one loader's pop from touching the next.
+    """
+    loader_options = dict(options or {})
+    if "audio" in loader_options and not getattr(loader, "supports_audio_fetch", False):
+        loader_options.pop("audio")
+    return loader_options
+
+
 def download_datasets(
     names: Sequence[str] | None,
     root: Path | str,
@@ -173,8 +188,9 @@ def download_datasets(
             continue
         if loader.auto_downloadable:
             _logger.info("downloading %s -> %s", loader.info.name, destination)
+            loader_options = _options_for(loader, options)
             try:
-                loader.download(destination, **(options or {}))
+                loader.download(destination, **loader_options)
             except TulipError as exc:
                 _logger.warning("download of %s failed: %s", loader.info.name, exc)
                 reports.append(

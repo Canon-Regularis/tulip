@@ -185,7 +185,7 @@ class TestCommonVoiceDownload:
 
     def test_unknown_options_rejected(self, tmp_path: Path) -> None:
         with pytest.raises(ConfigurationError, match="unknown option"):
-            DATASETS.create("common_voice_pl").download(tmp_path / "cv", audio=True)
+            DATASETS.create("common_voice_pl").download(tmp_path / "cv", codec="flac")
 
 
 class TestFetchFileSchemeGuard:

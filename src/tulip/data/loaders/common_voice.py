@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from tulip.core.exceptions import ConfigurationError, DataError
+from tulip.core.exceptions import ConfigurationError, DataError, TulipError
 from tulip.core.interfaces import DatasetLoader
 from tulip.core.types import DatasetInfo, DialectLabels, Sample
 from tulip.data.catalog import get_dataset_info
 from tulip.data.download import fetch_file
+from tulip.data.loaders._hub_audio import CLIPS_DIR, write_hub_clip
 from tulip.data.registry import DATASETS
 from tulip.labels.taxonomy import DialectFamily
 from tulip.utils.logging import get_logger
+from tulip.utils.optional import optional_import
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Iterator
 
 _logger = get_logger(__name__)
 
@@ -63,12 +66,15 @@ class CommonVoiceLoader(DatasetLoader):
 
     auto_downloadable: ClassVar[bool] = True
 
+    #: ``download(audio=True)`` streams and materialises the clips (see the
+    #: batch orchestrator in :func:`tulip.data.download.download_datasets`).
+    supports_audio_fetch: ClassVar[bool] = True
+
     acquisition: ClassVar[str] = (
-        "automatic (text only): `tulip data download common_voice_pl` fetches "
-        "validated.tsv from a community mirror of the CC0 release; audio clips "
-        "(tens of GB) are not fetched; get them from "
-        "https://commonvoice.mozilla.org/en/datasets if you need audio "
-        "(see docs/datasets.md)"
+        "automatic (text only by default): `tulip data download common_voice_pl` "
+        "fetches validated.tsv from a community mirror of the CC0 release; add "
+        "`--audio` (with `--limit`) to also stream and materialise the clips "
+        "(needs the `hf` extra; the full corpus is tens of GB) (see docs/datasets.md)"
     )
 
     def __init__(
@@ -83,31 +89,49 @@ class CommonVoiceLoader(DatasetLoader):
         }
 
     def download(self, root: Path, **options: Any) -> None:
-        """Fetch the release TSV (text + accent metadata; no audio).
+        """Fetch the release TSV (text + accent metadata), optionally with audio.
 
-        Sources the file from a community mirror of the CC0 release
-        (:data:`CV_MIRROR_REPO`): Mozilla's own portal is email/terms-gated
-        and the official Hub repo is a script-era dataset that modern
-        ``datasets`` cannot load, so the mirror is the only automatable
-        channel. CC0 makes mirroring licence-clean; the downloaded header is
-        validated so a drifted mirror fails loudly here rather than quietly
-        at load time. Audio clips are deliberately not fetched (tens of GB);
-        text pipelines work immediately, audio needs the official download.
+        Text mode (default) sources the release TSV from a community mirror of
+        the CC0 release (:data:`CV_MIRROR_REPO`): Mozilla's own portal is
+        email/terms-gated and the official Hub repo is a script-era dataset
+        that modern ``datasets`` cannot load, so the mirror is the only
+        automatable channel. CC0 makes mirroring licence-clean; the downloaded
+        header is validated so a drifted mirror fails loudly here rather than
+        quietly at load time.
+
+        Audio mode (``audio=True``, the CLI's ``--audio``) instead streams the
+        clips from the same mirror with the ``datasets`` library, writes them
+        under ``clips/`` and a matching release TSV alongside, so the standard
+        :meth:`load` picks up both text and audio offline. This is the
+        first-party real audio corpus the speech models need; pair it with
+        ``limit`` because the full corpus is tens of GB.
 
         Args:
             root: Corpus directory (``data/raw/common_voice_pl``).
-            **options: ``limit`` truncates to the first N rows; ``locale``
-                (default ``"pl"``), ``repo`` (mirror id), or a full ``url``
-                override.
+            **options: ``limit`` caps the number of rows/clips; ``locale``
+                (default ``"pl"``) and ``repo`` (mirror id) apply to both
+                modes; ``url`` overrides the TSV source (text mode only);
+                ``audio`` fetches the clips and ``split`` (default ``"train"``)
+                picks the streamed split (audio mode only).
 
         Raises:
             ConfigurationError: on unknown options.
-            DataError: if the transfer fails or the file is not a Common
-                Voice release TSV.
+            DataError: if the transfer fails, the file is not a Common Voice
+                release TSV, or the audio stream yields no samples.
+            MissingDependencyError: in audio mode without the ``hf`` extra.
         """
         limit = options.pop("limit", None)
         locale = options.pop("locale", CV_LOCALE)
         repo = options.pop("repo", CV_MIRROR_REPO)
+        if options.pop("audio", False):
+            split = options.pop("split", "train")
+            if options:
+                raise ConfigurationError(
+                    f"common_voice_pl audio download got unknown option(s): "
+                    f"{', '.join(sorted(options))}"
+                )
+            self._download_audio(root, repo=repo, locale=locale, split=split, limit=limit)
+            return
         url = options.pop(
             "url",
             f"https://huggingface.co/datasets/{repo}/resolve/main/transcript/{locale}/{self._tsv}",
@@ -123,6 +147,94 @@ class CommonVoiceLoader(DatasetLoader):
         except BaseException:
             destination.unlink(missing_ok=True)  # never leave a bad TSV behind
             raise
+
+    def _download_audio(
+        self, root: Path, *, repo: str, locale: str, split: str, limit: int | None
+    ) -> None:
+        """Stream clips + transcripts from the mirror into the official layout.
+
+        Writes each streamed record's clip under ``clips/`` and a release TSV
+        (``self._tsv``) carrying the same ``path`` values, so :meth:`load`
+        reads the materialised corpus with no special-casing. The TSV is
+        removed on any failure so a partial fetch never masquerades as a
+        present corpus.
+        """
+        datasets = optional_import(
+            "datasets", extra="hf", purpose="streaming Common Voice audio from the Hugging Face Hub"
+        )
+        _logger.info(
+            "streaming %s (locale=%s, split=%s) audio from the Hugging Face Hub",
+            repo,
+            locale,
+            split,
+        )
+        try:
+            stream = datasets.load_dataset(repo, locale, split=split, streaming=True)
+            # Disable decoding so each record carries the clip's original encoded
+            # bytes: audio fetch writes them verbatim and needs no decode backend.
+            stream = stream.cast_column("audio", datasets.Audio(decode=False))
+        except Exception as exc:  # datasets raises many library-specific types
+            raise DataError(
+                f"common_voice_pl: could not stream {repo!r} (locale={locale!r}, "
+                f"split={split!r}) audio from the Hub: {exc}"
+            ) from exc
+        root.mkdir(parents=True, exist_ok=True)
+        clips_dir = root / CLIPS_DIR
+        tsv_path = root / self._tsv
+        count = 0
+        written_clips: list[Path] = []
+        try:
+            with tsv_path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle, delimiter="\t")
+                writer.writerow(["client_id", "path", "sentence", "accents"])
+                for index, record in enumerate(stream):
+                    if limit is not None and count >= limit:
+                        break
+                    row = self._audio_record_row(record, clips_dir, index)
+                    if row is None:
+                        continue
+                    written_clips.append(clips_dir / row[1])
+                    writer.writerow(row)
+                    count += 1
+        except BaseException as exc:
+            # Never leave a partial TSV (it would masquerade as a present corpus)
+            # nor clips this run wrote (they would leak on retry).
+            tsv_path.unlink(missing_ok=True)
+            for clip_path in written_clips:
+                clip_path.unlink(missing_ok=True)
+            if isinstance(exc, (KeyboardInterrupt, SystemExit, TulipError)):
+                raise
+            raise DataError(f"common_voice_pl audio download failed mid-stream: {exc}") from exc
+        if count == 0:
+            tsv_path.unlink(missing_ok=True)
+            raise DataError(
+                f"common_voice_pl audio download produced no samples; check the mirror "
+                f"({repo!r}, locale={locale!r}, split={split!r})"
+            )
+        _logger.info("common_voice_pl audio download complete: %d clips -> %s", count, clips_dir)
+
+    def _audio_record_row(
+        self, record: Mapping[str, Any], clips_dir: Path, index: int
+    ) -> list[str] | None:
+        """Materialise one streamed record's clip; return its release-TSV row.
+
+        ``None`` for rows without a ``client_id`` (speaker-disjoint splitting
+        needs one). The clip is named from the record's original ``path``,
+        prefixed with the stream index so two identical stems cannot collide,
+        and the same name goes into the TSV so it and the clip stay in step.
+        """
+        speaker = str(record.get("client_id") or "").strip()
+        if not speaker:
+            return None
+        audio = record.get("audio")
+        original = str(record.get("path") or "").strip()
+        if not original and isinstance(audio, Mapping):
+            original = str(audio.get("path") or "").strip()
+        stem = f"{index:08d}-{Path(original).stem or 'clip'}"
+        name = write_hub_clip(audio, clips_dir, stem)
+        sentence = str(record.get("sentence") or "").strip()
+        accent = str(record.get("accents") or record.get("accent") or "").strip()
+        return [speaker, name, sentence, accent]
 
     def _validate_and_truncate(self, destination: Path, limit: int | None) -> None:
         """Fail loudly on non-CV content; apply the optional row cap."""

@@ -5,9 +5,10 @@ from __future__ import annotations
 import csv
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from tulip.core.exceptions import ConfigurationError, DataError
+from tulip.core.exceptions import ConfigurationError, DataError, TulipError
 from tulip.core.types import Sample
 from tulip.data.loaders._base import ManifestBackedLoader
+from tulip.data.loaders._hub_audio import CLIPS_DIR, write_hub_clip
 from tulip.data.manifest import surrogate_speaker_id
 from tulip.data.registry import DATASETS
 from tulip.utils.logging import get_logger
@@ -36,9 +37,10 @@ class BigosLoader(ManifestBackedLoader):
       like any other corpus (see ``docs/datasets.md``).
     * **Hugging Face Hub** (``from_hub=True``): stream transcriptions
       directly with the ``datasets`` library (extra ``hf``). Hub mode yields
-      *text-only* samples; decoding hub-hosted audio to local files is out
-      of scope for a loader; audio experiments should download the clips and
-      use the manifest mode.
+      *text-only* samples; to also materialise the audio use
+      ``tulip data download bigos --audio`` (see :meth:`download`), which
+      writes the clips locally and records their paths so the speech models
+      have a first-party real corpus.
 
     Dialect labels are not provided (tier 4): BIGOS is pretraining/ASR
     material, so labels stay empty unless your manifest adds them.
@@ -57,6 +59,10 @@ class BigosLoader(ManifestBackedLoader):
     dataset_name: ClassVar[str] = "bigos"
 
     auto_downloadable: ClassVar[bool] = True
+
+    #: ``download(audio=True)`` streams and materialises the clips (see the
+    #: batch orchestrator in :func:`tulip.data.download.download_datasets`).
+    supports_audio_fetch: ClassVar[bool] = True
 
     acquisition: ClassVar[str] = (
         "automatic with a Hugging Face login (the dataset is gated): accept the "
@@ -99,51 +105,78 @@ class BigosLoader(ManifestBackedLoader):
     def download(self, root: Path, **options: Any) -> None:
         """Materialise the Hub transcriptions as a local ``manifest.csv``.
 
-        After this, the default (manifest) mode works fully offline. Audio is
-        deliberately not fetched: BIGOS audio is tens of GB and tier-4
-        pretraining material; audio experiments should download clips
-        selectively (see docs/datasets.md).
+        After this, the default (manifest) mode works fully offline. By default
+        audio is not fetched (BIGOS audio is tens of GB); pass ``audio=True``
+        (the CLI's ``--audio``) to also write each sample's clip under
+        ``clips/`` and record its relative path in the manifest, which is what
+        gives the speech models a first-party real corpus. Combine with
+        ``limit`` to fetch a tractable slice.
 
         Args:
             root: Corpus directory (``data/raw/bigos``).
-            **options: ``limit`` overrides the constructor's sample cap.
+            **options: ``limit`` overrides the constructor's sample cap;
+                ``audio`` also fetches the clips (their original encoded bytes,
+                so no audio extra is needed).
 
         Raises:
             ConfigurationError: on unknown options.
-            DataError: if the Hub yields no samples.
+            DataError: if the Hub yields no samples, or a record lacks audio
+                in audio mode.
             MissingDependencyError: without the ``hf`` extra installed.
         """
         limit = options.pop("limit", self._limit)
+        audio = bool(options.pop("audio", False))
         if options:
             raise ConfigurationError(
                 f"bigos download got unknown option(s): {', '.join(sorted(options))}"
             )
         root.mkdir(parents=True, exist_ok=True)
         manifest_path = root / "manifest.csv"
+        header = ["id", "text", "speaker_id", "subset"]
+        if audio:
+            header.append("audio_path")
         count = 0
+        written_clips: list[Path] = []
         try:
             with manifest_path.open("w", encoding="utf-8", newline="") as handle:
                 writer = csv.writer(handle)
-                writer.writerow(["id", "text", "speaker_id", "subset"])
-                for sample in self._load_from_hub(limit=limit):
-                    writer.writerow(
-                        [
-                            sample.id,
-                            sample.text,
-                            sample.speaker_id,
-                            str(sample.metadata.get("dataset", "")),
-                        ]
-                    )
+                writer.writerow(header)
+                for index, record in enumerate(self._stream_records(raw_audio=audio)):
+                    if limit is not None and count >= limit:
+                        break
+                    sample = self._record_to_sample(record, index)
+                    if sample is None:
+                        continue
+                    row = [
+                        sample.id,
+                        sample.text,
+                        sample.speaker_id,
+                        str(sample.metadata.get("dataset", "")),
+                    ]
+                    if audio:
+                        # The stream index makes the clip name unique even when two
+                        # sample ids sanitise to the same filesystem-safe stem.
+                        clip = write_hub_clip(
+                            record.get("audio"), root / CLIPS_DIR, f"{index:08d}-{sample.id}"
+                        )
+                        written_clips.append(root / CLIPS_DIR / clip)
+                        row.append(f"{CLIPS_DIR}/{clip}")
+                    writer.writerow(row)
                     count += 1
                     if count % 5000 == 0:
                         _logger.info("bigos download: %d samples written", count)
-        except BaseException:
-            # _load_from_hub is a generator: even load_dataset only runs on
+        except BaseException as exc:
+            # _stream_records is a generator: even load_dataset only runs on
             # first iteration, i.e. AFTER the header was written. Any failure
             # (gated dataset, network drop, Ctrl+C) must not leave a partial
-            # manifest behind; it would masquerade as a present corpus.
+            # manifest, nor clips this run wrote, behind; the manifest would
+            # masquerade as a present corpus and the clips would leak.
             manifest_path.unlink(missing_ok=True)
-            raise
+            for clip_path in written_clips:
+                clip_path.unlink(missing_ok=True)
+            if isinstance(exc, (KeyboardInterrupt, SystemExit, TulipError)):
+                raise
+            raise DataError(f"bigos download failed mid-stream: {exc}") from exc
         if count == 0:
             manifest_path.unlink(missing_ok=True)
             raise DataError(
@@ -153,7 +186,25 @@ class BigosLoader(ManifestBackedLoader):
         _logger.info("bigos download complete: %d samples -> %s", count, manifest_path)
 
     def _load_from_hub(self, limit: int | None = None) -> Iterator[Sample]:
-        """Stream text-only samples from the Hub (lazy ``datasets`` import)."""
+        """Stream text-only samples from the Hub."""
+        count = 0
+        for index, record in enumerate(self._stream_records()):
+            if limit is not None and count >= limit:
+                break
+            sample = self._record_to_sample(record, index)
+            if sample is None:
+                continue
+            count += 1
+            yield sample
+
+    def _stream_records(self, *, raw_audio: bool = False) -> Iterator[dict[str, Any]]:
+        """Stream raw Hub records (lazy ``datasets`` import).
+
+        With ``raw_audio``, the ``audio`` column is cast to ``Audio(decode=False)``
+        so each record carries the clip's original encoded bytes, which the audio
+        fetch writes verbatim. Without it (text mode), the column is left as the
+        Hub serves it and never touched.
+        """
         datasets = optional_import(
             "datasets", extra="hf", purpose="loading BIGOS from the Hugging Face Hub"
         )
@@ -179,16 +230,9 @@ class BigosLoader(ManifestBackedLoader):
                     "then (3) re-run `tulip data download bigos`"
                 )
             raise DataError(message) from exc
-
-        count = 0
-        for index, record in enumerate(stream):
-            if limit is not None and count >= limit:
-                break
-            sample = self._record_to_sample(record, index)
-            if sample is None:
-                continue
-            count += 1
-            yield sample
+        if raw_audio:
+            stream = stream.cast_column("audio", datasets.Audio(decode=False))
+        yield from stream
 
     def _record_to_sample(self, record: dict[str, Any], index: int) -> Sample | None:
         """Convert one Hub record to a text-only Sample."""
