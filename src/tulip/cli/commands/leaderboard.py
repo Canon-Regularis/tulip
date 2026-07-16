@@ -24,6 +24,13 @@ def leaderboard(
         help="Also write per-experiment paired significance (CIs + McNemar).",
     ),
     sig_seed: int = typer.Option(0, "--sig-seed", help="Bootstrap seed for the significance CIs."),
+    jobs: int = typer.Option(
+        1,
+        "--jobs",
+        "-j",
+        help="Models to train in parallel per config (-1 for all cores); "
+        "results are byte-identical to the sequential run.",
+    ),
 ) -> None:
     """Regenerate the reproducible leaderboard for a whole suite of configs.
 
@@ -46,7 +53,7 @@ def leaderboard(
     )
 
     suite = load_suite(suite_path)
-    results = run_leaderboard(suite)
+    results = run_leaderboard(suite, n_jobs=jobs)
     destination = out / suite.name
     write_leaderboard(results, destination, suite=suite)
     if significance:

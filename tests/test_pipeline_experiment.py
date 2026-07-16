@@ -86,8 +86,22 @@ class TestRunBenchmark:
         reloaded = load_benchmark(out / "benchmark.json")
         assert {r.model for r in reloaded} == {"naive_bayes", "logistic_regression"}
 
+    def test_parallel_benchmark_matches_sequential(
+        self, experiment_config: ExperimentConfig
+    ) -> None:
+        # Each model re-seeds its own process, so process-parallel training yields
+        # the same models in the same order with the same metrics (only the
+        # machine-dependent wall_seconds may differ, and it never enters the board).
+        models = ["naive_bayes", "logistic_regression", "linear_svm"]
+        sequential = run_benchmark(experiment_config, models=models, n_jobs=1)
+        parallel = run_benchmark(experiment_config, models=models, n_jobs=2)
 
-class TestExampleConfigs:
+        def board_view(results: list) -> list:
+            return [
+                (r.model, r.n_train, r.n_test, r.reports["test"].model_dump()) for r in results
+            ]
+
+        assert board_view(sequential) == board_view(parallel)
     @pytest.mark.parametrize("path", sorted(CONFIGS_DIR.glob("*.yaml")), ids=lambda p: p.name)
     def test_every_shipped_config_validates(self, path: Path) -> None:
         config = load_experiment_config(path)

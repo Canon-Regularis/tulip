@@ -142,6 +142,7 @@ def run_benchmark(
     models: Sequence[ComponentConfig | str] | None = None,
     *,
     calibration_bins: int | None = None,
+    n_jobs: int = 1,
 ) -> list[BenchmarkResult]:
     """Compare several models over one identical, frozen, speaker-disjoint split.
 
@@ -151,12 +152,21 @@ def run_benchmark(
             omitted.
         models: The competitors (registry names or component configs). Each is
             trained and evaluated with the same features, samples, and split.
+        calibration_bins: When given, each model's report gains a top-label
+            calibration block (ECE/MCE/Brier) with this many uniform bins.
+        n_jobs: Competitors to train in parallel. ``1`` runs in-process and
+            sequentially (the default, and what the committed leaderboard uses).
+            Above 1 (or ``-1`` for all cores) trains models in separate processes
+            via joblib; because every fit re-seeds its own process, the results
+            and their order are identical to the sequential run.
 
     Returns:
         One :class:`BenchmarkResult` per model, in the given order. Also
         writes ``benchmark.json`` and ``benchmark.md`` (sorted comparison
         table) under ``config.output_dir/<config.name>/``.
     """
+    from joblib import Parallel, delayed
+
     entries = [
         entry if isinstance(entry, ComponentConfig) else ComponentConfig(name=str(entry))
         for entry in (models if models is not None else [config.model])
@@ -167,39 +177,55 @@ def run_benchmark(
         config.split, target=config.target, output_dir=output_dir / "splits"
     )
 
-    results: list[BenchmarkResult] = []
-    for entry in entries:
-        candidate_config = config.model_copy(update={"model": entry})
-        _logger.info("benchmark %r: training %s", config.name, entry.name)
-        started = time.perf_counter()
-        classifier = build_classifier(candidate_config)
-        classifier.fit(splits.train)
-        reports: dict[str, EvaluationReport] = {}
-        predictions: dict[str, SplitPredictions] = {}
-        for split_name, samples in splits.as_dict().items():
-            if split_name == "train" or not samples:
-                continue
-            reports[split_name], predictions[split_name] = _evaluate_split(
-                classifier, samples, split_name, candidate_config, calibration_bins=calibration_bins
-            )
-        results.append(
-            BenchmarkResult(
-                experiment=config.name,
-                model=entry.name,
-                target_level=config.target.value,
-                reports=reports,
-                predictions=predictions,
-                wall_seconds=round(time.perf_counter() - started, 3),
-                n_train=len(splits.train),
-                n_test=len(splits.test),
-            )
-        )
+    # joblib preserves input order, and each model's fit re-seeds its own
+    # (possibly separate) process, so the parallel results match the sequential
+    # ones exactly. n_jobs=1 stays in-process, leaving the committed board's
+    # byte-for-byte reproducibility untouched.
+    results: list[BenchmarkResult] = Parallel(n_jobs=n_jobs)(
+        delayed(_benchmark_one_model)(config, entry, splits, calibration_bins) for entry in entries
+    )
 
     save_benchmark(results, output_dir / "benchmark.json")
     markdown = to_markdown_table(results)
     write_markdown(output_dir / "benchmark.md", markdown)
     _logger.info("benchmark %r: %d models compared -> %s", config.name, len(results), output_dir)
     return results
+
+
+def _benchmark_one_model(
+    config: ExperimentConfig,
+    entry: ComponentConfig,
+    splits: DatasetSplits,
+    calibration_bins: int | None,
+) -> BenchmarkResult:
+    """Train and evaluate one competitor on the frozen split (a parallel unit).
+
+    A module-level function so joblib's process backend can pickle it; its inputs
+    and the returned :class:`BenchmarkResult` are all picklable.
+    """
+    candidate_config = config.model_copy(update={"model": entry})
+    _logger.info("benchmark %r: training %s", config.name, entry.name)
+    started = time.perf_counter()
+    classifier = build_classifier(candidate_config)
+    classifier.fit(splits.train)
+    reports: dict[str, EvaluationReport] = {}
+    predictions: dict[str, SplitPredictions] = {}
+    for split_name, samples in splits.as_dict().items():
+        if split_name == "train" or not samples:
+            continue
+        reports[split_name], predictions[split_name] = _evaluate_split(
+            classifier, samples, split_name, candidate_config, calibration_bins=calibration_bins
+        )
+    return BenchmarkResult(
+        experiment=config.name,
+        model=entry.name,
+        target_level=config.target.value,
+        reports=reports,
+        predictions=predictions,
+        wall_seconds=round(time.perf_counter() - started, 3),
+        n_train=len(splits.train),
+        n_test=len(splits.test),
+    )
 
 
 def build_classifier(config: ExperimentConfig) -> DialectClassifier:

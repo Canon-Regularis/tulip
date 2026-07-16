@@ -70,6 +70,14 @@ class TestRunCrossValidation:
         b = run_cross_validation(config, CVConfig(k=3, seeds=(0,)))
         assert a.summary("f1_macro").mean == b.summary("f1_macro").mean
 
+    def test_parallel_matches_sequential(self, config: ExperimentConfig) -> None:
+        # Each fold re-seeds its own process, so process-parallel folds produce a
+        # report identical to the sequential run (CVFoldResult carries no timing).
+        cv = CVConfig(k=3, seeds=(0, 1))
+        sequential = run_cross_validation(config, cv, n_jobs=1)
+        parallel = run_cross_validation(config, cv, n_jobs=2)
+        assert sequential.model_dump() == parallel.model_dump()
+
     def test_markdown_renders(self, config: ExperimentConfig) -> None:
         report = run_cross_validation(config, CVConfig(k=3))
         markdown = report.to_markdown()

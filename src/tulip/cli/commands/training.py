@@ -29,6 +29,12 @@ def benchmark(
         [], "--model", "-m", help="Model registry name (repeatable); default: config's model."
     ),
     split: str = typer.Option("test", help="Split shown in the comparison table."),
+    jobs: int = typer.Option(
+        1,
+        "--jobs",
+        "-j",
+        help="Models to train in parallel (-1 for all cores); results are identical.",
+    ),
 ) -> None:
     """Compare several models over one identical frozen split."""
     from tulip.config import load_experiment_config
@@ -36,7 +42,7 @@ def benchmark(
     from tulip.pipeline import run_benchmark
 
     config = load_experiment_config(config_path)
-    results = run_benchmark(config, models=model or None)
+    results = run_benchmark(config, models=model or None, n_jobs=jobs)
     frame = comparison_table(results, split=split)
     _print_frame(frame, f"benchmark {config.name!r} ({split} split)")
     _console.print(f"[green]benchmark artifacts under {config.output_dir / config.name}[/green]")

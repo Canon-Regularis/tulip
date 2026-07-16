@@ -183,7 +183,7 @@ def grouped_stratified_kfold(
         yield [labelled[i] for i in train_index], [labelled[i] for i in test_index]
 
 
-def run_cross_validation(config: ExperimentConfig, cv: CVConfig) -> CVReport:
+def run_cross_validation(config: ExperimentConfig, cv: CVConfig, *, n_jobs: int = 1) -> CVReport:
     """Cross-validate the experiment's model and aggregate the fold metrics.
 
     Loads and prepares the corpus once (load, clean, deduplicate), then for every
@@ -194,6 +194,11 @@ def run_cross_validation(config: ExperimentConfig, cv: CVConfig) -> CVReport:
     Args:
         config: The experiment declaration (data, features, model, target).
         cv: The cross-validation protocol.
+        n_jobs: Fold runs to execute in parallel. ``1`` runs in-process and
+            sequentially (the default). Above 1 (or ``-1`` for all cores) runs
+            folds in separate processes via joblib; because each fold's fit
+            re-seeds its own process, the aggregated report is identical to the
+            sequential run.
 
     Returns:
         A :class:`CVReport` with per-metric aggregates and per-fold results.
@@ -202,33 +207,25 @@ def run_cross_validation(config: ExperimentConfig, cv: CVConfig) -> CVReport:
         DataError: if the corpus cannot be folded (see
             :func:`grouped_stratified_kfold`).
     """
+    from joblib import Parallel, delayed
+
     from tulip.data.builder import DatasetBuilder
-    from tulip.pipeline.experiment import build_classifier, evaluate_samples
 
     samples = DatasetBuilder(config.data).load_samples()
-    fold_results: list[CVFoldResult] = []
-    for seed in cv.seeds:
-        candidate = config.model_copy(update={"seed": seed})
+    # Materialise every (seed, fold) unit up front so they can be dispatched
+    # together; joblib preserves this order, so the aggregate is deterministic.
+    tasks = [
+        (seed, fold, train, test)
+        for seed in cv.seeds
         for fold, (train, test) in enumerate(
             grouped_stratified_kfold(
                 samples, k=cv.k, seed=seed, target=config.target, group_by=cv.group_by
             )
-        ):
-            classifier = build_classifier(candidate)
-            classifier.fit(train)
-            report = evaluate_samples(classifier, test, name=f"seed{seed}-fold{fold}")
-            fold_results.append(
-                CVFoldResult(
-                    seed=seed,
-                    fold=fold,
-                    n_train=len(train),
-                    n_test=report.n_samples,
-                    accuracy=report.accuracy,
-                    balanced_accuracy=report.balanced_accuracy,
-                    f1_macro=report.f1_macro,
-                    f1_weighted=report.f1_weighted,
-                )
-            )
+        )
+    ]
+    fold_results: list[CVFoldResult] = Parallel(n_jobs=n_jobs)(
+        delayed(_run_one_fold)(config, seed, fold, train, test) for seed, fold, train, test in tasks
+    )
     _logger.info(
         "cross-validation %r: %d runs (%d-fold x %d seeds)",
         config.model.name,
@@ -243,6 +240,37 @@ def run_cross_validation(config: ExperimentConfig, cv: CVConfig) -> CVReport:
         seeds=cv.seeds,
         metrics=tuple(_summarise(metric, fold_results) for metric in _METRICS),
         folds=tuple(fold_results),
+    )
+
+
+def _run_one_fold(
+    config: ExperimentConfig,
+    seed: int,
+    fold: int,
+    train: Sequence[Sample],
+    test: Sequence[Sample],
+) -> CVFoldResult:
+    """Train and evaluate one fold (a parallel unit).
+
+    A module-level function so joblib's process backend can pickle it. The model
+    is seeded from the fold's ``seed`` so a fold's result is independent of which
+    process runs it.
+    """
+    from tulip.pipeline.experiment import build_classifier, evaluate_samples
+
+    candidate = config.model_copy(update={"seed": seed})
+    classifier = build_classifier(candidate)
+    classifier.fit(train)
+    report = evaluate_samples(classifier, test, name=f"seed{seed}-fold{fold}")
+    return CVFoldResult(
+        seed=seed,
+        fold=fold,
+        n_train=len(train),
+        n_test=report.n_samples,
+        accuracy=report.accuracy,
+        balanced_accuracy=report.balanced_accuracy,
+        f1_macro=report.f1_macro,
+        f1_weighted=report.f1_weighted,
     )
 
 
