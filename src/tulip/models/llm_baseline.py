@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -44,6 +45,7 @@ from tulip.models._common import (
     require_fitted,
     validate_fit_inputs,
 )
+from tulip.models._llm_exemplars import EXEMPLAR_SELECTORS
 from tulip.models.registry import MODELS
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
@@ -202,6 +204,18 @@ def _json_label(text: str) -> str | None:
     return None
 
 
+def _majority_vote(votes: Sequence[str], classes: Sequence[Any] | np.ndarray) -> str:
+    """The most-voted label, ties broken by class order for a deterministic result.
+
+    ``votes`` are all valid label ids (:func:`parse_label` always returns one),
+    so a simple count suffices; ``max`` keeps the first class in ``classes`` order
+    on a tie.
+    """
+    counts = Counter(votes)
+    class_list = [str(label) for label in classes]
+    return max(class_list, key=lambda label: counts.get(label, 0))
+
+
 def _cache_key(model: str, max_tokens: int, system: str, messages: Sequence[dict[str, str]]) -> str:
     """Content-address a request by everything that determines its response."""
     payload = {
@@ -288,6 +302,8 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
         max_tokens: int = DEFAULT_MAX_TOKENS,
         cache_dir: Path | str | None = None,
         system_prompt: str | None = None,
+        exemplar_selection: str = "random",
+        self_consistency: int = 1,
         seed: int = 42,
     ) -> None:
         """Configure the wrapper; the SDK is imported only when the API is called.
@@ -299,6 +315,13 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
             cache_dir: Directory backing the response cache; ``None`` caches only
                 in memory (so a fresh process re-queries).
             system_prompt: Override for the auto-built instruction and glossary.
+            exemplar_selection: Few-shot selection strategy (``"random"`` or
+                ``"similar"``; see :data:`~tulip.models._llm_exemplars.EXEMPLAR_SELECTORS`).
+                ``"similar"`` picks per-class examples closest to the query text.
+            self_consistency: Number of prompt variants to classify and
+                majority-vote (1 disables it). Diversity comes from asking each
+                variant for a different exemplar set, so it only helps with
+                ``few_shot > 0``.
             seed: Seed for the deterministic few-shot example selection.
 
         Note:
@@ -310,6 +333,8 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
         self.max_tokens = max_tokens
         self.cache_dir = cache_dir
         self.system_prompt = system_prompt
+        self.exemplar_selection = exemplar_selection
+        self.self_consistency = self_consistency
         self.seed = seed
 
     def _validate_hyperparameters(self) -> None:
@@ -318,6 +343,13 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
             raise ConfigurationError(f"few_shot must be >= 0, got {self.few_shot}")
         if self.max_tokens < 1:
             raise ConfigurationError(f"max_tokens must be >= 1, got {self.max_tokens}")
+        if self.self_consistency < 1:
+            raise ConfigurationError(f"self_consistency must be >= 1, got {self.self_consistency}")
+        if self.exemplar_selection not in set(EXEMPLAR_SELECTORS.names()):
+            options = ", ".join(EXEMPLAR_SELECTORS.names())
+            raise ConfigurationError(
+                f"unknown exemplar_selection {self.exemplar_selection!r}; choose from: {options}"
+            )
 
     def fit(self, X: Sequence[str], y: Sequence[Any]) -> LLMClassifier:
         """Record the label set and few-shot examples; no API calls are made.
@@ -340,28 +372,17 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
         class_ids = [str(label) for label in classes]
         self.classes_ = classes
         self.system_prompt_ = self.system_prompt or build_system_prompt(class_ids)
-        self.exemplars_ = self._select_exemplars(texts, labels, class_ids)
-        return self
 
-    def _select_exemplars(
-        self, texts: Sequence[str], labels: Sequence[str], class_ids: Sequence[str]
-    ) -> tuple[tuple[str, str], ...]:
-        """Pick ``few_shot`` seeded demonstrations per class, in a stable order."""
-        if self.few_shot <= 0:
-            return ()
         by_label: dict[str, list[str]] = {}
         for text, label in zip(texts, labels, strict=True):
             by_label.setdefault(label, []).append(text)
-        rng = np.random.default_rng(self.seed)
-        exemplars: list[tuple[str, str]] = []
-        for label in class_ids:
-            pool = by_label.get(label, [])
-            if not pool:
-                continue
-            chosen = rng.permutation(len(pool))[: self.few_shot]
-            for index in sorted(chosen):
-                exemplars.append((pool[index], label))
-        return tuple(exemplars)
+        self.selector_ = EXEMPLAR_SELECTORS.create(self.exemplar_selection).fit(
+            by_label, class_ids, self.few_shot, self.seed
+        )
+        # A representative (variant 0) snapshot, so the query-independent random
+        # selection stays inspectable and the value is defined for every strategy.
+        self.exemplars_ = self.selector_.select("", variant=0)
+        return self
 
     def predict_proba(self, X: Sequence[str]) -> np.ndarray:
         """Return a one-hot class distribution for each text.
@@ -390,8 +411,22 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
         return np.vstack(rows)
 
     def _classify(self, text: str) -> str:
-        """Classify one text, from the cache when possible, else via the API."""
-        messages = build_messages(text, self.exemplars_)
+        """Classify one text; a single request, or a self-consistency vote.
+
+        With ``self_consistency == 1`` this is one constrained-choice request
+        (variant 0), identical to the base behaviour. Above 1, the same text is
+        classified through several prompt variants (each a different exemplar
+        set) and the labels are majority-voted, ties broken by class order.
+        """
+        if self.self_consistency <= 1:
+            return self._classify_variant(text, variant=0)
+        votes = [self._classify_variant(text, variant=v) for v in range(self.self_consistency)]
+        return _majority_vote(votes, self.classes_)
+
+    def _classify_variant(self, text: str, *, variant: int) -> str:
+        """Classify one text with one prompt variant, from the cache when possible."""
+        exemplars = self.selector_.select(text, variant=variant)
+        messages = build_messages(text, exemplars)
         key = _cache_key(self.model, self.max_tokens, self.system_prompt_, messages)
         cached = self._cache.get(key)
         if cached is not None:
