@@ -277,7 +277,7 @@ def test_reliability_diagram_matplotlib_has_two_panels() -> None:
     y_true, proba, labels = _random_stream(300, 3, seed=5)
     report = compute_calibration(y_true, proba, labels, n_bins=10)
 
-    from tulip.viz.charts import reliability_diagram
+    from tulip.viz.reliability import reliability_diagram
 
     fig = reliability_diagram(report, title="Calibration")
     assert isinstance(fig, matplotlib.figure.Figure)
@@ -286,7 +286,7 @@ def test_reliability_diagram_matplotlib_has_two_panels() -> None:
 
 def test_reliability_diagram_rejects_unknown_backend_and_empty_report() -> None:
     pytest.importorskip("matplotlib")
-    from tulip.viz.charts import reliability_diagram
+    from tulip.viz.reliability import reliability_diagram
 
     y_true, proba, labels = _random_stream(100, 3, seed=6)
     report = compute_calibration(y_true, proba, labels, n_bins=5)
