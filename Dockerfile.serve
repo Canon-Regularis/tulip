@@ -1,0 +1,47 @@
+# Production serving image for the tulip HTTP service.
+#
+# The build trains the small synthetic text baseline in-process (no downloads,
+# fully deterministic), so `docker run` immediately serves a working model and
+# the interactive demo page at `/`. To serve your own model, mount its saved
+# directory and override the command:
+#
+#   docker run --rm -p 8000:8000 -v "$PWD/my-model:/model" tulip-serve \
+#     tulip serve /model --host 0.0.0.0
+#
+# The listen port honours the PORT environment variable (Hugging Face Spaces
+# sets one), defaulting to 8000. Guards (auth, rate limits, CORS, security
+# headers) are configured with TULIP_SERVE_* environment variables.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+RUN pip install ".[serve]"
+
+# Bake the demo model: train the synthetic baseline and keep only the saved
+# model directory.
+COPY configs ./configs
+RUN tulip train configs/synthetic_text.yaml \
+    && mv artifacts/synthetic-text/model /app/model \
+    && rm -rf artifacts data
+
+# Run as a non-root user, as a service should. The app tree stays root-owned
+# and world-readable on purpose: the service only reads it, and a process that
+# cannot overwrite its own code or model is the point of dropping root.
+RUN useradd --create-home --uid 1000 tulip
+USER tulip
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"8000\")}/health', timeout=4)"
+
+# exec replaces the shell, so uvicorn is PID 1 and docker stop delivers SIGTERM
+# to it directly instead of timing out against /bin/sh.
+CMD exec tulip serve /app/model --host 0.0.0.0 --port "${PORT:-8000}"

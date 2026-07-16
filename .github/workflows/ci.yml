@@ -188,3 +188,34 @@ jobs:
         run: |
           docker run --rm tulip-repro tulip --version
           docker run --rm tulip-repro tulip leaderboard benchmarks/suite.yaml --out /tmp/board
+
+  docker-serve:
+    # The serving image must build (which trains the baked synthetic model) and
+    # come up healthy: the container starts, /health answers 200, and /predict
+    # returns a prediction for a Polish sentence.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the serving image
+        run: docker build -f Dockerfile.serve -t tulip-serve .
+      - name: Start the container and probe the API
+        run: |
+          docker run -d --name tulip-serve -p 8000:8000 tulip-serve
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then break; fi
+            if [ "$(docker inspect -f '{{.State.Running}}' tulip-serve)" != "true" ]; then
+              echo "container exited during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/health
+          curl -fsS -X POST http://127.0.0.1:8000/predict/text \
+            -H "Content-Type: application/json" \
+            -d '{"text": "baca pognal owce na hale"}'
+      - name: Container logs and cleanup
+        # Runs on failure too; the logs matter most when the probe failed.
+        if: always()
+        run: |
+          docker logs tulip-serve || true
+          docker rm -f tulip-serve || true
