@@ -33,10 +33,12 @@ if TYPE_CHECKING:
 
     import numpy as np
 
+    from tulip.config.schemas import ComponentConfig
     from tulip.core.types import Prediction, Sample, TaskType
     from tulip.labels.taxonomy import LabelLevel
+    from tulip.pipeline.classifier import LabelledBatch
 
-__all__ = ["ProbabilisticClassifier", "SamplePredictor"]
+__all__ = ["CalibratableClassifier", "ProbabilisticClassifier", "SamplePredictor"]
 
 
 @runtime_checkable
@@ -79,4 +81,28 @@ class ProbabilisticClassifier(Protocol):
 
     def predict_proba(self, raws: Sequence[Any]) -> np.ndarray:
         """Return the probability matrix for ``raws``, columns aligned to ``classes_``."""
+        ...
+
+
+@runtime_checkable
+class CalibratableClassifier(ProbabilisticClassifier, Protocol):
+    """The surface the uncertainty wrappers need from the classifier they wrap.
+
+    :class:`~tulip.pipeline.calibrated.CalibratedClassifier`,
+    :class:`~tulip.pipeline.conformal.ConformalClassifier`, and
+    :class:`~tulip.pipeline.openset.OpenSetClassifier` compose over a base by
+    reading its aligned probabilities (:class:`ProbabilisticClassifier`), its
+    labelled-batch builder (samples to raw/label pairs), and its ``model_config``
+    (which names the wrapped model in a report). Typing the wrappers against this
+    abstraction rather than the concrete
+    :class:`~tulip.pipeline.classifier.DialectClassifier` keeps them composable
+    over any conforming classifier and injectable with a stub in tests, exactly
+    as :class:`~tulip.pipeline.fusion.MultimodalClassifier` already depends on
+    :class:`ProbabilisticClassifier`.
+    """
+
+    model_config: ComponentConfig
+
+    def labelled_batch(self, samples: Sequence[Sample]) -> LabelledBatch:
+        """Pair each usable sample's raw model input with its label at ``target``."""
         ...

@@ -46,7 +46,8 @@ if TYPE_CHECKING:
     from tulip.core.types import Prediction, Sample, TaskType
     from tulip.labels.taxonomy import LabelLevel
     from tulip.models.calibration import ProbabilityCalibrator
-    from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
+    from tulip.pipeline.classifier import LabelledBatch
+    from tulip.pipeline.protocols import CalibratableClassifier
 
 __all__ = ["CalibratedClassifier"]
 
@@ -73,7 +74,7 @@ class CalibratedClassifier:
 
     def __init__(
         self,
-        base: DialectClassifier,
+        base: CalibratableClassifier,
         calibrator: ProbabilityCalibrator | None = None,
         *,
         abstain_threshold: float | None = None,
