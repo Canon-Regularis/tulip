@@ -15,7 +15,6 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
 from pydantic import BaseModel, ConfigDict
 
 from tulip._serialize import write_markdown
@@ -24,10 +23,9 @@ from tulip.config.schemas import ComponentConfig, ExperimentConfig
 from tulip.core.exceptions import DataError
 from tulip.data.builder import DatasetBuilder
 from tulip.evaluation.benchmark import BenchmarkResult, save_benchmark, to_markdown_table
-from tulip.evaluation.metrics import compute_metrics
-from tulip.evaluation.predictions import PREDICTION_FLOAT_DIGITS, PredictionRecord, SplitPredictions
 from tulip.evaluation.report import EvaluationReport
-from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
+from tulip.pipeline.classifier import DialectClassifier
+from tulip.pipeline.scoring import _evaluate_split, collect_predictions, evaluate_samples
 from tulip.utils.io import write_json
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
@@ -35,8 +33,8 @@ from tulip.utils.seed import set_global_seed
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from tulip.core.types import Sample
     from tulip.data.splitting import DatasetSplits
+    from tulip.evaluation.predictions import SplitPredictions
 
 _logger = get_logger(__name__)
 
@@ -228,21 +226,32 @@ def _benchmark_one_model(
     )
 
 
+#: TrainingConfig fields injected into a training-aware model whose metadata
+#: does not narrow them. The neural fine-tuners accept all three; a model that
+#: accepts only a subset (or none) declares its own ``training_knobs`` so this
+#: function never has to know about it.
+_DEFAULT_TRAINING_KNOBS = ("batch_size", "epochs", "learning_rate")
+
+
 def build_classifier(config: ExperimentConfig) -> DialectClassifier:
     """Instantiate the classifier declared by an experiment config.
 
     For raw-input models (empty ``features``) registered as ``training_aware``
     (i.e. whose constructors accept the shared TrainingConfig knobs),
     ``config.training`` values are merged into the model params; explicit
-    per-model params always win. The capability is declared at each model's
-    registration site (see :meth:`tulip.core.registry.Registry.add`), so new
-    models opt in without changes here.
+    per-model params always win. A model declares *which* knobs its constructor
+    accepts through its ``training_knobs`` metadata (default: all three); only
+    those are injected, so a model that takes a subset (or renames them via
+    factory aliases) can be training-aware without this function hardcoding the
+    neural fine-tuners' knob set. The capability is declared at each model's
+    registration site, so new models opt in without changes here.
     """
     from tulip.config.schemas import TrainingConfig
     from tulip.models import MODELS
 
     model = config.model
-    training_aware = MODELS.metadata(model.name).get("training_aware", False)
+    metadata = MODELS.metadata(model.name)
+    training_aware = metadata.get("training_aware", False)
     if not training_aware and config.training != TrainingConfig():
         _logger.warning(
             "experiment %r sets a training block, but model %r is not training-aware; "
@@ -251,13 +260,9 @@ def build_classifier(config: ExperimentConfig) -> DialectClassifier:
             model.name,
         )
     if not config.features and training_aware:
-        merged = {
-            "batch_size": config.training.batch_size,
-            "epochs": config.training.epochs,
-            "learning_rate": config.training.learning_rate,
-            **model.params,
-        }
-        model = model.model_copy(update={"params": merged})
+        knobs = metadata.get("training_knobs", _DEFAULT_TRAINING_KNOBS)
+        training_values = {knob: getattr(config.training, knob) for knob in knobs}
+        model = model.model_copy(update={"params": {**training_values, **model.params}})
     return DialectClassifier(
         model=model,
         features=config.features,
@@ -265,166 +270,6 @@ def build_classifier(config: ExperimentConfig) -> DialectClassifier:
         target=config.target,
         abstain_threshold=config.abstain_threshold,
         seed=config.seed,
-    )
-
-
-def evaluate_samples(
-    classifier: DialectClassifier,
-    samples: Sequence[Sample],
-    *,
-    name: str = "eval",
-    metadata: dict[str, str] | None = None,
-    calibration_bins: int | None = None,
-) -> EvaluationReport:
-    """Evaluate a fitted classifier on labelled samples.
-
-    Abstention never applies here: evaluation scores the raw argmax so metrics
-    stay comparable across abstention thresholds. Gold labels the model never
-    saw are kept (they count as errors); when present they widen the label set
-    beyond the probability columns, so ROC AUC is safely omitted by the
-    metrics guard rather than misreported.
-
-    Args:
-        classifier: A fitted classifier.
-        samples: Labelled samples to score.
-        name: Split name recorded in the report metadata.
-        metadata: Extra free-form report metadata.
-        calibration_bins: When given, also populate the report's calibration
-            block (top-label ECE/MCE and Brier) with this many uniform bins.
-            Defaults to ``None`` (no calibration), so existing artifacts are
-            unchanged until it is explicitly requested.
-
-    Raises:
-        DataError: if no sample carries both the input modality and a label
-            at the classifier's target level.
-    """
-    batch, probabilities, y_pred = _score_split(classifier, samples, name)
-    return _report_from(classifier, batch, probabilities, y_pred, name, metadata, calibration_bins)
-
-
-def collect_predictions(
-    classifier: DialectClassifier,
-    samples: Sequence[Sample],
-    *,
-    name: str = "eval",
-    metadata: dict[str, str] | None = None,
-) -> SplitPredictions:
-    """Evaluate a fitted classifier and keep the per-sample predictions.
-
-    Scores the same raw argmax as :func:`evaluate_samples` (no abstention), so
-    the returned records align exactly with that split's
-    :class:`~tulip.evaluation.report.EvaluationReport`. Each record also carries
-    self-describing slice keys (source, speaker, length, modality) so the
-    downstream significance / selective-prediction / error-analysis layers need
-    never re-load the originating corpus.
-
-    Raises:
-        DataError: if no sample carries both the input modality and a label
-            at the classifier's target level.
-    """
-    batch, probabilities, y_pred = _score_split(classifier, samples, name)
-    return _predictions_from(classifier, batch, probabilities, y_pred, name, metadata)
-
-
-def _score_split(
-    classifier: DialectClassifier, samples: Sequence[Sample], name: str
-) -> tuple[LabelledBatch, np.ndarray, list[str]]:
-    """Run inference once for a split: filtered batch, probabilities, argmax labels.
-
-    The single shared inference pass behind both the aggregate report and the
-    per-sample predictions, so a runner that wants both pays for prediction only
-    once (it matters for the neural models).
-
-    Raises:
-        DataError: if no sample carries both the input modality and a label.
-    """
-    batch = classifier.labelled_batch(samples)
-    if not batch.raws:
-        raise DataError(
-            f"split {name!r} has no evaluable samples for target "
-            f"{classifier.target.value!r} (skipped {batch.n_skipped})"
-        )
-    if batch.n_skipped:
-        _logger.info("split %r: skipped %d unlabelled/modality-less samples", name, batch.n_skipped)
-    probabilities = classifier.predict_proba(batch.raws)
-    y_pred = [classifier.classes_[int(i)] for i in np.argmax(probabilities, axis=1)]
-    return batch, probabilities, y_pred
-
-
-def _report_from(
-    classifier: DialectClassifier,
-    batch: LabelledBatch,
-    probabilities: np.ndarray,
-    y_pred: Sequence[str],
-    name: str,
-    metadata: dict[str, str] | None,
-    calibration_bins: int | None = None,
-) -> EvaluationReport:
-    """Build the aggregate report from an already-scored split."""
-    labels = sorted(set(classifier.classes_) | set(batch.labels))
-    return compute_metrics(
-        batch.labels,
-        y_pred,
-        y_proba=probabilities,
-        labels=labels,
-        metadata={"split": name, "target": classifier.target.value, **(metadata or {})},
-        calibration_bins=calibration_bins,
-    )
-
-
-def _predictions_from(
-    classifier: DialectClassifier,
-    batch: LabelledBatch,
-    probabilities: np.ndarray,
-    y_pred: Sequence[str],
-    name: str,
-    metadata: dict[str, str] | None,
-) -> SplitPredictions:
-    """Build per-sample records from an already-scored split."""
-    records = tuple(
-        PredictionRecord(
-            id=sample.id,
-            y_true=true_label,
-            y_pred=pred_label,
-            proba=tuple(round(float(value), PREDICTION_FLOAT_DIGITS) for value in row),
-            source=sample.source,
-            speaker_id=sample.speaker_id,
-            n_chars=len(sample.text) if sample.text is not None else None,
-            modality=classifier.task.value,
-        )
-        for sample, true_label, pred_label, row in zip(
-            batch.samples, batch.labels, y_pred, probabilities, strict=True
-        )
-    )
-    return SplitPredictions(
-        model=classifier.model_config.name,
-        split=name,
-        labels=classifier.classes_,
-        records=records,
-        metadata={"target": classifier.target.value, **(metadata or {})},
-    )
-
-
-def _evaluate_split(
-    classifier: DialectClassifier,
-    samples: Sequence[Sample],
-    split_name: str,
-    config: ExperimentConfig,
-    *,
-    calibration_bins: int | None = None,
-) -> tuple[EvaluationReport, SplitPredictions]:
-    """Evaluate one experiment split, returning report and predictions together.
-
-    Scores the split once (:func:`_score_split`) and derives both artifacts, so
-    the runners never pay for inference twice. Metadata is config-aware.
-    """
-    metadata = {"model": config.model.name, "experiment": config.name}
-    batch, probabilities, y_pred = _score_split(classifier, samples, split_name)
-    return (
-        _report_from(
-            classifier, batch, probabilities, y_pred, split_name, metadata, calibration_bins
-        ),
-        _predictions_from(classifier, batch, probabilities, y_pred, split_name, metadata),
     )
 
 

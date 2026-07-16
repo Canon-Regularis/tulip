@@ -22,6 +22,60 @@ def experiment_config(tmp_path: Path) -> ExperimentConfig:
     return make_manifest_experiment_config(corpus, tmp_path / "artifacts")
 
 
+class TestBuildClassifierTrainingKnobs:
+    """build_classifier injects only the TrainingConfig knobs a model declares.
+
+    The model's metadata is stubbed rather than a probe model registered, so the
+    global model registry (and other tests asserting over it) is untouched. A
+    real raw-input model name (``fasttext``) keeps the config valid; only the
+    metadata lookup inside build_classifier is redirected.
+    """
+
+    def _config(self, tmp_path: Path) -> ExperimentConfig:
+        from tulip.config.schemas import ComponentConfig, TrainingConfig
+
+        corpus = write_manifest_corpus(tmp_path / "corpus", speakers=5, variants=2)
+        return make_manifest_experiment_config(
+            corpus,
+            tmp_path / "artifacts",
+            model=ComponentConfig(name="fasttext"),
+            features=[],
+            training=TrainingConfig(batch_size=9, epochs=7, learning_rate=0.3),
+        )
+
+    def test_default_injects_all_three_knobs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from tulip.models import MODELS
+        from tulip.pipeline.experiment import build_classifier
+
+        config = self._config(tmp_path)
+        monkeypatch.setattr(MODELS, "metadata", lambda name: {"training_aware": True})
+        classifier = build_classifier(config)
+        assert classifier.model_config.params == {
+            "batch_size": 9,
+            "epochs": 7,
+            "learning_rate": 0.3,
+        }
+
+    def test_declared_knobs_restrict_the_injection(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The OCP fix: a training-aware model that accepts only ``epochs`` gets
+        # only that knob, not the neural fine-tuners' full set.
+        from tulip.models import MODELS
+        from tulip.pipeline.experiment import build_classifier
+
+        config = self._config(tmp_path)
+        monkeypatch.setattr(
+            MODELS,
+            "metadata",
+            lambda name: {"training_aware": True, "training_knobs": ("epochs",)},
+        )
+        classifier = build_classifier(config)
+        assert classifier.model_config.params == {"epochs": 7}
+
+
 class TestRunExperiment:
     def test_end_to_end_artifacts_and_reports(self, experiment_config: ExperimentConfig) -> None:
         result = run_experiment(experiment_config)
