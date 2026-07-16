@@ -48,7 +48,8 @@ if TYPE_CHECKING:
 
     from tulip.core.types import Sample, TaskType
     from tulip.labels.taxonomy import LabelLevel
-    from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
+    from tulip.pipeline.classifier import LabelledBatch
+    from tulip.pipeline.protocols import CalibratableClassifier
 
 __all__ = ["ConformalClassifier", "ConformalPrediction", "ConformalReport"]
 
@@ -108,7 +109,7 @@ class ConformalClassifier:
 
     def __init__(
         self,
-        base: DialectClassifier,
+        base: CalibratableClassifier,
         *,
         alpha: float = 0.1,
         mondrian: bool = False,

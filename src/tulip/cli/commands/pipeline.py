@@ -165,6 +165,13 @@ def crossval(
     config_path: Path = typer.Argument(..., help="Experiment config YAML."),
     k: int = typer.Option(5, "--k", min=2, help="Number of folds."),
     seeds: str = typer.Option("0", "--seeds", help="Comma-separated fold seeds (e.g. 0,1,2)."),
+    jobs: int = typer.Option(
+        1,
+        "--jobs",
+        "-j",
+        help="Fold runs to execute in parallel (-1 for all cores); "
+        "the aggregate is identical to the sequential run.",
+    ),
 ) -> None:
     """Grouped, stratified K-fold cross-validation with multi-seed aggregation.
 
@@ -176,7 +183,7 @@ def crossval(
 
     config = load_experiment_config(config_path)
     seed_tuple = tuple(int(part) for part in seeds.split(",") if part.strip())
-    report = run_cross_validation(config, CVConfig(k=k, seeds=seed_tuple))
+    report = run_cross_validation(config, CVConfig(k=k, seeds=seed_tuple), n_jobs=jobs)
 
     table = Table(title=f"cross-validation {config.model.name!r} ({report.target})")
     for column in ("metric", "mean", "std", "95% CI"):
@@ -341,8 +348,7 @@ def acquire(
     the model merely happens to be unsure about. Ranking only; labeling is a
     human step.
     """
-    from tulip.core.exceptions import ConfigurationError
-    from tulip.core.registry import UnknownComponentError
+    from tulip.core.exceptions import ConfigurationError, UnknownComponentError
     from tulip.data import read_samples
     from tulip.pipeline import STRATEGIES, DialectClassifier, rank_for_labeling
 

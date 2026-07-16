@@ -35,8 +35,8 @@ if TYPE_CHECKING:
 
     from tulip.core.types import Sample
     from tulip.labels.taxonomy import LabelLevel
-    from tulip.pipeline.classifier import DialectClassifier
     from tulip.pipeline.conformal import ConformalClassifier
+    from tulip.pipeline.protocols import CalibratableClassifier
 
 __all__ = ["OpenSetClassifier", "OpenSetPrediction", "OpenSetReport"]
 
@@ -94,7 +94,7 @@ class OpenSetClassifier:
         self.conformal = conformal
 
     @property
-    def base(self) -> DialectClassifier:
+    def base(self) -> CalibratableClassifier:
         """The underlying fitted classifier."""
         return self.conformal.base
 

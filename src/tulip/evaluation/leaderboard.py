@@ -29,19 +29,18 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from tulip._serialize import tulip_version, write_markdown
+from tulip._serialize import write_markdown
 from tulip.config.loader import load_experiment_config
 from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation._format import format_metric, markdown_table, write_sorted_json
-from tulip.evaluation._provenance_env import environment_provenance
+from tulip.evaluation._provenance import PROVENANCE_JSON, build_provenance
 from tulip.evaluation.benchmark import BenchmarkResult, save_benchmark
-from tulip.utils.io import read_json, read_yaml
+from tulip.utils.io import read_yaml
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from tulip.config.schemas import ExperimentConfig
 
 _logger = get_logger(__name__)
 
@@ -50,10 +49,6 @@ DEFAULT_SPLIT = "test"
 #: File names written by :func:`write_leaderboard`.
 LEADERBOARD_MD = "leaderboard.md"
 LEADERBOARD_JSON = "leaderboard.json"
-PROVENANCE_JSON = "provenance.json"
-#: Fixed rounding applied to every float in ``provenance.json`` so re-runs are
-#: byte-identical even under trivial floating-point noise.
-PROVENANCE_FLOAT_DIGITS = 6
 
 #: The deterministic leaderboard columns; a strict subset of the benchmark
 #: table that excludes the nondeterministic ``wall_seconds``. ``Experiment`` is
@@ -144,7 +139,7 @@ def load_suite(path: Path | str) -> LeaderboardSuite:
 
 
 def run_leaderboard(
-    suite: LeaderboardSuite, *, output_dir: Path | None = None
+    suite: LeaderboardSuite, *, output_dir: Path | None = None, n_jobs: int = 1
 ) -> list[BenchmarkResult]:
     """Run every ``(config, model)`` pair in ``suite`` on its frozen split.
 
@@ -161,6 +156,11 @@ def run_leaderboard(
             declared tree. A from-scratch reproduction passes a throwaway
             directory, so the run depends only on the committed source and never
             reads or writes the developer's own artifacts tree.
+        n_jobs: Competitors to train in parallel within each config (passed to
+            :func:`~tulip.pipeline.experiment.run_benchmark`). ``1`` (the
+            default) is in-process and sequential, so the committed board is
+            byte-for-byte unchanged; above 1 trains in separate processes with
+            identical results.
 
     Returns:
         One :class:`BenchmarkResult` per ``(config, model)`` pair.
@@ -176,7 +176,9 @@ def run_leaderboard(
         if output_dir is not None:
             config = config.model_copy(update={"output_dir": Path(output_dir)})
         _logger.info("leaderboard %r: benchmarking config %r", suite.name, config.name)
-        results.extend(run_benchmark(config, models, calibration_bins=suite.calibration_bins))
+        results.extend(
+            run_benchmark(config, models, calibration_bins=suite.calibration_bins, n_jobs=n_jobs)
+        )
     _logger.info("leaderboard %r: produced %d result(s)", suite.name, len(results))
     return results
 
@@ -281,7 +283,7 @@ def write_leaderboard(
 
     save_benchmark(results, out_dir / LEADERBOARD_JSON)
 
-    provenance = _build_provenance(results, suite, build_dir=build_dir)
+    provenance = build_provenance(results, suite, split=DEFAULT_SPLIT, build_dir=build_dir)
     write_sorted_json(out_dir / PROVENANCE_JSON, provenance)
     _logger.info("wrote leaderboard artifacts to %s", out_dir)
 
@@ -332,121 +334,3 @@ def write_significance(
     if written:
         _logger.info("wrote significance for %d experiment(s) to %s", len(written), out_dir)
     return written
-
-
-def _build_provenance(
-    results: Sequence[BenchmarkResult], suite: LeaderboardSuite, *, build_dir: Path | None = None
-) -> dict[str, Any]:
-    """Assemble the deterministic provenance payload (see :func:`write_leaderboard`)."""
-    config_entries = [
-        _config_provenance(config_path, load_experiment_config(config_path), build_dir=build_dir)
-        for config_path in suite.configs
-    ]
-    result_entries = [
-        entry
-        for result in results
-        if (entry := _result_provenance(result, DEFAULT_SPLIT)) is not None
-    ]
-    # Total, seed-independent order: experiment, then best-first, then model.
-    result_entries.sort(key=lambda e: (e["experiment"], -e["f1_macro"], e["model"]))
-    return {
-        "configs": config_entries,
-        "environment": environment_provenance(suite.configs),
-        "float_precision": PROVENANCE_FLOAT_DIGITS,
-        "models": sorted(suite.models),
-        "results": result_entries,
-        "split": DEFAULT_SPLIT,
-        "suite": suite.name,
-        "tulip_version": tulip_version(),
-    }
-
-
-def _config_provenance(
-    config_path: Path, config: ExperimentConfig, *, build_dir: Path | None = None
-) -> dict[str, Any]:
-    """Provenance for one experiment: seeds, split sizes/distribution, and a data digest.
-
-    The manifest and split lock are read from where the run actually built its
-    splits: ``build_dir/<name>/splits`` for an isolated run, else the config's
-    declared ``output_dir/<name>/splits``. Reading them from the build location
-    keeps a from-scratch reproduction honest, rather than picking up a stale
-    developer artifacts tree.
-    """
-    splits_dir = (
-        (build_dir if build_dir is not None else config.output_dir) / config.name / "splits"
-    )
-    manifest = _read_manifest(splits_dir)
-    return {
-        "class_distribution": manifest.get("class_distribution") if manifest else None,
-        "dataset_digest": _dataset_digest(splits_dir),
-        "name": config.name,
-        "path": Path(config_path).as_posix(),
-        "seed": config.seed,
-        "sizes": manifest.get("sizes") if manifest else None,
-        "split_seed": config.split.seed,
-    }
-
-
-def _dataset_digest(splits_dir: Path) -> str | None:
-    """The split lock's combined content digest under ``splits_dir``, or ``None``.
-
-    Ties the leaderboard to the exact dataset content that fed it: the split
-    lock's ``combined`` digest changes if any sample in any split is added,
-    removed, or altered, so a silent data change is caught the same way an edited
-    config or lexicon is. The digest is itself deterministic (an order-independent
-    content hash), so it does not threaten the byte-stable guarantee.
-    """
-    from tulip.data.fingerprint import SPLIT_LOCK_NAME
-
-    path = splits_dir / SPLIT_LOCK_NAME
-    if not path.is_file():
-        _logger.debug("no split lock at %s; dataset digest omitted from provenance", path)
-        return None
-    try:
-        data = read_json(path)
-    except (OSError, ValueError) as exc:
-        # A corrupt or unreadable lock degrades to null, matching how an absent
-        # build manifest degrades sizes: provenance never fails a valid run.
-        _logger.debug("split lock %s unreadable; dataset digest omitted: %s", path, exc)
-        return None
-    if isinstance(data, dict) and data.get("combined") is not None:
-        return str(data["combined"])
-    return None
-
-
-def _result_provenance(result: BenchmarkResult, split: str) -> dict[str, Any] | None:
-    """Fixed-precision metrics for one result, or ``None`` if it lacks ``split``."""
-    report = result.reports.get(split)
-    if report is None:
-        _logger.debug("result %r has no %r split; omitted from provenance", result.model, split)
-        return None
-    auc = report.roc_auc_macro_ovr
-    calibration = report.calibration
-    return {
-        "accuracy": round(report.accuracy, PROVENANCE_FLOAT_DIGITS),
-        "brier": None if calibration is None else round(calibration.brier, PROVENANCE_FLOAT_DIGITS),
-        "ece": None if calibration is None else round(calibration.ece, PROVENANCE_FLOAT_DIGITS),
-        "experiment": result.experiment,
-        "f1_macro": round(report.f1_macro, PROVENANCE_FLOAT_DIGITS),
-        "f1_weighted": round(report.f1_weighted, PROVENANCE_FLOAT_DIGITS),
-        "model": result.model,
-        "n_train": result.n_train,
-        "roc_auc": None if auc is None else round(auc, PROVENANCE_FLOAT_DIGITS),
-    }
-
-
-def _read_manifest(splits_dir: Path) -> dict[str, Any] | None:
-    """Read the ``build_manifest.json`` under ``splits_dir``, or ``None`` if absent.
-
-    The manifest is written by :meth:`tulip.data.builder.DatasetBuilder.build`
-    into the run's ``splits/`` directory; it is absent until the suite is actually
-    run, so provenance degrades to ``null`` sizes rather than failing.
-    """
-    from tulip.data.builder import BUILD_MANIFEST_NAME
-
-    path = splits_dir / BUILD_MANIFEST_NAME
-    if not path.is_file():
-        _logger.debug("no build manifest at %s; provenance sizes omitted", path)
-        return None
-    manifest = read_json(path)
-    return manifest if isinstance(manifest, dict) else None
