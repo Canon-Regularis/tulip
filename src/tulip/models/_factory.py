@@ -30,6 +30,28 @@ def reconcile_seed_param(params: dict[str, Any]) -> None:
     params.setdefault("seed", random_state)
 
 
+def pop_seed(params: dict[str, Any], *, default: int | None) -> int | None:
+    """Reconcile the two seed spellings and pop the resolved seed out of ``params``.
+
+    The single seed-extraction path for the factories that pass a concrete seed
+    to their estimator (the classical and ensemble factories): it reuses
+    :func:`reconcile_seed_param` for the ``random_state``/``seed`` reconciliation
+    (and its conflict check), then removes and returns the seed.
+
+    Args:
+        params: Factory keyword arguments; mutated in place (both spellings gone).
+        default: Seed returned when neither spelling is present.
+
+    Returns:
+        The resolved seed (may be ``None`` to request unseeded behaviour).
+
+    Raises:
+        ConfigurationError: if ``random_state`` and ``seed`` disagree.
+    """
+    reconcile_seed_param(params)
+    return params.pop("seed", default)
+
+
 def checkpoint_factory(cls: type, checkpoint: str) -> Callable[..., Any]:
     """Build a registry factory that pre-binds a default checkpoint.
 

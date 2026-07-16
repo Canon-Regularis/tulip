@@ -17,9 +17,9 @@ The ensembling logic is not reimplemented. These factories reuse scikit-learn's
 :class:`~sklearn.ensemble.StackingClassifier`, and build the base estimators
 through :meth:`MODELS.create`. The only new code is the glue that turns a list of
 registry names into unique ``(alias, estimator)`` pairs and threads the seed
-through. Seed handling reuses ``_pop_seed`` from
-:mod:`tulip.models.classical`, so the two spellings (``random_state``/``seed``)
-behave identically to every other baseline.
+through. Seed handling reuses the shared
+:func:`tulip.models._factory.pop_seed`, so the two spellings
+(``random_state``/``seed``) behave identically to every other baseline.
 
 The bases must consume the same feature matrix as any classical model. Base-model
 constraints carry over: soft voting and stacking need bases with
@@ -31,7 +31,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from tulip.core.exceptions import ConfigurationError
-from tulip.models.classical import DEFAULT_SEED, _pop_seed
+from tulip.models._factory import pop_seed
+from tulip.models.classical import DEFAULT_SEED
 from tulip.models.registry import MODELS
 from tulip.utils.logging import get_logger
 
@@ -75,7 +76,7 @@ def make_voting(
     """
     from sklearn.ensemble import VotingClassifier
 
-    seed = _pop_seed(params, default=None)
+    seed = pop_seed(params, default=None)
     _reject_extra(params, "voting")
     if voting not in ("soft", "hard"):
         raise ConfigurationError(f"voting must be 'soft' or 'hard', got {voting!r}")
@@ -120,7 +121,7 @@ def make_stacking(
     from sklearn.ensemble import StackingClassifier
     from sklearn.model_selection import StratifiedKFold
 
-    seed = _pop_seed(params, default=DEFAULT_SEED)
+    seed = pop_seed(params, default=DEFAULT_SEED)
     _reject_extra(params, "stacking")
     if cv < 2:
         raise ConfigurationError(f"stacking cv must be >= 2, got {cv}")

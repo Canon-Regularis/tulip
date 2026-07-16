@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 
 from tulip.core.exceptions import ConfigurationError
+from tulip.models._factory import pop_seed
 from tulip.models.registry import MODELS
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
@@ -46,33 +47,11 @@ __all__ = [
 def _pop_seed(params: dict[str, Any], *, default: int | None = DEFAULT_SEED) -> int | None:
     """Extract the random seed from ``params``, honouring both spellings.
 
-    ``random_state`` (scikit-learn's name) and ``seed`` (tulip config's name)
-    are both accepted; supplying conflicting values is a configuration error
-    rather than a silent coin flip.
-
-    Args:
-        params: Factory keyword arguments; mutated in place (both keys popped).
-        default: Seed to use when neither key is present.
-
-    Returns:
-        The resolved seed (may be ``None`` to request unseeded behaviour).
-
-    Raises:
-        ConfigurationError: If ``random_state`` and ``seed`` disagree.
+    A thin wrapper over the shared :func:`tulip.models._factory.pop_seed` that
+    only supplies this module's default; the reconciliation and its conflict
+    check live in one place there.
     """
-    has_random_state = "random_state" in params
-    has_seed = "seed" in params
-    random_state = params.pop("random_state", None)
-    seed = params.pop("seed", None)
-    if has_random_state and has_seed and random_state != seed:
-        raise ConfigurationError(
-            f"conflicting seeds: random_state={random_state!r} vs seed={seed!r}"
-        )
-    if has_random_state:
-        return random_state
-    if has_seed:
-        return seed
-    return default
+    return pop_seed(params, default=default)
 
 
 class LabelEncodedClassifier:
