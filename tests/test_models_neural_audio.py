@@ -178,17 +178,17 @@ def test_clipped_waveforms_honour_sample_rate_through_real_loader(tmp_path: Path
     # the 16 kHz default). Decoding a 1 s 8 kHz file AT 8 kHz must yield
     # 8000 samples, not 16000.
     pytest.importorskip("soundfile")
-    from tulip.models.neural_audio import _load_clipped_waveforms
+    from tulip.models.neural_audio import load_clipped_waveforms
 
     clip = _write_wav(tmp_path / "clip.wav", seconds=1.0, framerate=8_000)
-    (waveform,) = _load_clipped_waveforms([clip], sample_rate=8_000, max_seconds=5.0)
+    (waveform,) = load_clipped_waveforms([clip], sample_rate=8_000, max_seconds=5.0)
     assert waveform.shape == (8_000,)
 
-    (upsampled,) = _load_clipped_waveforms([clip], sample_rate=16_000, max_seconds=5.0)
+    (upsampled,) = load_clipped_waveforms([clip], sample_rate=16_000, max_seconds=5.0)
     assert upsampled.shape == (16_000,)
 
     # max_seconds clips at the requested rate.
-    (clipped,) = _load_clipped_waveforms([clip], sample_rate=8_000, max_seconds=0.5)
+    (clipped,) = load_clipped_waveforms([clip], sample_rate=8_000, max_seconds=0.5)
     assert clipped.shape == (4_000,)
 
 
