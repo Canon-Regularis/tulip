@@ -19,16 +19,16 @@ diagnostic; audio-only samples (no text) are skipped.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tulip._serialize import round_floats, write_sorted_json
+from tulip._serialize import save_report
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from tulip.core.types import Sample
     from tulip.pipeline.classifier import DialectClassifier
@@ -109,8 +109,7 @@ class IsoglossReport(BaseModel):
 
     def save(self, path: Path | str) -> None:
         """Write the report as deterministic JSON (sorted keys, rounded floats)."""
-        payload = round_floats(self.model_dump(mode="json"), ISOGLOSS_FLOAT_DIGITS)
-        write_sorted_json(Path(path), payload)
+        save_report(self, path, digits=ISOGLOSS_FLOAT_DIGITS)
 
 
 def isogloss_diagnostics(

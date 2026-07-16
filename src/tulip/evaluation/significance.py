@@ -23,19 +23,19 @@ order, so a committed significance report regenerates byte-for-byte.
 from __future__ import annotations
 
 import math
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 from sklearn.metrics import accuracy_score, f1_score
 
-from tulip._serialize import round_floats
+from tulip._serialize import save_report
 from tulip.core.exceptions import ConfigurationError
-from tulip.evaluation._format import format_metric, markdown_table, write_sorted_json
+from tulip.evaluation._format import format_metric, markdown_table
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from pathlib import Path
 
     from tulip.evaluation.predictions import SplitPredictions
 
@@ -173,9 +173,7 @@ class SignificanceReport(BaseModel):
 
     def save(self, path: Path | str) -> None:
         """Write the report as deterministic JSON (sorted keys, rounded floats)."""
-        write_sorted_json(
-            Path(path), round_floats(self.model_dump(mode="json"), SIGNIFICANCE_FLOAT_DIGITS)
-        )
+        save_report(self, path, digits=SIGNIFICANCE_FLOAT_DIGITS)
 
 
 def mcnemar_exact(

@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tulip._serialize import round_floats, write_sorted_json
+from tulip._serialize import save_report
 from tulip.core.exceptions import DataError
 from tulip.evaluation.efficiency import EfficiencyRecord
 from tulip.utils.logging import get_logger
@@ -123,8 +123,7 @@ class DistillationReport(BaseModel):
 
     def save(self, path: Path | str) -> None:
         """Write the report as JSON (sorted keys, rounded floats)."""
-        payload = round_floats(self.model_dump(mode="json"), DISTILL_FLOAT_DIGITS)
-        write_sorted_json(Path(path), payload)
+        save_report(self, path, digits=DISTILL_FLOAT_DIGITS)
 
 
 def _efficiency_row(role: str, record: EfficiencyRecord) -> tuple[str, str, str, str]:

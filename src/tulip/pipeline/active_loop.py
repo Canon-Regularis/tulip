@@ -25,19 +25,19 @@ deterministic, so a saved :class:`ActiveLoopReport` is byte-stable.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-from tulip._serialize import round_floats, write_sorted_json
+from tulip._serialize import save_report
 from tulip.core.exceptions import ConfigurationError
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from tulip.config.schemas import ExperimentConfig
     from tulip.core.types import Sample
@@ -103,8 +103,7 @@ class ActiveLoopReport(BaseModel):
 
     def save(self, path: Path | str) -> None:
         """Write the report as deterministic JSON (sorted keys, rounded floats)."""
-        payload = round_floats(self.model_dump(mode="json"), ACTIVE_LOOP_FLOAT_DIGITS)
-        write_sorted_json(Path(path), payload)
+        save_report(self, path, digits=ACTIVE_LOOP_FLOAT_DIGITS)
 
 
 def active_learning_loop(
