@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from tulip._serialize import markdown_table
 from tulip.core.exceptions import DataError
 from tulip.data.manifest import ManifestColumns, read_manifest
 from tulip.labels.taxonomy import DialectFamily, RegionalDialect
@@ -111,18 +112,13 @@ class ManifestReport(BaseModel):
 
         Mirrors :meth:`tulip.evaluation.report.EvaluationReport.to_markdown`:
         a summary table followed by an issues table built with the shared
-        :func:`~tulip.evaluation._format.markdown_table` helper. Every issue's
+        :func:`~tulip._serialize.markdown_table` helper. Every issue's
         machine-readable ``code`` appears in the table so reports remain
         greppable.
 
         Returns:
             A markdown document ending without a trailing newline.
         """
-        # Imported here, not at module scope: tulip.evaluation pulls in pandas,
-        # and `import tulip.data` must not pay for a renderer most callers of
-        # validate_manifest never invoke.
-        from tulip.evaluation._format import markdown_table
-
         status = "OK" if self.ok else "FAILED"
         summary_rows = [
             ("Path", _escape_cell(self.path)),

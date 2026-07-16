@@ -15,20 +15,68 @@ writer without a dependency cycle. It imports nothing from ``tulip``.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from pathlib import Path
+    from collections.abc import Callable, Sequence
     from typing import Any
 
+    from pydantic import BaseModel
+
 __all__ = [
+    "format_metric",
+    "markdown_table",
     "round_floats",
+    "save_report",
     "sorted_json_text",
     "tulip_version",
     "write_markdown",
     "write_sorted_json",
 ]
+
+
+def format_metric(value: float | None, digits: int = 4) -> str:
+    """Format a metric value for display, rendering ``None`` as ``"n/a"``.
+
+    A pure formatting helper with no evaluation dependency, so it lives at the
+    package root beside the shared writers rather than in ``evaluation``: the
+    data and CLI layers render tables too and must not import ``evaluation``.
+
+    Args:
+        value: The metric value, or ``None`` when the metric is unavailable
+            (e.g. ROC AUC without probability estimates).
+        digits: Number of decimal places.
+
+    Returns:
+        The formatted string.
+    """
+    if value is None:
+        return "n/a"
+    return f"{value:.{digits}f}"
+
+
+def markdown_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
+    """Render a GitHub-flavoured markdown table.
+
+    The first column is left-aligned (names), remaining columns right-aligned
+    (numbers), which keeps metric tables readable in rendered READMEs. Kept
+    dependency-free so it never requires ``tabulate`` or any optional package.
+
+    Args:
+        headers: Column header cells.
+        rows: Row cells; every row must have ``len(headers)`` entries.
+
+    Returns:
+        The markdown table as a single string (no trailing newline).
+    """
+    separators = [":---" if index == 0 else "---:" for index in range(len(headers))]
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(separators) + " |",
+    ]
+    lines.extend("| " + " | ".join(str(cell) for cell in row) + " |" for row in rows)
+    return "\n".join(lines)
 
 
 def round_floats(payload: Any, digits: int) -> Any:
@@ -99,6 +147,28 @@ def write_markdown(path: Path, text: str) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text + "\n", encoding="utf-8", newline="\n")
+
+
+def save_report(model: BaseModel, path: Path | str, *, digits: int | None = None) -> None:
+    """Write a pydantic report as deterministic JSON, optionally rounding floats.
+
+    The one ``save()`` body every rigor report shares: dump the model to
+    JSON-native values, round its floats to ``digits`` so re-runs are byte
+    identical (skip when ``digits`` is ``None``), and write sorted-key JSON.
+    Reports call this instead of repeating the three lines, which also keeps the
+    byte-stability discipline in one place. A plain function, not a mixin, so it
+    never touches a frozen model's MRO.
+
+    Args:
+        model: Any pydantic model exposing ``model_dump(mode="json")``.
+        path: Destination file; parent directories are created.
+        digits: Decimal places every float is rounded to for byte-stability, or
+            ``None`` to write the dump unrounded.
+    """
+    payload = model.model_dump(mode="json")
+    if digits is not None:
+        payload = round_floats(payload, digits)
+    write_sorted_json(Path(path), payload)
 
 
 def tulip_version() -> str:
