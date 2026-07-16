@@ -76,8 +76,23 @@ area-prefixed, e.g. `test_models_*.py`. Optional-dependency tests guard with
 
 ## Release checklist
 
+Releases are automated. Pushing a version tag runs the `Release` workflow,
+which builds the distribution, verifies it, creates the GitHub Release with the
+notes for that version from `CHANGELOG.md`, and publishes to PyPI with trusted
+publishing. Documentation deploys to GitHub Pages on every push to `main`.
+
 1. `python -m pytest` green locally and in CI. `ruff format --check`,
    `ruff check`, and `mypy` clean.
-2. Bump `version` in `pyproject.toml`.
-3. Update the README and docs for any new components or CLI surface.
-4. Tag and build: `python -m pip install build && python -m build`.
+2. Bump `version` in `pyproject.toml`, and match it in `CITATION.cff` and
+   `.zenodo.json` (`tulip cite --check` verifies the parity).
+3. Move the `[Unreleased]` items in `CHANGELOG.md` into a dated section for the
+   new version. The workflow refuses a tag with no matching section.
+4. Update the README and docs for any new components or CLI surface.
+5. Commit, push, then tag: `git tag v<version> && git push origin v<version>`.
+
+One-time setup for a new repository: add this repository and the
+`release.yml` workflow as a trusted publisher on the `tulip-dialect` PyPI
+project (PyPI already has an unrelated `tulip`, so the distribution publishes
+under that name while the import package and CLI stay `tulip`), create the
+`pypi` environment in the repository settings, and enable GitHub Pages with
+GitHub Actions as the source.

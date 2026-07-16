@@ -107,6 +107,42 @@ tulip serve dialect@production --registry artifacts/registry
 Serving from the registry stamps `X-Model-Version` and `X-Model-Digest` on every
 prediction. A client or an audit can then tell which artifact answered.
 
+## Publishing a model to the Hugging Face Hub
+
+`tulip registry push` uploads a registered version to a Hub model repository,
+together with a README rendered from the model card. The artifact directory is
+uploaded unchanged, so `DialectClassifier.load` works on a `snapshot_download`
+of the repository. Credentials come from the `huggingface_hub` login or the
+`HF_TOKEN` environment variable; tulip never stores a token. Needs the `hf`
+extra.
+
+```bash
+tulip registry push dialect@production --repo-id someone/tulip-dialect
+```
+
+## Docker image
+
+`Dockerfile.serve` builds a production serving image. The build trains the
+small synthetic baseline in-process, so the container serves a working model
+and the demo page at `/` with no setup:
+
+```bash
+docker build -f Dockerfile.serve -t tulip-serve .
+docker run --rm -p 8000:8000 tulip-serve
+```
+
+To serve your own model, mount its saved directory and override the command:
+
+```bash
+docker run --rm -p 8000:8000 -v "$PWD/my-model:/model" tulip-serve \
+  tulip serve /model --host 0.0.0.0
+```
+
+The listen port honours the `PORT` environment variable, so the same image runs
+on platforms that inject one. A Hugging Face Space with the Docker SDK can point
+at this file directly; set `app_port: 8000` in the Space README or rely on the
+injected `PORT`.
+
 ## Programmatic use
 
 `create_app` returns a plain `fastapi.FastAPI` instance. You can mount it in a

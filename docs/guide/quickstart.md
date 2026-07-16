@@ -10,8 +10,15 @@ every command below works today.
 
 ## Install
 
-You need Python 3.10 or newer. The core install is light. Heavy stacks are
-opt-in extras.
+You need Python 3.11 or newer. The core install is light. Heavy stacks are
+opt-in extras. From PyPI the package is published as `tulip-dialect`; it still
+imports as `tulip` and installs the `tulip` CLI:
+
+```bash
+pip install tulip-dialect
+```
+
+For development from a clone:
 
 ```bash
 python -m venv .venv

@@ -5,12 +5,21 @@ Changelog, and the project follows Semantic Versioning.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-07-15
+## [0.1.0] - 2026-07-16
 
 First public release.
 
 ### Added
 
+- A tag-triggered release workflow that builds the package, creates the GitHub
+  Release, and publishes to PyPI with trusted publishing. The distribution is
+  named `tulip-dialect` (PyPI already has an unrelated `tulip`); the import
+  package and the CLI stay `tulip`.
+- Documentation deployed to GitHub Pages on every push to main.
+- A production serving image (`Dockerfile.serve`) that bakes a small synthetic
+  demo model, so `docker run` serves the interactive demo with no setup.
+- `tulip registry push` to publish a registered model to the Hugging Face Hub
+  together with its generated model card.
 - Dialect classification from text, transcribed speech, and raw audio behind one
   `DialectClassifier` API.
 - Classical baselines, gradient boosting, fastText, transformer text models, and

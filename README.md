@@ -27,8 +27,17 @@ benchmark for Polish dialect identification, so tulip provides one.
 
 ## Install
 
-You need Python 3.10 or newer. The core install is light. Heavy stacks are
+You need Python 3.11 or newer. The core install is light. Heavy stacks are
 opt-in extras.
+
+From PyPI the package is published as `tulip-dialect`; it still imports as
+`tulip` and installs the `tulip` CLI:
+
+```bash
+pip install tulip-dialect
+```
+
+From a clone:
 
 ```bash
 pip install -e .                  # core: sklearn pipelines, CLI, benchmarks

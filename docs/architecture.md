@@ -309,7 +309,7 @@ subgroup gap), `crossval`, `transfer`, `conformal`, `openset`
 (regenerate a suite and fail on drift from the committed board) and
 `repro from-scratch` (the same, but isolating every build output so the run
 depends only on committed source, as the Dockerfile does), `registry`
-(add/promote/rollback/ls/resolve), `card` (dataset/model), `selftrain`, `serve`.
+(add/promote/rollback/ls/resolve/push), `card` (dataset/model), `selftrain`, `serve`.
 Discovery and metadata: `doctor` reports which components run now and what to
 install; `models list` / `features list` / `explainers list` show each registry
 with availability; `cite` prints BibTeX or APA. Rich tables for human output.
@@ -495,6 +495,13 @@ returns the entry the serving layer binds to. The index (`registry.json`) uses
 the shared deterministic JSON writer, so the same operation sequence reproduces
 byte-identical bytes.
 
+`hub.py`: `push_to_hub(registry, reference, repo_id=...)` publishes a resolved
+entry to the Hugging Face Hub: the artifact directory uploads unchanged (so a
+`snapshot_download` loads with `DialectClassifier.load`) plus a README rendered
+from the model card with the registry provenance (version, stage, digest).
+Credentials are resolved by `huggingface_hub` itself; tulip never reads or
+stores a token. Reachable as `tulip registry push`; needs the `hf` extra.
+
 ### tulip.robustness
 
 `run_robustness(config, *, perturbations)` trains one model, then re-scores the
@@ -513,7 +520,7 @@ training set; it imports the engine lazily, so `import tulip.data` stays light.
 
 ## Conventions (enforced)
 
-- Python >= 3.10. `from __future__ import annotations` in every module. Full
+- Python >= 3.11. `from __future__ import annotations` in every module. Full
   type hints on public APIs. PEP 604 unions (`str | None`).
 - Ruff: line length 100, rule set in `pyproject.toml`. Run
   `ruff format` + `ruff check` on your files before finishing.
