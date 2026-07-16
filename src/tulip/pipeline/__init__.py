@@ -7,6 +7,11 @@ from tulip.pipeline.active import (
     AcquisitionStrategy,
     rank_for_labeling,
 )
+from tulip.pipeline.active_loop import (
+    ActiveLoopPoint,
+    ActiveLoopReport,
+    active_learning_loop,
+)
 from tulip.pipeline.calibrated import CalibratedClassifier
 from tulip.pipeline.classifier import DialectClassifier, LabelledBatch
 from tulip.pipeline.conformal import (
@@ -22,6 +27,7 @@ from tulip.pipeline.crossval import (
     grouped_stratified_kfold,
     run_cross_validation,
 )
+from tulip.pipeline.distill import DistillationConfig, DistillationReport, distill
 from tulip.pipeline.experiment import (
     ExperimentResult,
     collect_predictions,
@@ -48,6 +54,11 @@ from tulip.pipeline.hierarchical import (
     MarginThreshold,
     NotAbstained,
 )
+from tulip.pipeline.isogloss_diagnostics import (
+    IsoglossDiagnostic,
+    IsoglossReport,
+    isogloss_diagnostics,
+)
 from tulip.pipeline.learning_curve import (
     LearningCurvePoint,
     LearningCurveReport,
@@ -62,6 +73,8 @@ __all__ = [
     "AcquisitionCandidate",
     "AcquisitionContext",
     "AcquisitionStrategy",
+    "ActiveLoopPoint",
+    "ActiveLoopReport",
     "AllOf",
     "AlwaysAccept",
     "AnyOf",
@@ -75,10 +88,14 @@ __all__ = [
     "ConformalPrediction",
     "ConformalReport",
     "DialectClassifier",
+    "DistillationConfig",
+    "DistillationReport",
     "ExperimentResult",
     "FusionStrategy",
     "HierarchicalConfig",
     "HierarchicalDialectClassifier",
+    "IsoglossDiagnostic",
+    "IsoglossReport",
     "LabelledBatch",
     "LearningCurvePoint",
     "LearningCurveReport",
@@ -96,9 +113,12 @@ __all__ = [
     "SelfTrainConfig",
     "SelfTrainResult",
     "WeightedAverageFusion",
+    "active_learning_loop",
     "collect_predictions",
+    "distill",
     "evaluate_samples",
     "grouped_stratified_kfold",
+    "isogloss_diagnostics",
     "learning_curve",
     "rank_for_labeling",
     "run_benchmark",

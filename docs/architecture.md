@@ -220,6 +220,11 @@ LPC-based estimate (scipy) when parselmouth is unavailable. A shared
   messages. A populated cache replays every response byte-identically and
   offline; a cache miss is non-deterministic, so the baseline is kept out of the
   committed suite and never feeds `leaderboard.md`. `anthropic` imports lazily.
+  Few-shot exemplar selection is a pluggable strategy (`_llm_exemplars.py`,
+  registry `EXEMPLAR_SELECTORS`): `random` (the seeded default) or `similar`
+  (per-class char-n-gram nearest neighbours of the query). `self_consistency`
+  classifies each text through several prompt variants (a different exemplar set
+  each, since the models expose no temperature) and majority-votes.
 - `persistence.py`: `save_model(pipeline, path, metadata)` /
   `load_model(path)` using joblib, storing a JSON sidecar (tulip version,
   config, classes, metrics).
@@ -302,6 +307,27 @@ marker lexicon. The lexicon-key to family reconciliation lives once in
   as the only moving part. One seeded per-class shuffle makes the fractions
   nested and the `LearningCurveReport` deterministic and byte-stable. Surfaced
   as `tulip learning-curve`.
+- `active_loop.py`: `active_learning_loop(config, strategy=...)` closes the loop
+  `active.py` only opens. It treats the training split as the pool and its gold
+  labels as the oracle: a stratified seed set is labeled, then each round labels
+  a batch chosen by `rank_for_labeling` (or drawn at random for the baseline),
+  refits, and scores the held-out test split. The `ActiveLoopReport` is a
+  learning curve indexed by annotation budget, deterministic and byte-stable.
+  Surfaced as `tulip active-loop`.
+- `distill.py`: `distill(teacher=..., transfer=..., test=..., student_model=...)`
+  is hard-label knowledge distillation. The teacher labels a transfer pool
+  (its probability gates which labels transfer), a small student trains on those
+  labels, and the `DistillationReport` puts the student's accuracy retention next
+  to the size and latency it costs, reusing `measure_efficiency`. Accuracy fields
+  are deterministic; the efficiency block is machine dependent. Surfaced as
+  `tulip distill`.
+- `isogloss_diagnostics.py`: `isogloss_diagnostics(classifier, samples)` asks
+  whether accuracy collapses when a dialect marker is absent. For each detectable
+  isogloss it reuses the phonological rule engine to split the samples of the
+  dialects it signals by whether the reflex fired, and compares accuracy across
+  the split (reusing `collect_predictions` for per-sample correctness). A large
+  positive gap means the model reads the marker, not the dialect. Surfaced as
+  `tulip isogloss-diagnostics`.
 
 ### tulip.cli (typer)
 
@@ -315,7 +341,10 @@ one cohesive command group and keeps its heavy imports function-local, so `tulip
 --help` never pays for scikit-learn. Command groups: `data`
 (list/download/prepare/synthesize/synthesize-audio/transcribe/validate; `download
 --audio` materialises clips for the loaders that support it, `transcribe` is the
-ASR bridge to a text manifest), `train`, `learning-curve`,
+ASR bridge to a text manifest), `train`, `learning-curve`, `active-loop`
+(simulate acquire/label/retrain over the training split), `distill` (hard-label
+teacher-to-student distillation with an accuracy-versus-cost report),
+`isogloss-diagnostics` (accuracy with versus without each dialect marker),
 `evaluate`, `predict` (text arg or `--audio` path; `--json`; map export via
 `--map out.html`; inline explanations via `--explain <method>`), `explain`
 (standalone; the command group the contract lists), `explain-global`

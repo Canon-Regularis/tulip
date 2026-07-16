@@ -62,6 +62,42 @@ function of the model and pool, ties broken by sample id.
 
 ::: tulip.pipeline.AcquisitionStrategy
 
+### Closed-loop active learning
+
+Simulate acquire, label, and retrain over the training split (its gold labels are
+the oracle), scoring the held-out test split each round. Run it against
+`strategy="random"` to see whether a strategy beats labeling at random.
+
+::: tulip.pipeline.active_learning_loop
+
+::: tulip.pipeline.ActiveLoopReport
+
+::: tulip.pipeline.ActiveLoopPoint
+
+## Distillation
+
+Distil a large teacher into a small, fast student: the teacher labels a transfer
+pool, the student trains on those labels, and the report puts the student's
+accuracy retention next to the size and latency it costs.
+
+::: tulip.pipeline.distill
+
+::: tulip.pipeline.DistillationReport
+
+::: tulip.pipeline.DistillationConfig
+
+## Isogloss diagnostics
+
+Ask whether accuracy collapses when a dialect marker is absent. For each
+detectable isogloss, the samples of the dialects it signals are split by whether
+the reflex fired in the text and accuracy is compared across the split.
+
+::: tulip.pipeline.isogloss_diagnostics
+
+::: tulip.pipeline.IsoglossReport
+
+::: tulip.pipeline.IsoglossDiagnostic
+
 ## Cross-validation
 
 Grouped, stratified K-fold cross-validation. Folds are speaker-disjoint. Each

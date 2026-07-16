@@ -1,7 +1,7 @@
 """Pipeline analysis commands.
 
-Covers selftrain, crossval, learning-curve, transfer, robustness, conformal,
-openset, acquire, evaluate.
+Covers learning-curve, active-loop, selftrain, crossval, transfer, robustness,
+conformal, openset, acquire, distill, isogloss-diagnostics, evaluate.
 """
 
 from __future__ import annotations
@@ -49,6 +49,49 @@ def learning_curve_command(
     if out is not None:
         report.save(out)
         _console.print(f"[green]learning curve written to {out}[/green]")
+    if json_output:
+        _console.print_json(report.model_dump_json())
+    else:
+        _console.print(report.to_markdown())
+
+
+@app.command("active-loop")
+@_tulip_errors
+def active_loop_command(
+    config_path: Path = typer.Argument(..., help="Experiment config YAML."),
+    strategy: str = typer.Option(
+        "entropy", "--strategy", help="Acquisition strategy name, or 'random' for the baseline."
+    ),
+    seed_size: int = typer.Option(20, "--seed-size", min=1, help="Samples labeled before round 1."),
+    batch_size: int = typer.Option(20, "--batch-size", min=1, help="Samples labeled each round."),
+    rounds: int = typer.Option(5, "--rounds", min=1, help="Maximum acquisition rounds."),
+    seed: int | None = typer.Option(
+        None, "--seed", help="Seed for the seed set and random draws (default: the config's seed)."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+    out: Path | None = typer.Option(None, "--out", help="Also write the report JSON here."),
+) -> None:
+    """Simulate acquire, label, retrain over the training split; score each round on test.
+
+    Closes the active-learning loop `acquire` only opens: the training split is
+    the pool, its gold labels are the oracle, and every round labels a batch the
+    strategy chose. Run it once per strategy and against `--strategy random` to
+    see whether the strategy beats labeling at random.
+    """
+    from tulip.config import load_experiment_config
+    from tulip.pipeline import active_learning_loop
+
+    report = active_learning_loop(
+        load_experiment_config(config_path),
+        strategy=strategy,
+        seed_size=seed_size,
+        batch_size=batch_size,
+        rounds=rounds,
+        seed=seed,
+    )
+    if out is not None:
+        report.save(out)
+        _console.print(f"[green]active-loop curve written to {out}[/green]")
     if json_output:
         _console.print_json(report.model_dump_json())
     else:
@@ -348,6 +391,100 @@ def evaluate(
 
     classifier = DialectClassifier.load(model_path)
     report = evaluate_samples(classifier, list(read_samples(data)), name=str(data))
+    if json_output:
+        _console.print_json(report.model_dump_json())
+    else:
+        _console.print(report.to_markdown())
+
+
+@app.command()
+@_tulip_errors
+def distill(
+    teacher_path: Path = typer.Argument(..., help="Saved teacher model directory."),
+    transfer: Path = typer.Argument(..., help="Pool the teacher labels (split .jsonl/manifest)."),
+    test: Path = typer.Argument(..., help="Gold-labelled samples both models are scored on."),
+    student: str = typer.Option(
+        "logistic_regression", "--student", "-s", help="Small student model registry name."
+    ),
+    feature: list[str] = typer.Option(
+        [], "--feature", "-f", help="Student feature registry name (repeatable)."
+    ),
+    min_confidence: float = typer.Option(
+        0.0, "--min-confidence", min=0.0, max=1.0, help="Drop teacher labels below this confidence."
+    ),
+    workdir: Path | None = typer.Option(
+        None, "--workdir", help="Save both models here to also measure on-disk size."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+    out: Path | None = typer.Option(None, "--out", help="Also write the report JSON here."),
+) -> None:
+    """Distil a saved teacher into a small student and report accuracy vs cost.
+
+    The teacher labels the transfer pool, the student trains on those labels,
+    and both are scored on the test split. The report shows how much of the
+    teacher's accuracy the student keeps and how much smaller and faster it is.
+    """
+    from tulip.data import read_samples
+    from tulip.models import MODELS
+    from tulip.pipeline import DialectClassifier, DistillationConfig
+    from tulip.pipeline import distill as run_distill
+
+    # A classical student needs at least one feature extractor; a raw-input model
+    # (fasttext, herbert, ...) takes none. Default to char_tfidf for a classical
+    # student given no --feature, so the bare command works out of the box.
+    student_features = list(feature)
+    if not student_features and not MODELS.metadata(student).get("raw_input", False):
+        student_features = ["char_tfidf"]
+
+    teacher = DialectClassifier.load(teacher_path)
+    report = run_distill(
+        teacher=teacher,
+        transfer=list(read_samples(transfer)),
+        test=list(read_samples(test)),
+        student_model=student,
+        features=student_features,
+        config=DistillationConfig(min_teacher_confidence=min_confidence),
+        workdir=workdir,
+    )
+    if out is not None:
+        report.save(out)
+        _console.print(f"[green]distillation report written to {out}[/green]")
+    if json_output:
+        _console.print_json(report.model_dump_json())
+    else:
+        _console.print(report.to_markdown())
+
+
+@app.command("isogloss-diagnostics")
+@_tulip_errors
+def isogloss_diagnostics_command(
+    model_path: Path = typer.Argument(..., help="Saved model directory."),
+    data: Path = typer.Argument(..., help="Labelled samples: split .jsonl or manifest."),
+    rules: Path | None = typer.Option(
+        None, "--rules", help="Phonological rule file (default: the bundled set)."
+    ),
+    min_support: int = typer.Option(
+        5, "--min-support", min=1, help="Group size below which a diagnostic is flagged."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+    out: Path | None = typer.Option(None, "--out", help="Also write the report JSON here."),
+) -> None:
+    """Check whether accuracy collapses when a dialect marker is absent.
+
+    For each detectable isogloss, splits the samples of the dialects it signals
+    by whether the reflex is present in the text and compares accuracy. A large
+    positive gap means the model reads the surface marker, not the dialect.
+    """
+    from tulip.data import read_samples
+    from tulip.pipeline import DialectClassifier, isogloss_diagnostics
+
+    classifier = DialectClassifier.load(model_path)
+    report = isogloss_diagnostics(
+        classifier, list(read_samples(data)), rules_path=rules, min_support=min_support
+    )
+    if out is not None:
+        report.save(out)
+        _console.print(f"[green]isogloss diagnostics written to {out}[/green]")
     if json_output:
         _console.print_json(report.model_dump_json())
     else:
