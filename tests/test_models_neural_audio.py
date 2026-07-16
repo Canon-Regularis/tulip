@@ -139,7 +139,7 @@ def test_finetuned_fit_without_torch_names_speech_extra(
     with pytest.raises(MissingDependencyError) as excinfo:
         model.fit(["a.wav", "b.wav"], ["podhale", "silesia"])
     assert excinfo.value.extra == "speech"
-    assert 'pip install "tulip[speech]"' in str(excinfo.value)
+    assert 'pip install "tulip-dialect[speech]"' in str(excinfo.value)
 
 
 def test_embedding_fit_without_torch_names_speech_extra(

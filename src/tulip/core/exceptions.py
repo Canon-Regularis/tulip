@@ -50,7 +50,8 @@ class MissingDependencyError(TulipError, ImportError):
             message += f" (required for {purpose})"
         message += "."
         if extra:
-            message += f' Install it with: pip install "tulip[{extra}]"'
+            # The PyPI distribution is tulip-dialect; the import package stays tulip.
+            message += f' Install it with: pip install "tulip-dialect[{extra}]"'
         super().__init__(message)
         self.module = module
         self.extra = extra

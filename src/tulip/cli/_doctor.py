@@ -75,7 +75,7 @@ class ExtraStatus(BaseModel):
     @property
     def install_hint(self) -> str:
         """The command that installs this extra."""
-        return f"pip install 'tulip[{self.name}]'"
+        return f"pip install 'tulip-dialect[{self.name}]'"
 
 
 class ComponentStatus(BaseModel):

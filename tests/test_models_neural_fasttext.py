@@ -215,7 +215,7 @@ def test_fit_without_fasttext_names_fasttext_extra(monkeypatch: pytest.MonkeyPat
     with pytest.raises(MissingDependencyError) as excinfo:
         model.fit(["ala ma kota", "kaj ta idziesz"], ["standard", "silesia"])
     assert excinfo.value.extra == "fasttext"
-    assert 'pip install "tulip[fasttext]"' in str(excinfo.value)
+    assert 'pip install "tulip-dialect[fasttext]"' in str(excinfo.value)
 
 
 def test_predict_before_fit_raises_tulip_error() -> None:

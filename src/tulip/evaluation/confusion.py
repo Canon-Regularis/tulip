@@ -103,7 +103,7 @@ def plot_confusion(
 
     Raises:
         MissingDependencyError: If matplotlib is not installed
-            (``pip install "tulip[viz]"``).
+            (``pip install "tulip-dialect[viz]"``).
         ConfigurationError: If ``normalize`` is invalid.
     """
     matrix = confusion_from_report(report, normalize=normalize)

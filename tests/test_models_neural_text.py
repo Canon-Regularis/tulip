@@ -125,7 +125,7 @@ def test_fit_without_torch_names_transformers_extra(monkeypatch: pytest.MonkeyPa
     with pytest.raises(MissingDependencyError) as excinfo:
         model.fit(["ala ma kota", "kaj ta idziesz"], ["standard", "silesia"])
     assert excinfo.value.extra == "transformers"
-    assert 'pip install "tulip[transformers]"' in str(excinfo.value)
+    assert 'pip install "tulip-dialect[transformers]"' in str(excinfo.value)
 
 
 def test_predict_before_fit_raises_tulip_error() -> None:
