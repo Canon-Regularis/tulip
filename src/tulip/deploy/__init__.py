@@ -7,6 +7,7 @@ only the standard library and pydantic on top.
 
 from __future__ import annotations
 
+from tulip.deploy.hub import hub_readme, push_to_hub
 from tulip.deploy.registry_store import (
     ModelRegistry,
     RegistryEntry,
@@ -19,4 +20,6 @@ __all__ = [
     "RegistryEntry",
     "Stage",
     "artifact_digest",
+    "hub_readme",
+    "push_to_hub",
 ]

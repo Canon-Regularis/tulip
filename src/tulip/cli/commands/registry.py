@@ -1,4 +1,4 @@
-"""Model-registry commands: add, promote, rollback, ls, resolve."""
+"""Model-registry commands: add, promote, rollback, ls, resolve, push."""
 
 from __future__ import annotations
 
@@ -109,6 +109,31 @@ def registry_resolve(
     _console.print(f"{entry.name}@{entry.version} ({entry.stage.value})")
     _console.print(f"digest: {entry.digest}")
     _console.print(f"path:   {store.path_for(entry)}")
+
+
+@registry_app.command("push")
+@_tulip_errors
+def registry_push(
+    reference: str = typer.Argument(..., help="name, name@production, or name@<version>."),
+    repo_id: str = typer.Option(
+        ..., "--repo-id", help="Target Hub repository, e.g. someone/tulip-dialect."
+    ),
+    private: bool = typer.Option(
+        True, "--private/--public", help="Visibility when the repository is first created."
+    ),
+    registry: Path = _registry_option(),
+) -> None:
+    """Publish a registered model version to the Hugging Face Hub.
+
+    Uploads the content-addressed artifact directory unchanged, plus a README
+    rendered from the model card. Credentials come from the huggingface_hub
+    login or the HF_TOKEN environment variable; tulip never stores a token.
+    Needs the ``hf`` extra.
+    """
+    from tulip.deploy import ModelRegistry, push_to_hub
+
+    url = push_to_hub(ModelRegistry(registry), reference, repo_id=repo_id, private=private)
+    _console.print(f"[green]pushed {reference} to {url}[/green]")
 
 
 def _report_metrics(report_path: Path) -> dict[str, float]:
