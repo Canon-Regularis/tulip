@@ -30,6 +30,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 from sklearn.metrics import accuracy_score, f1_score
 
+from tulip._serialize import round_floats
 from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation._format import format_metric, markdown_table, write_sorted_json
 
@@ -172,7 +173,9 @@ class SignificanceReport(BaseModel):
 
     def save(self, path: Path | str) -> None:
         """Write the report as deterministic JSON (sorted keys, rounded floats)."""
-        write_sorted_json(Path(path), _round(self.model_dump(mode="json")))
+        write_sorted_json(
+            Path(path), round_floats(self.model_dump(mode="json"), SIGNIFICANCE_FLOAT_DIGITS)
+        )
 
 
 def mcnemar_exact(
@@ -399,14 +402,3 @@ def _pretty(metric: str) -> str:
 def _fmt_ci(ci: MetricCI) -> str:
     """Render a metric CI as ``point [low, high]``."""
     return f"{format_metric(ci.point)} [{format_metric(ci.low)}, {format_metric(ci.high)}]"
-
-
-def _round(payload: object) -> object:
-    """Recursively round floats to :data:`SIGNIFICANCE_FLOAT_DIGITS` for persistence."""
-    if isinstance(payload, float):
-        return round(payload, SIGNIFICANCE_FLOAT_DIGITS)
-    if isinstance(payload, dict):
-        return {key: _round(value) for key, value in payload.items()}
-    if isinstance(payload, list):
-        return [_round(item) for item in payload]
-    return payload

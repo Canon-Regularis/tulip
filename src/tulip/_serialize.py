@@ -22,7 +22,31 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any
 
-__all__ = ["sorted_json_text", "tulip_version", "write_markdown", "write_sorted_json"]
+__all__ = [
+    "round_floats",
+    "sorted_json_text",
+    "tulip_version",
+    "write_markdown",
+    "write_sorted_json",
+]
+
+
+def round_floats(payload: Any, digits: int) -> Any:
+    """Recursively round every float in a JSON-native payload to ``digits`` places.
+
+    Used before serialising a report so re-runs are byte-identical under trivial
+    floating-point noise. Booleans pass through unchanged (a ``bool`` is not a
+    ``float``, so this is explicit rather than load-bearing).
+    """
+    if isinstance(payload, bool):
+        return payload
+    if isinstance(payload, float):
+        return round(payload, digits)
+    if isinstance(payload, dict):
+        return {key: round_floats(value, digits) for key, value in payload.items()}
+    if isinstance(payload, list):
+        return [round_floats(item, digits) for item in payload]
+    return payload
 
 
 def sorted_json_text(payload: Any, *, default: Callable[[Any], Any] | None = None) -> str:

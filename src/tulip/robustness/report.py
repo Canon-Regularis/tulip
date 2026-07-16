@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from tulip._serialize import write_sorted_json
+from tulip._serialize import round_floats, write_sorted_json
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -159,7 +159,7 @@ class RobustnessReport(BaseModel):
                 for curve in self.curves
             ],
         }
-        write_sorted_json(path, _round_floats(payload, ROBUSTNESS_FLOAT_DIGITS))
+        write_sorted_json(path, round_floats(payload, ROBUSTNESS_FLOAT_DIGITS))
 
 
 class AugmentSpec(BaseModel):
@@ -170,16 +170,3 @@ class AugmentSpec(BaseModel):
     perturbations: tuple[PerturbationConfig, ...]
     multiplier: int = Field(default=1, ge=1)
     seed: int = 0
-
-
-def _round_floats(value: Any, digits: int) -> Any:
-    """Recursively round floats so the serialised artifact is byte-stable."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, float):
-        return round(value, digits)
-    if isinstance(value, dict):
-        return {key: _round_floats(item, digits) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_round_floats(item, digits) for item in value]
-    return value
