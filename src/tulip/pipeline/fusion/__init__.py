@@ -31,6 +31,7 @@ from tulip.pipeline.fusion.strategies import (
     MaximumFusion,
     WeightedAverageFusion,
     build_strategy,
+    default_params,
 )
 from tulip.pipeline.protocols import ProbabilisticClassifier
 
@@ -46,4 +47,5 @@ __all__ = [
     "WeightedAverageFusion",
     "build_strategy",
     "compare_modalities",
+    "default_params",
 ]

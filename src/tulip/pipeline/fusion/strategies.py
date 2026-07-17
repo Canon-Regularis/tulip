@@ -37,6 +37,7 @@ __all__ = [
     "MaximumFusion",
     "WeightedAverageFusion",
     "build_strategy",
+    "default_params",
 ]
 
 
@@ -96,8 +97,8 @@ class _FusionBase(abc.ABC):
     shapes, rejects a sample with no present modality, forces a lone present
     modality to pass through unchanged, and renormalises every row. Centralising
     the contract here is exactly what makes the three strategies provably
-    substitutable (LSP), rather than each re-deriving, and risking diverging
-    from, the same postcondition.
+    substitutable, rather than each re-deriving, and risking diverging from, the
+    same postcondition.
     """
 
     #: Stable identifier used to (de)serialise the strategy; set by subclasses.
@@ -288,7 +289,7 @@ class LogarithmicPoolingFusion(_WeightedFusion):
         return np.exp(weighted)
 
 
-#: OCP factory: a new named strategy registers here without editing any consumer.
+#: Strategy registry: a new named strategy registers here without editing any consumer.
 _STRATEGY_REGISTRY: dict[str, Callable[[Mapping[str, Any]], FusionStrategy]] = {
     WeightedAverageFusion.kind: lambda params: WeightedAverageFusion(tuple(params["weights"])),
     MaximumFusion.kind: lambda _params: MaximumFusion(),
@@ -297,6 +298,26 @@ _STRATEGY_REGISTRY: dict[str, Callable[[Mapping[str, Any]], FusionStrategy]] = {
         tuple(params["weights"])
     ),
 }
+
+#: The strategy kinds that take a per-modality weight vector.
+_WEIGHTED_KINDS: frozenset[str] = frozenset(
+    {WeightedAverageFusion.kind, LogarithmicPoolingFusion.kind}
+)
+
+#: Equal split over two modalities, the default a weighted strategy takes when a
+#: caller builds it without an explicit weight vector.
+_DEFAULT_WEIGHTS: tuple[float, ...] = (0.5, 0.5)
+
+
+def default_params(kind: str) -> dict[str, Any]:
+    """Default build parameters for ``kind`` when a caller supplies none.
+
+    A weighted strategy needs one weight per modality; absent an explicit choice it
+    takes an equal split over two modalities. A parameter-free strategy needs
+    nothing and returns an empty mapping. This keeps a caller from having to know
+    which strategies are weighted.
+    """
+    return {"weights": list(_DEFAULT_WEIGHTS)} if kind in _WEIGHTED_KINDS else {}
 
 
 def build_strategy(kind: str, params: Mapping[str, Any] | None = None) -> FusionStrategy:
