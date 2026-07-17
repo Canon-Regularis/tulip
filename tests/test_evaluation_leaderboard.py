@@ -82,6 +82,23 @@ def _cells(row: str) -> list[str]:
     return [cell.strip() for cell in row.strip().strip("|").split("|")]
 
 
+def test_render_caption_renders_above_table_and_default_unchanged(
+    results: list[BenchmarkResult],
+) -> None:
+    plain = render_leaderboard_markdown(results)
+    capped = render_leaderboard_markdown(results, caption="Synthetic fixture, not real accuracy.")
+    assert capped == f"Synthetic fixture, not real accuracy.\n\n{plain}"
+    # A missing or blank caption leaves the byte-stable default untouched.
+    assert render_leaderboard_markdown(results, caption=None) == plain
+    assert render_leaderboard_markdown(results, caption="   ") == plain
+
+
+def test_suite_caption_field_defaults_to_none() -> None:
+    with_caption = LeaderboardSuite(name="x", configs=[Path("c.yaml")], caption="note")
+    assert with_caption.caption == "note"
+    assert LeaderboardSuite(name="x", configs=[Path("c.yaml")]).caption is None
+
+
 def test_render_contains_models_and_metric_headers(results: list[BenchmarkResult]) -> None:
     markdown = render_leaderboard_markdown(results)
     for model in ("best", "mediocre", "worst"):

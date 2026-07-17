@@ -7,12 +7,22 @@
 # regeneration instructions.
 name: synthetic-leaderboard
 
+# Rendered above the table in the committed leaderboard.md, so the fixture can
+# never be mistaken for a real result when read on its own.
+caption: >-
+  **Synthetic fixture, not real dialect accuracy.** These scores come from a
+  procedurally generated corpus that exercises the pipeline; they say nothing
+  about real dialect classification. See docs/benchmark.md and
+  benchmarks/results/real-text-leaderboard/ for the real benchmark.
+
 configs:
   - benchmarks/configs/char_baseline.yaml
   - benchmarks/configs/lexical_baseline.yaml
 
-# Classical competitors only (no heavy or optional dependencies).
+# Classical competitors only (no heavy or optional dependencies). The majority
+# baseline is listed first so the table opens with the floor every model beats.
 models:
+  - majority
   - naive_bayes
   - logistic_regression
   - linear_svm

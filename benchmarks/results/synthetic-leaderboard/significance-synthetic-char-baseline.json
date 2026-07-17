@@ -97,6 +97,30 @@
       ],
       "model": "random_forest",
       "tied_with_best": false
+    },
+    {
+      "metrics": [
+        {
+          "high": 0.229167,
+          "low": 0.111111,
+          "metric": "accuracy",
+          "point": 0.166667
+        },
+        {
+          "high": 0.062147,
+          "low": 0.033333,
+          "metric": "f1_macro",
+          "point": 0.047619
+        },
+        {
+          "high": 0.085452,
+          "low": 0.022222,
+          "metric": "f1_weighted",
+          "point": 0.047619
+        }
+      ],
+      "model": "majority",
+      "tied_with_best": false
     }
   ],
   "n_resamples": 2000,
@@ -133,6 +157,16 @@
       "significant": true
     },
     {
+      "accuracy_delta": 0.666667,
+      "discordant_a": 99,
+      "discordant_b": 3,
+      "model_a": "linear_svm",
+      "model_b": "majority",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
       "accuracy_delta": 0.013889,
       "discordant_a": 6,
       "discordant_b": 4,
@@ -153,6 +187,16 @@
       "significant": true
     },
     {
+      "accuracy_delta": 0.645833,
+      "discordant_a": 96,
+      "discordant_b": 3,
+      "model_a": "naive_bayes",
+      "model_b": "majority",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
       "accuracy_delta": 0.118056,
       "discordant_a": 21,
       "discordant_b": 4,
@@ -160,6 +204,26 @@
       "model_b": "random_forest",
       "p_value": 0.000911,
       "p_value_holm": 0.00439,
+      "significant": true
+    },
+    {
+      "accuracy_delta": 0.631944,
+      "discordant_a": 94,
+      "discordant_b": 3,
+      "model_a": "logistic_regression",
+      "model_b": "majority",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
+      "accuracy_delta": 0.513889,
+      "discordant_a": 78,
+      "discordant_b": 4,
+      "model_a": "random_forest",
+      "model_b": "majority",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
       "significant": true
     }
   ],

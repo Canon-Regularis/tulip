@@ -1,3 +1,5 @@
+**Synthetic fixture, not real dialect accuracy.** These scores come from a procedurally generated corpus that exercises the pipeline; they say nothing about real dialect classification. See docs/benchmark.md and benchmarks/results/real-text-leaderboard/ for the real benchmark.
+
 | Experiment | Model | Accuracy | F1 (macro) | F1 (weighted) | ROC AUC | ECE | Brier | Train |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | synthetic-char-baseline | linear_svm | 0.8333 | 0.8313 | 0.8313 | 0.9520 | 0.1975 | 0.3142 | 576 |
@@ -8,3 +10,5 @@
 | synthetic-lexical-baseline | logistic_regression | 0.7431 | 0.7389 | 0.7389 | 0.9153 | 0.3520 | 0.5406 | 576 |
 | synthetic-char-baseline | random_forest | 0.6806 | 0.6900 | 0.6900 | 0.9046 | 0.1439 | 0.4686 | 576 |
 | synthetic-lexical-baseline | naive_bayes | 0.4444 | 0.3562 | 0.3562 | 0.8615 | 0.3128 | 0.8442 | 576 |
+| synthetic-char-baseline | majority | 0.1667 | 0.0476 | 0.0476 | 0.5000 | 0.0000 | 0.8333 | 576 |
+| synthetic-lexical-baseline | majority | 0.1667 | 0.0476 | 0.0476 | 0.5000 | 0.0000 | 0.8333 | 576 |

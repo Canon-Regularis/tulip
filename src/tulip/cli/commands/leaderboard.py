@@ -190,3 +190,28 @@ def _report_repro_drift(drift: list[str]) -> None:
             _errors.print(f"  - {line}")
         raise typer.Exit(code=1)
     _console.print("[green]reproduced the committed leaderboard byte-for-byte[/green]")
+
+
+@repro_app.command("verify-lock")
+@_tulip_errors
+def repro_verify_lock(
+    config_path: Path = typer.Argument(..., help="Experiment config YAML whose splits to rebuild."),
+    lock: Path = typer.Argument(..., help="Committed split_lock.json to reproduce."),
+) -> None:
+    """Rebuild an experiment's splits from local data and check the committed lock.
+
+    The reproducibility check for a benchmark whose corpus cannot be
+    redistributed: the split fingerprint (``split_lock.json``) is committed but the
+    raw data is not. This rebuilds the speaker-disjoint split from the local
+    ``data/raw`` and confirms it reproduces the committed fingerprint, so the exact
+    split behind the committed real numbers is verifiable while the data stays
+    private. It fails loudly if the local data no longer produces that split.
+    """
+    from tulip.config import load_experiment_config
+    from tulip.data import DatasetBuilder
+    from tulip.data.fingerprint import SplitFingerprint, verify_splits
+
+    config = load_experiment_config(config_path)
+    splits = DatasetBuilder(config.data).build(config.split, target=config.target)
+    verify_splits(splits, SplitFingerprint.load(lock))
+    _console.print(f"[green]local splits reproduce the committed lock {lock}[/green]")

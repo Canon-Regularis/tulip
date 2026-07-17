@@ -97,6 +97,30 @@
       ],
       "model": "naive_bayes",
       "tied_with_best": false
+    },
+    {
+      "metrics": [
+        {
+          "high": 0.229167,
+          "low": 0.111111,
+          "metric": "accuracy",
+          "point": 0.166667
+        },
+        {
+          "high": 0.062147,
+          "low": 0.033333,
+          "metric": "f1_macro",
+          "point": 0.047619
+        },
+        {
+          "high": 0.085452,
+          "low": 0.022222,
+          "metric": "f1_weighted",
+          "point": 0.047619
+        }
+      ],
+      "model": "majority",
+      "tied_with_best": false
     }
   ],
   "n_resamples": 2000,
@@ -133,6 +157,16 @@
       "significant": true
     },
     {
+      "accuracy_delta": 0.631944,
+      "discordant_a": 94,
+      "discordant_b": 3,
+      "model_a": "linear_svm",
+      "model_b": "majority",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
       "accuracy_delta": 0.0,
       "discordant_a": 12,
       "discordant_b": 12,
@@ -153,6 +187,16 @@
       "significant": true
     },
     {
+      "accuracy_delta": 0.576389,
+      "discordant_a": 89,
+      "discordant_b": 6,
+      "model_a": "random_forest",
+      "model_b": "majority",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
       "accuracy_delta": 0.298611,
       "discordant_a": 51,
       "discordant_b": 8,
@@ -160,6 +204,26 @@
       "model_b": "naive_bayes",
       "p_value": 0.0,
       "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
+      "accuracy_delta": 0.576389,
+      "discordant_a": 90,
+      "discordant_b": 7,
+      "model_a": "logistic_regression",
+      "model_b": "majority",
+      "p_value": 0.0,
+      "p_value_holm": 0.0,
+      "significant": true
+    },
+    {
+      "accuracy_delta": 0.277778,
+      "discordant_a": 64,
+      "discordant_b": 24,
+      "model_a": "naive_bayes",
+      "model_b": "majority",
+      "p_value": 2.4e-05,
+      "p_value_holm": 9.5e-05,
       "significant": true
     }
   ],
