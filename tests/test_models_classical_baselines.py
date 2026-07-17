@@ -83,6 +83,27 @@ def test_core_model_probabilities_and_classes(
     assert sorted(model.classes_) == sorted(set(labels))
 
 
+def test_majority_registered() -> None:
+    assert "majority" in MODELS
+
+
+def test_majority_predicts_most_frequent_and_returns_priors() -> None:
+    # Five 'a', two 'b', one 'c': the majority is 'a'. Features are ignored.
+    features = np.zeros((8, 3))
+    labels = np.array(["a"] * 5 + ["b"] * 2 + ["c"] * 1)
+    model = MODELS.create("majority", random_state=0).fit(features, labels)
+
+    predictions = model.predict(np.zeros((4, 3)))
+    assert set(predictions) == {"a"}
+
+    proba = model.predict_proba(np.zeros((4, 3)))
+    assert np.allclose(proba.sum(axis=1), 1.0)
+    assert np.allclose(proba, proba[0])  # constant priors across samples
+    classes = list(model.classes_)
+    assert classes == ["a", "b", "c"]  # sklearn sorts the labels
+    assert proba[0][classes.index("a")] == pytest.approx(5 / 8)
+
+
 def test_linear_svm_exposes_predict_proba(tfidf_corpus: tuple[object, np.ndarray]) -> None:
     matrix, labels = tfidf_corpus
     model = MODELS.create("linear_svm", seed=0)

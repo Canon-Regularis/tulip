@@ -38,6 +38,7 @@ __all__ = [
     "lightgbm",
     "linear_svm",
     "logistic_regression",
+    "majority",
     "naive_bayes",
     "random_forest",
     "xgboost",
@@ -114,6 +115,33 @@ class LabelEncodedClassifier:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(estimator={self.estimator!r})"
+
+
+@MODELS.register("majority")
+def majority(**params: Any) -> Any:
+    """Majority-class baseline: always predicts the most frequent training label.
+
+    The floor every real model must beat. It ignores the features entirely and
+    predicts the single most frequent class; ``predict_proba`` returns the class
+    priors. On an imbalanced dialect corpus a respectable-looking accuracy can be
+    almost entirely this baseline, so it belongs at the top of every benchmark
+    table as the reference point.
+
+    Args:
+        **params: Overrides forwarded to ``DummyClassifier``. ``random_state``/
+            ``seed`` are accepted for interface uniformity but ignored (the
+            ``prior`` strategy is deterministic).
+
+    Returns:
+        An unfitted ``DummyClassifier(strategy="prior")``.
+    """
+    from sklearn.dummy import DummyClassifier
+
+    seed = _pop_seed(params, default=None)
+    if seed is not None:
+        logger.debug("majority baseline is deterministic; ignoring seed %r", seed)
+    merged: dict[str, Any] = {"strategy": "prior", **params}
+    return DummyClassifier(**merged)
 
 
 @MODELS.register("naive_bayes")
