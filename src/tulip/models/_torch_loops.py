@@ -168,6 +168,53 @@ def train_torch_classifier(
     model.eval()
 
 
+def train_classifier_from_estimator(
+    estimator: Any,
+    torch: Any,
+    model: Any,
+    encode_batch: Callable[[np.ndarray], tuple[dict[str, Any], Any]],
+    n_examples: int,
+    *,
+    device: str,
+    class_weights: np.ndarray | None = None,
+) -> None:
+    """Run :func:`train_torch_classifier` reading the shared knobs off ``estimator``.
+
+    The text and speech fine-tuners carry the identical eight training knobs
+    (``epochs``, ``batch_size``, ``learning_rate``, ``weight_decay``,
+    ``warmup_ratio``, ``gradient_accumulation_steps``, ``max_grad_norm``,
+    ``seed``) as attributes, and each read all eight into the same call. This
+    reads them once, mirroring :func:`validate_common_training_params` and
+    :func:`resolve_class_weights`, so a wrapper's ``fit`` collapses to one call.
+
+    Args:
+        estimator: The fine-tuner exposing the eight training-knob attributes.
+        torch: The imported ``torch`` module.
+        model: Model returning an object with a ``.logits`` attribute.
+        encode_batch: Callable building one batch from example indices, already
+            placed on ``device``.
+        n_examples: Number of training examples.
+        device: Device the batches are placed on.
+        class_weights: Optional per-class loss weights.
+    """
+    train_torch_classifier(
+        torch,
+        model,
+        encode_batch,
+        n_examples,
+        epochs=estimator.epochs,
+        batch_size=estimator.batch_size,
+        learning_rate=estimator.learning_rate,
+        weight_decay=estimator.weight_decay,
+        warmup_ratio=estimator.warmup_ratio,
+        gradient_accumulation_steps=estimator.gradient_accumulation_steps,
+        max_grad_norm=estimator.max_grad_norm,
+        seed=estimator.seed,
+        device=device,
+        class_weights=class_weights,
+    )
+
+
 def empty_proba(n_classes: int) -> np.ndarray:
     """Return the empty ``(0, n_classes)`` probability matrix for empty input.
 

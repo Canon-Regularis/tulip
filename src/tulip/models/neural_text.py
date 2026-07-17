@@ -35,7 +35,7 @@ from tulip.models._common import (
     require_fitted,
     resolve_class_weights,
     resolve_device,
-    train_torch_classifier,
+    train_classifier_from_estimator,
     validate_common_training_params,
     validate_fit_inputs,
 )
@@ -190,21 +190,8 @@ class TransformerTextClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimat
             return inputs, targets
 
         class_weights = resolve_class_weights(self, encoded, len(classes))
-        train_torch_classifier(
-            torch,
-            model,
-            encode_batch,
-            len(texts),
-            epochs=self.epochs,
-            batch_size=self.batch_size,
-            learning_rate=self.learning_rate,
-            weight_decay=self.weight_decay,
-            warmup_ratio=self.warmup_ratio,
-            gradient_accumulation_steps=self.gradient_accumulation_steps,
-            max_grad_norm=self.max_grad_norm,
-            seed=self.seed,
-            device=device,
-            class_weights=class_weights,
+        train_classifier_from_estimator(
+            self, torch, model, encode_batch, len(texts), device=device, class_weights=class_weights
         )
         self.classes_ = classes
         self.model_ = model

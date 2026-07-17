@@ -88,6 +88,3 @@ class ArgmaxPredictMixin:
         """Return the most probable class label for each input."""
         probabilities = self.predict_proba(X)
         return np.asarray(self.classes_)[np.argmax(probabilities, axis=1)]
-
-
-# ---------------------------------------------------------------- torch loops

@@ -30,6 +30,7 @@ from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.models._common import (
     ArgmaxPredictMixin,
     empty_proba,
+    reconcile_param_alias,
     reconcile_seed_param,
     require_fitted,
     validate_fit_inputs,
@@ -355,12 +356,5 @@ def make_fasttext(**params: Any) -> FastTextClassifier:
     """
     reconcile_seed_param(params)
     for alias, native in _KNOB_ALIASES.items():
-        if alias not in params:
-            continue
-        value = params.pop(alias)
-        if native in params and params[native] != value:
-            raise ConfigurationError(
-                f"conflicting values: {alias}={value!r} vs {native}={params[native]!r}"
-            )
-        params.setdefault(native, value)
+        reconcile_param_alias(params, alias, native)
     return FastTextClassifier(**params)

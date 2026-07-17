@@ -10,6 +10,29 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
+def reconcile_param_alias(params: dict[str, Any], alias: str, native: str) -> None:
+    """Fold a param spelled ``alias`` onto its ``native`` name, or raise on conflict.
+
+    When ``params`` carries ``alias``, pop it and set ``native`` from it, unless
+    ``native`` is already present with a different value. Mutates ``params``. This
+    is the one alias-reconciliation rule the neural and fastText factories share,
+    so a config can swap ``model.name`` between trainable models without renaming
+    its params.
+
+    Raises:
+        ConfigurationError: if ``alias`` and ``native`` are both present and
+            disagree.
+    """
+    if alias not in params:
+        return
+    value = params.pop(alias)
+    if native in params and params[native] != value:
+        raise ConfigurationError(
+            f"conflicting values: {alias}={value!r} vs {native}={params[native]!r}"
+        )
+    params.setdefault(native, value)
+
+
 def reconcile_seed_param(params: dict[str, Any]) -> None:
     """Map scikit-learn's ``random_state`` spelling onto the wrappers' ``seed``.
 
@@ -20,14 +43,7 @@ def reconcile_seed_param(params: dict[str, Any]) -> None:
     Raises:
         ConfigurationError: if ``random_state`` and ``seed`` disagree.
     """
-    if "random_state" not in params:
-        return
-    random_state = params.pop("random_state")
-    if "seed" in params and params["seed"] != random_state:
-        raise ConfigurationError(
-            f"conflicting seeds: random_state={random_state!r} vs seed={params['seed']!r}"
-        )
-    params.setdefault("seed", random_state)
+    reconcile_param_alias(params, "random_state", "seed")
 
 
 def pop_seed(params: dict[str, Any], *, default: int | None) -> int | None:

@@ -28,13 +28,18 @@ from tulip.models._estimator import (
     validate_class_weight,
     validate_common_training_params,
 )
-from tulip.models._factory import checkpoint_factory, reconcile_seed_param
+from tulip.models._factory import (
+    checkpoint_factory,
+    reconcile_param_alias,
+    reconcile_seed_param,
+)
 from tulip.models._torch_loops import (
     batched_softmax_probabilities,
     empty_proba,
     linear_warmup_factor,
     optimizer_param_groups,
     resolve_device,
+    train_classifier_from_estimator,
     train_torch_classifier,
 )
 
@@ -48,10 +53,12 @@ __all__ = [
     "label_id_maps",
     "linear_warmup_factor",
     "optimizer_param_groups",
+    "reconcile_param_alias",
     "reconcile_seed_param",
     "require_fitted",
     "resolve_class_weights",
     "resolve_device",
+    "train_classifier_from_estimator",
     "train_torch_classifier",
     "validate_class_weight",
     "validate_common_training_params",
