@@ -103,3 +103,17 @@ def test_contrast_rejects_unknown_level(tmp_path: Path) -> None:
     )
     assert result.exit_code != 0
     assert "unknown level" in result.output
+
+
+def test_fusion_compare_missing_model_errors_cleanly(tmp_path: Path) -> None:
+    # A missing model directory must fail with a clean error, not a traceback.
+    result = runner.invoke(
+        app,
+        [
+            "fusion-compare",
+            str(tmp_path / "no-text"),
+            str(tmp_path / "no-audio"),
+            str(tmp_path / "data.jsonl"),
+        ],
+    )
+    assert result.exit_code != 0

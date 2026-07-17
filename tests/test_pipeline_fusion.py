@@ -22,6 +22,7 @@ from tulip.data.synthetic import SyntheticSpec, generate_corpus
 from tulip.labels.taxonomy import LabelLevel
 from tulip.pipeline.classifier import DialectClassifier
 from tulip.pipeline.fusion import (
+    ConfidenceWeightedFusion,
     FusionStrategy,
     LogarithmicPoolingFusion,
     MaximumFusion,
@@ -67,9 +68,10 @@ class StubClassifier:
 STRATEGIES: list[FusionStrategy] = [
     WeightedAverageFusion((0.5, 0.5)),
     MaximumFusion(),
+    ConfidenceWeightedFusion(),
     LogarithmicPoolingFusion((0.5, 0.5)),
 ]
-STRATEGY_IDS = ["weighted_average", "maximum", "logarithmic_pooling"]
+STRATEGY_IDS = ["weighted_average", "maximum", "confidence", "logarithmic_pooling"]
 
 
 def _stack_and_mask() -> tuple[np.ndarray, np.ndarray]:
@@ -223,9 +225,24 @@ def test_build_strategy_round_trips_each_kind() -> None:
     assert isinstance(strategy, WeightedAverageFusion)
     assert strategy.weights == (0.3, 0.7)
     assert isinstance(build_strategy("maximum"), MaximumFusion)
+    assert isinstance(build_strategy("confidence"), ConfidenceWeightedFusion)
     assert isinstance(
         build_strategy("logarithmic_pooling", {"weights": [1.0, 2.0]}), LogarithmicPoolingFusion
     )
+
+
+def test_confidence_fusion_weights_towards_the_more_certain_expert() -> None:
+    # Sample 0: text is very confident on class 0, audio is flat. The fused
+    # distribution leans towards the confident expert, past the equal-average mark.
+    stack = np.array([[[0.95, 0.05]], [[0.5, 0.5]]])
+    mask = np.array([[True], [True]])
+    fused = ConfidenceWeightedFusion().fuse(stack, mask)
+    equal_average = WeightedAverageFusion((0.5, 0.5)).fuse(stack, mask)
+    assert fused[0, 0] > equal_average[0, 0]  # confident text pulled it further
+    # Roles reversed: the confident audio expert now dominates.
+    reversed_stack = np.array([[[0.5, 0.5]], [[0.1, 0.9]]])
+    reversed_fused = ConfidenceWeightedFusion().fuse(reversed_stack, mask)
+    assert reversed_fused[0, 1] > 0.5
 
 
 def test_build_strategy_unknown_kind_raises() -> None:

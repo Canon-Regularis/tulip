@@ -19,7 +19,13 @@ fusion's alone) and is re-exported here for backward compatibility.
 from __future__ import annotations
 
 from tulip.pipeline.fusion.classifier import MultimodalClassifier
+from tulip.pipeline.fusion.comparison import (
+    ModalityComparison,
+    ModalityScore,
+    compare_modalities,
+)
 from tulip.pipeline.fusion.strategies import (
+    ConfidenceWeightedFusion,
     FusionStrategy,
     LogarithmicPoolingFusion,
     MaximumFusion,
@@ -29,11 +35,15 @@ from tulip.pipeline.fusion.strategies import (
 from tulip.pipeline.protocols import ProbabilisticClassifier
 
 __all__ = [
+    "ConfidenceWeightedFusion",
     "FusionStrategy",
     "LogarithmicPoolingFusion",
     "MaximumFusion",
+    "ModalityComparison",
+    "ModalityScore",
     "MultimodalClassifier",
     "ProbabilisticClassifier",
     "WeightedAverageFusion",
     "build_strategy",
+    "compare_modalities",
 ]

@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from typing import Any
 
 __all__ = [
+    "ConfidenceWeightedFusion",
     "FusionStrategy",
     "LogarithmicPoolingFusion",
     "MaximumFusion",
@@ -58,6 +59,9 @@ class FusionStrategy(Protocol):
     * a sample with *no* present modality raises
       :class:`~tulip.core.exceptions.DataError`.
     """
+
+    #: Stable identifier used to (de)serialise the strategy (see ``build_strategy``).
+    kind: ClassVar[str]
 
     def fuse(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
         """Fuse ``stack`` under ``mask`` into one distribution per sample."""
@@ -232,6 +236,34 @@ class MaximumFusion(_FusionBase):
 
 
 @dataclass(frozen=True)
+class ConfidenceWeightedFusion(_FusionBase):
+    """Fuse by a per-sample soft attention over modalities, weighted by confidence.
+
+    Each present modality is weighted, for each sample independently, by its own
+    top probability (its confidence on that sample), and the weights are
+    normalised across modalities before the convex combination. So on a sample
+    where the text expert is certain but the audio expert is unsure, text
+    dominates the fused distribution, and vice versa. This is a lightweight,
+    parameter-free attention over the two experts; it is not a learned multimodal
+    transformer (which needs paired training data and a GPU), but it captures the
+    same intuition that the more reliable modality should carry more weight where
+    it is reliable. Unweighted by hyperparameter: the attention is data-driven.
+    """
+
+    kind: ClassVar[str] = "confidence"
+
+    def _pool(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        confidence = stack.max(axis=2)  # (modalities, samples): each expert's top prob
+        weights = confidence * mask  # absent modalities carry zero weight
+        totals = weights.sum(axis=0, keepdims=True)
+        # A zero total (both experts flat at zero confidence) is left to the base
+        # renormalise/passthrough guards; avoid dividing by it here.
+        safe_totals = np.where(totals > 0.0, totals, 1.0)
+        normalised = weights / safe_totals
+        return (normalised[:, :, None] * stack).sum(axis=0)
+
+
+@dataclass(frozen=True)
 class LogarithmicPoolingFusion(_WeightedFusion):
     """Fuse by the weighted geometric mean, the log-linear opinion pool.
 
@@ -260,6 +292,7 @@ class LogarithmicPoolingFusion(_WeightedFusion):
 _STRATEGY_REGISTRY: dict[str, Callable[[Mapping[str, Any]], FusionStrategy]] = {
     WeightedAverageFusion.kind: lambda params: WeightedAverageFusion(tuple(params["weights"])),
     MaximumFusion.kind: lambda _params: MaximumFusion(),
+    ConfidenceWeightedFusion.kind: lambda _params: ConfidenceWeightedFusion(),
     LogarithmicPoolingFusion.kind: lambda params: LogarithmicPoolingFusion(
         tuple(params["weights"])
     ),

@@ -187,6 +187,51 @@ def contrast(
     )
 
 
+@app.command("fusion-compare")
+@_tulip_errors
+def fusion_compare(
+    text_model: Path = typer.Argument(..., help="Saved text-modality model directory."),
+    audio_model: Path = typer.Argument(..., help="Saved audio-modality model directory."),
+    data: Path = typer.Argument(..., help="Multimodal labelled samples (both text and audio)."),
+    strategy: str = typer.Option(
+        "weighted_average",
+        "--strategy",
+        help="Fusion strategy: weighted_average | maximum | confidence | logarithmic_pooling.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+    out: Path | None = typer.Option(None, "--out", help="Also write the report JSON here."),
+) -> None:
+    """Compare text-only, audio-only, and fused classification on a multimodal set.
+
+    Answers whether combining the text and audio experts beats the better of the
+    two alone: it scores each base and their fusion on the identical set of samples
+    that carry both modalities, with the fusion uplift and a paired McNemar test.
+    The two models must share a target level; the audio model needs the audio
+    extras to load.
+    """
+    from tulip.data import read_samples
+    from tulip.pipeline import DialectClassifier
+    from tulip.pipeline.fusion import build_strategy, compare_modalities
+
+    params = (
+        {"weights": [0.5, 0.5]} if strategy in {"weighted_average", "logarithmic_pooling"} else {}
+    )
+    fusion = build_strategy(strategy, params)
+    report = compare_modalities(
+        DialectClassifier.load(text_model),
+        DialectClassifier.load(audio_model),
+        list(read_samples(data)),
+        strategy=fusion,
+    )
+    _emit_report(
+        report,
+        json_output=json_output,
+        out=out,
+        saved_label="modality comparison",
+        markdown=report.to_markdown(),
+    )
+
+
 def _require_input_matches_task(classifier: Any, *, text: str | None, audio: Path | None) -> None:
     """Reject a text/audio input that mismatches the model's modality.
 
