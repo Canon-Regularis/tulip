@@ -16,6 +16,27 @@ These are the objects most users touch.
 
 ::: tulip.pipeline.SamplePredictor
 
+## Multimodal fusion
+
+`MultimodalClassifier` fuses a text and an audio expert at the probability level
+with a pluggable strategy. Beyond the weighted, maximum, and log-pool strategies,
+`ConfidenceWeightedFusion` applies a per-sample soft attention over the two
+experts: each is weighted by its own confidence on that sample, so the more
+certain modality carries more weight where it is reliable. It is parameter-free
+and data-driven, a lightweight stand-in for a learned multimodal transformer.
+
+`compare_modalities` answers the question a single leaderboard row cannot: does
+fusion actually help? It scores text-only, audio-only, and their fusion on one
+identical multimodal test set and reports the fusion uplift with a paired McNemar
+test against each single modality. It is exposed as
+`tulip fusion-compare TEXT_MODEL AUDIO_MODEL DATA --strategy <name>`.
+
+::: tulip.pipeline.fusion.ConfidenceWeightedFusion
+
+::: tulip.pipeline.fusion.compare_modalities
+
+::: tulip.pipeline.fusion.ModalityComparison
+
 ## Experiment and benchmark runners
 
 ::: tulip.pipeline.run_experiment
