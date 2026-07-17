@@ -33,8 +33,14 @@ ENV_PREFIX = "TULIP_SERVE_"
 #: far below what a memory-exhaustion upload would need.
 _DEFAULT_MAX_BODY_BYTES = 32 * 1024 * 1024
 
+#: Hard ceiling on the per-call batch size, enforced at the request-schema level
+#: so an oversized list is rejected before the handler runs. The configurable
+#: ``max_batch`` cannot exceed it, so the schema cap and the configured limit
+#: never drift. This is the single source of truth for both.
+MAX_BATCH_CEILING = 512
+
 #: Default per-call batch cap (matches the historical hard-coded value).
-_DEFAULT_MAX_BATCH = 512
+_DEFAULT_MAX_BATCH = MAX_BATCH_CEILING
 
 #: Paths exempt from authentication so liveness and scraping never need a token.
 _AUTH_EXEMPT_PATHS = ("/health", "/metrics")
@@ -53,7 +59,8 @@ class ServeSettings(BaseModel):
         max_concurrency: Maximum in-flight requests; ``None`` disables the cap.
         max_body_bytes: Request-body ceiling, enforced *before* buffering;
             ``None`` disables it.
-        max_batch: Maximum texts per batch prediction call.
+        max_batch: Maximum texts per batch prediction call; at most
+            :data:`MAX_BATCH_CEILING`, the schema-level hard cap.
         cors_allow_origins: Allowed CORS origins; empty disables CORS.
         security_headers: Whether to add ``X-Content-Type-Options`` etc.
         hsts: Whether to add ``Strict-Transport-Security`` (HTTPS deployments).
@@ -65,7 +72,7 @@ class ServeSettings(BaseModel):
     rate_limit_per_minute: int | None = Field(default=None, gt=0)
     max_concurrency: int | None = Field(default=None, gt=0)
     max_body_bytes: int | None = Field(default=_DEFAULT_MAX_BODY_BYTES, gt=0)
-    max_batch: int = Field(default=_DEFAULT_MAX_BATCH, gt=0)
+    max_batch: int = Field(default=_DEFAULT_MAX_BATCH, gt=0, le=MAX_BATCH_CEILING)
     cors_allow_origins: tuple[str, ...] = ()
     security_headers: bool = True
     hsts: bool = False

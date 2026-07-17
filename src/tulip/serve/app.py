@@ -38,7 +38,7 @@ from tulip.core.types import Prediction, TaskType
 from tulip.serve._demo import demo_page
 from tulip.serve._guards import install_guards
 from tulip.serve._metrics import CONTENT_TYPE, MetricsRegistry
-from tulip.serve.settings import ServeSettings
+from tulip.serve.settings import MAX_BATCH_CEILING, ServeSettings
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
 
@@ -59,10 +59,6 @@ _AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".opus"}
 #: real Polish rather than "string".
 _PODHALE_EXAMPLE = "Hej, baca się pyto, kaj się owce pasą na holi."
 _SILESIA_EXAMPLE = "Jo żech je z Katowic i godom po naszymu cołki czos."
-
-#: Upper bound on batch size: large enough to be useful, small enough that one
-#: request cannot monopolise the worker or exhaust memory.
-_MAX_BATCH = 512
 
 
 class TextRequest(BaseModel):
@@ -86,8 +82,10 @@ class TextRequest(BaseModel):
 class BatchTextRequest(BaseModel):
     """Request body for ``POST /predict/text/batch``.
 
-    ``texts`` is capped at :data:`_MAX_BATCH` at the schema level (an oversized
-    list is a 422). Emptiness and per-item blankness are enforced in the handler
+    ``texts`` is capped at :data:`~tulip.serve.settings.MAX_BATCH_CEILING` at the
+    schema level (an oversized list is a 422); the configurable ``max_batch`` can
+    only be lower, and the handler enforces it. Emptiness and per-item blankness
+    are enforced in the handler
     so they surface as a 400, the same "your content is unusable" semantics as
     the single-text endpoint, rather than a schema-shaped 422.
     """
@@ -99,8 +97,8 @@ class BatchTextRequest(BaseModel):
     )
 
     texts: list[str] = Field(
-        max_length=_MAX_BATCH,
-        description=f"One to {_MAX_BATCH} texts to classify in a single call.",
+        max_length=MAX_BATCH_CEILING,
+        description=f"One to {MAX_BATCH_CEILING} texts to classify in a single call.",
         examples=[[_PODHALE_EXAMPLE, _SILESIA_EXAMPLE]],
     )
     top_k: int | None = Field(
@@ -372,7 +370,7 @@ def create_app(
         tags=["inference"],
         summary="Classify a batch of Polish texts",
         description="Classify up to "
-        f"{_MAX_BATCH} texts in one call, returning one prediction per input in order.",
+        f"{MAX_BATCH_CEILING} texts in one call, returning one prediction per input in order.",
     )
     def predict_text_batch(request: BatchTextRequest, response: Response) -> list[Prediction]:
         _require_text_task()
