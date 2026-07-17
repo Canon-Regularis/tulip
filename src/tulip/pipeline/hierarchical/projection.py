@@ -118,9 +118,7 @@ def project_onto_family(fine: Prediction, coarse: Prediction) -> Prediction | No
         ClassProbability(
             label=cp.label,
             probability=(
-                family_probability * consistent[cp.label] / total
-                if cp.label in consistent
-                else 0.0
+                family_probability * consistent[cp.label] / total if cp.label in consistent else 0.0
             ),
         )
         for cp in fine.probabilities
