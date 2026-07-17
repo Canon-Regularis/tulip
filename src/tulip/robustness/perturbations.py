@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from tulip.robustness.registry import PERTURBATIONS
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     import numpy as np
@@ -72,8 +73,52 @@ def _rewrite_fraction(
     return " ".join(rewritten)
 
 
+def _substitute(
+    text: str, level: float, rng: np.random.Generator, mapping: Mapping[str, Sequence[str]]
+) -> str:
+    """Replace each mapped character with a seeded variant with probability ``level``.
+
+    Shared by the two channel stressors: a character whose lowercase form is in
+    ``mapping`` is replaced, with probability ``level``, by a seeded choice among
+    its variants; case is preserved and unmapped characters pass through. A ``str``
+    value counts as a sequence of single-character variants, so both the diacritic
+    map (tuples) and the keyboard map (strings) fit unchanged.
+    """
+    out = []
+    for char in text:
+        variants = mapping.get(char.lower())
+        if variants and rng.random() < level:
+            choice = variants[int(rng.integers(len(variants)))]
+            out.append(choice.upper() if char.isupper() else choice)
+        else:
+            out.append(char)
+    return "".join(out)
+
+
+class _RuleRewriter:
+    """Base for the rule-grounded perturbations: load the rules, rewrite a fraction.
+
+    Both directions load the phonological rules identically and rewrite a seeded
+    fraction of tokens through them; a subclass sets :attr:`_reverse` to choose
+    the direction (forward towards dialectal, or reverse towards standard). Level 0
+    is identity.
+    """
+
+    _reverse: bool = False
+
+    def __init__(self, rules_path: str | Path | None = None) -> None:
+        from tulip.features.text.phonological_rules import load_phonological_rules
+
+        self._rules = load_phonological_rules(rules_path)
+
+    def perturb(self, text: str, *, level: float, rng: np.random.Generator) -> str:
+        if level <= 0.0:
+            return text
+        return _rewrite_fraction(text, self._rules, level, rng, reverse=self._reverse)
+
+
 @PERTURBATIONS.register("dialect_intensity_dial")
-class DialectIntensityDial:
+class DialectIntensityDial(_RuleRewriter):
     """Rewrite a seeded fraction of tokens standard towards dialectal.
 
     At ``level`` p each token is rewritten with probability p through every
@@ -82,19 +127,9 @@ class DialectIntensityDial:
     lowercases and drops punctuation, the same canonicalisation the rules use.
     """
 
-    def __init__(self, rules_path: str | Path | None = None) -> None:
-        from tulip.features.text.phonological_rules import load_phonological_rules
-
-        self._rules = load_phonological_rules(rules_path)
-
-    def perturb(self, text: str, *, level: float, rng: np.random.Generator) -> str:
-        if level <= 0.0:
-            return text
-        return _rewrite_fraction(text, self._rules, level, rng, reverse=False)
-
 
 @PERTURBATIONS.register("standardize")
-class Standardize:
+class Standardize(_RuleRewriter):
     """Rewrite a seeded fraction of tokens dialectal towards standard.
 
     The reverse of :class:`DialectIntensityDial`, using the reverse of the
@@ -103,15 +138,7 @@ class Standardize:
     :func:`~tulip.features.text.phonological_rules.normalize_to_standard`.
     """
 
-    def __init__(self, rules_path: str | Path | None = None) -> None:
-        from tulip.features.text.phonological_rules import load_phonological_rules
-
-        self._rules = load_phonological_rules(rules_path)
-
-    def perturb(self, text: str, *, level: float, rng: np.random.Generator) -> str:
-        if level <= 0.0:
-            return text
-        return _rewrite_fraction(text, self._rules, level, rng, reverse=True)
+    _reverse = True
 
 
 #: Polish diacritics mapped to the plainer letters a transcription channel emits.
@@ -139,15 +166,7 @@ class AsrNoise:
     def perturb(self, text: str, *, level: float, rng: np.random.Generator) -> str:
         if level <= 0.0:
             return text
-        out = []
-        for char in text:
-            variants = _ASR_VARIANTS.get(char.lower())
-            if variants and rng.random() < level:
-                choice = variants[int(rng.integers(len(variants)))]
-                out.append(choice.upper() if char.isupper() else choice)
-            else:
-                out.append(char)
-        return "".join(out)
+        return _substitute(text, level, rng, _ASR_VARIANTS)
 
 
 #: Lowercase letters mapped to their QWERTY keyboard neighbours.
@@ -192,12 +211,4 @@ class TypoNoise:
     def perturb(self, text: str, *, level: float, rng: np.random.Generator) -> str:
         if level <= 0.0:
             return text
-        out = []
-        for char in text:
-            neighbours = _KEY_NEIGHBOURS.get(char.lower())
-            if neighbours and rng.random() < level:
-                choice = neighbours[int(rng.integers(len(neighbours)))]
-                out.append(choice.upper() if char.isupper() else choice)
-            else:
-                out.append(char)
-        return "".join(out)
+        return _substitute(text, level, rng, _KEY_NEIGHBOURS)
