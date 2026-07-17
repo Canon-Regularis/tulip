@@ -16,7 +16,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import typer
 from rich.console import Console
@@ -25,6 +25,9 @@ from rich.table import Table
 from tulip import __version__
 from tulip.core.exceptions import ConfigurationError, TulipError
 from tulip.utils.logging import configure_logging, get_logger
+
+if TYPE_CHECKING:
+    from tulip.labels.taxonomy import LabelLevel
 
 app = typer.Typer(
     name="tulip",
@@ -152,6 +155,22 @@ def _parse_number_csv(
         raise ConfigurationError(
             f"--{name} must be comma-separated numbers, got {value!r}"
         ) from exc
+
+
+def _parse_level(value: str) -> LabelLevel:
+    """Parse a ``--level`` option into a :class:`LabelLevel`, or raise a clean error.
+
+    A value outside the taxonomy raises :class:`ConfigurationError` listing the
+    valid levels, rather than leaking a raw ``ValueError`` past the CLI error
+    boundary.
+    """
+    from tulip.labels.taxonomy import LabelLevel
+
+    try:
+        return LabelLevel(value)
+    except ValueError as exc:
+        allowed = ", ".join(member.value for member in LabelLevel)
+        raise ConfigurationError(f"unknown level {value!r}; use one of: {allowed}") from exc
 
 
 def _emit_report(

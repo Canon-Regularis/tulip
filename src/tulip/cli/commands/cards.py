@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
 from tulip.cli._context import _console, _read_json_mapping, _tulip_errors, cards_app
+
+if TYPE_CHECKING:
+    from tulip.core.types import DatasetInfo
 
 
 def _emit(markdown: str, destination: Path | None) -> None:
@@ -21,6 +25,31 @@ def _emit(markdown: str, destination: Path | None) -> None:
     _console.print(f"[green]card written to {destination}[/green]")
 
 
+def _resolve_dataset_info(name: str | None, sources: list[str], *, hint: str = "") -> DatasetInfo:
+    """Resolve corpus metadata, inferring the name from a single source when unset.
+
+    When ``name`` is not given the corpus must be unambiguous: exactly one source,
+    otherwise a clean error asks for ``--dataset``. Not every corpus is catalogued
+    (the generic manifest loader is not), so an uncatalogued name falls back to the
+    loader's own metadata rather than a fabricated tier and licence; an unknown name
+    still raises.
+    """
+    from tulip.core.exceptions import ConfigurationError, DataError
+    from tulip.data import DATASETS, get_dataset_info
+
+    if name is None:
+        if len(sources) != 1:
+            raise ConfigurationError(
+                f"cannot infer the corpus from {len(sources)} source(s) {sources}; "
+                f"pass --dataset NAME{hint}"
+            )
+        name = sources[0]
+    try:
+        return get_dataset_info(name)
+    except DataError:
+        return DATASETS.create(name).info
+
+
 @cards_app.command("dataset")
 @_tulip_errors
 def card_dataset(
@@ -31,28 +60,11 @@ def card_dataset(
     out: Path | None = typer.Option(None, "--out", help="Write the card here instead of stdout."),
 ) -> None:
     """Render a dataset card from a built dataset's audit manifest."""
-    from tulip.core.exceptions import ConfigurationError, DataError
-    from tulip.data import DATASETS, get_dataset_info
     from tulip.evaluation.cards import dataset_card
 
     manifest = _read_json_mapping(build_manifest, what="build manifest")
-    name = dataset
-    if name is None:
-        sources = list(manifest.get("sources") or {})
-        if len(sources) != 1:
-            raise ConfigurationError(
-                f"cannot infer the corpus from {len(sources)} source(s) {sources}; "
-                "pass --dataset NAME"
-            )
-        name = sources[0]
-
-    try:
-        info = get_dataset_info(name)
-    except DataError:
-        # Not every dataset is catalogued: the generic `manifest` loader
-        # deliberately is not. Ask the loader for its own metadata rather than
-        # fabricating a tier and a licence. An unknown name still raises.
-        info = DATASETS.create(name).info
+    sources = list(manifest.get("sources") or {})
+    info = _resolve_dataset_info(dataset, sources)
     _emit(dataset_card(info, manifest), out)
 
 
@@ -82,27 +94,13 @@ def card_datasheet(
     prose fields in ``--spec`` into one byte-stable document. For a benchmark that
     merges corpora, render one datasheet per source corpus.
     """
-    from tulip.core.exceptions import ConfigurationError, DataError
-    from tulip.data import DATASETS, get_dataset_info
     from tulip.data.splitting import load_splits
     from tulip.evaluation.datasheet import datasheet, load_datasheet_spec
 
     splits = load_splits(build_dir)
     spec_model = load_datasheet_spec(spec)
-
-    name = dataset
-    if name is None:
-        sources = sorted({s.source for group in splits.as_dict().values() for s in group})
-        if len(sources) != 1:
-            raise ConfigurationError(
-                f"cannot infer the corpus from {len(sources)} source(s) {sources}; "
-                "pass --dataset NAME (render one datasheet per source corpus)"
-            )
-        name = sources[0]
-    try:
-        info = get_dataset_info(name)
-    except DataError:
-        info = DATASETS.create(name).info
+    sources = sorted({s.source for group in splits.as_dict().values() for s in group})
+    info = _resolve_dataset_info(dataset, sources, hint=" (render one datasheet per source corpus)")
 
     conformance = None
     if manifest is not None:

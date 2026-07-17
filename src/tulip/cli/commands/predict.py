@@ -8,7 +8,7 @@ from typing import Any
 import typer
 from rich.table import Table
 
-from tulip.cli._context import _console, _emit_report, _tulip_errors, app
+from tulip.cli._context import _console, _emit_report, _parse_level, _tulip_errors, app
 from tulip.core.types import Prediction, TaskType
 
 
@@ -106,17 +106,10 @@ def explain_global(
     a dialect. The evidence is resource-defined, so no model is needed and the
     report is the same regardless of which classifier you trained.
     """
-    from tulip.core.exceptions import ConfigurationError
     from tulip.data import read_samples
     from tulip.explain import dataset_evidence
-    from tulip.labels.taxonomy import LabelLevel
 
-    try:
-        label_level = LabelLevel(level)
-    except ValueError as exc:
-        allowed = ", ".join(member.value for member in LabelLevel)
-        raise ConfigurationError(f"unknown level {level!r}; use one of: {allowed}") from exc
-
+    label_level = _parse_level(level)
     report = dataset_evidence(read_samples(data), level=label_level, name=str(data))
     _emit_report(
         report,
@@ -160,17 +153,10 @@ def contrast(
     two-proportion test. Use `--level family` to contrast, for example, silesian
     against standard.
     """
-    from tulip.core.exceptions import ConfigurationError
     from tulip.data import read_samples
     from tulip.explain.contrast import contrast_dialects
-    from tulip.labels.taxonomy import LabelLevel
 
-    try:
-        label_level = LabelLevel(level)
-    except ValueError as exc:
-        allowed = ", ".join(member.value for member in LabelLevel)
-        raise ConfigurationError(f"unknown level {level!r}; use one of: {allowed}") from exc
-
+    label_level = _parse_level(level)
     report = contrast_dialects(
         list(read_samples(data)),
         dialect_a,
@@ -211,12 +197,9 @@ def fusion_compare(
     """
     from tulip.data import read_samples
     from tulip.pipeline import DialectClassifier
-    from tulip.pipeline.fusion import build_strategy, compare_modalities
+    from tulip.pipeline.fusion import build_strategy, compare_modalities, default_params
 
-    params = (
-        {"weights": [0.5, 0.5]} if strategy in {"weighted_average", "logarithmic_pooling"} else {}
-    )
-    fusion = build_strategy(strategy, params)
+    fusion = build_strategy(strategy, default_params(strategy))
     report = compare_modalities(
         DialectClassifier.load(text_model),
         DialectClassifier.load(audio_model),
