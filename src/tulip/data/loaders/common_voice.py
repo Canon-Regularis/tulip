@@ -7,12 +7,13 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from tulip.core.exceptions import ConfigurationError, DataError, TulipError
+from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.interfaces import DatasetLoader
 from tulip.core.types import DatasetInfo, DialectLabels, Sample
 from tulip.data.catalog import get_dataset_info
 from tulip.data.download import fetch_file
 from tulip.data.loaders._hub_audio import CLIPS_DIR, write_hub_clip
+from tulip.data.loaders._stream import stream_records_to_manifest
 from tulip.data.registry import DATASETS
 from tulip.labels.taxonomy import DialectFamily
 from tulip.utils.logging import get_logger
@@ -181,36 +182,26 @@ class CommonVoiceLoader(DatasetLoader):
         root.mkdir(parents=True, exist_ok=True)
         clips_dir = root / CLIPS_DIR
         tsv_path = root / self._tsv
-        count = 0
-        written_clips: list[Path] = []
-        try:
-            with tsv_path.open("w", encoding="utf-8", newline="") as handle:
-                writer = csv.writer(handle, delimiter="\t")
-                writer.writerow(["client_id", "path", "sentence", "accents"])
-                for index, record in enumerate(stream):
-                    if limit is not None and count >= limit:
-                        break
-                    row = self._audio_record_row(record, clips_dir, index)
-                    if row is None:
-                        continue
-                    written_clips.append(clips_dir / row[1])
-                    writer.writerow(row)
-                    count += 1
-        except BaseException as exc:
-            # Never leave a partial TSV (it would masquerade as a present corpus)
-            # nor clips this run wrote (they would leak on retry).
-            tsv_path.unlink(missing_ok=True)
-            for clip_path in written_clips:
-                clip_path.unlink(missing_ok=True)
-            if isinstance(exc, (KeyboardInterrupt, SystemExit, TulipError)):
-                raise
-            raise DataError(f"common_voice_pl audio download failed mid-stream: {exc}") from exc
-        if count == 0:
-            tsv_path.unlink(missing_ok=True)
-            raise DataError(
+
+        def build_row(record: Mapping[str, Any], index: int) -> tuple[list[str], list[Path]] | None:
+            row = self._audio_record_row(record, clips_dir, index)
+            if row is None:
+                return None
+            return row, [clips_dir / row[1]]
+
+        count = stream_records_to_manifest(
+            tsv_path,
+            stream,
+            build_row,
+            header=["client_id", "path", "sentence", "accents"],
+            limit=limit,
+            source="common_voice_pl",
+            empty_error=(
                 f"common_voice_pl audio download produced no samples; check the mirror "
                 f"({repo!r}, locale={locale!r}, split={split!r})"
-            )
+            ),
+            delimiter="\t",
+        )
         _logger.info("common_voice_pl audio download complete: %d clips -> %s", count, clips_dir)
 
     def _audio_record_row(

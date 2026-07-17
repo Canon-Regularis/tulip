@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import csv
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from tulip.core.exceptions import ConfigurationError, DataError, TulipError
+from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.types import Sample
 from tulip.data.loaders._base import ManifestBackedLoader
 from tulip.data.loaders._hub_audio import CLIPS_DIR, write_hub_clip
+from tulip.data.loaders._stream import stream_records_to_manifest
 from tulip.data.manifest import surrogate_speaker_id
 from tulip.data.registry import DATASETS
 from tulip.utils.logging import get_logger
@@ -135,54 +135,41 @@ class BigosLoader(ManifestBackedLoader):
         header = ["id", "text", "speaker_id", "subset"]
         if audio:
             header.append("audio_path")
-        count = 0
-        written_clips: list[Path] = []
-        try:
-            with manifest_path.open("w", encoding="utf-8", newline="") as handle:
-                writer = csv.writer(handle)
-                writer.writerow(header)
-                for index, record in enumerate(self._stream_records(raw_audio=audio)):
-                    if limit is not None and count >= limit:
-                        break
-                    sample = self._record_to_sample(record, index)
-                    if sample is None:
-                        continue
-                    row = [
-                        sample.id,
-                        sample.text,
-                        sample.speaker_id,
-                        str(sample.metadata.get("dataset", "")),
-                    ]
-                    if audio:
-                        # The stream index makes the clip name unique even when two
-                        # sample ids sanitise to the same filesystem-safe stem.
-                        clip = write_hub_clip(
-                            record.get("audio"), root / CLIPS_DIR, f"{index:08d}-{sample.id}"
-                        )
-                        written_clips.append(root / CLIPS_DIR / clip)
-                        row.append(f"{CLIPS_DIR}/{clip}")
-                    writer.writerow(row)
-                    count += 1
-                    if count % 5000 == 0:
-                        _logger.info("bigos download: %d samples written", count)
-        except BaseException as exc:
-            # _stream_records is a generator: even load_dataset only runs on
-            # first iteration, i.e. AFTER the header was written. Any failure
-            # (gated dataset, network drop, Ctrl+C) must not leave a partial
-            # manifest, nor clips this run wrote, behind; the manifest would
-            # masquerade as a present corpus and the clips would leak.
-            manifest_path.unlink(missing_ok=True)
-            for clip_path in written_clips:
-                clip_path.unlink(missing_ok=True)
-            if isinstance(exc, (KeyboardInterrupt, SystemExit, TulipError)):
-                raise
-            raise DataError(f"bigos download failed mid-stream: {exc}") from exc
-        if count == 0:
-            manifest_path.unlink(missing_ok=True)
-            raise DataError(
+
+        def build_row(record: dict[str, Any], index: int) -> tuple[list[Any], list[Path]] | None:
+            sample = self._record_to_sample(record, index)
+            if sample is None:
+                return None
+            row: list[Any] = [
+                sample.id,
+                sample.text,
+                sample.speaker_id,
+                str(sample.metadata.get("dataset", "")),
+            ]
+            clips: list[Path] = []
+            if audio:
+                # The stream index makes the clip name unique even when two sample
+                # ids sanitise to the same filesystem-safe stem.
+                clip = write_hub_clip(
+                    record.get("audio"), root / CLIPS_DIR, f"{index:08d}-{sample.id}"
+                )
+                clips.append(root / CLIPS_DIR / clip)
+                row.append(f"{CLIPS_DIR}/{clip}")
+            return row, clips
+
+        count = stream_records_to_manifest(
+            manifest_path,
+            self._stream_records(raw_audio=audio),
+            build_row,
+            header=header,
+            limit=limit,
+            source="bigos",
+            empty_error=(
                 "bigos download produced no samples; check the Hub dataset "
                 f"({self._hf_dataset!r}, config={self._hf_config!r}, split={self._split!r})"
-            )
+            ),
+            progress_every=5000,
+        )
         _logger.info("bigos download complete: %d samples -> %s", count, manifest_path)
 
     def _load_from_hub(self, limit: int | None = None) -> Iterator[Sample]:
