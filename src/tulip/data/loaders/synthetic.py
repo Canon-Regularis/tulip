@@ -13,10 +13,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from tulip.core.exceptions import DataError
 from tulip.core.interfaces import DatasetLoader
 from tulip.data.catalog import get_dataset_info
-from tulip.data.loaders._base import DEFAULT_MANIFEST_NAMES
+from tulip.data.loaders._base import resolve_optional_manifest
 from tulip.data.manifest import read_manifest
 from tulip.data.registry import DATASETS
 from tulip.data.synthetic import SOURCE, SyntheticSpec, generate_corpus
@@ -112,16 +111,7 @@ class SyntheticLoader(DatasetLoader):
 
     def _resolve_manifest(self, root: Path) -> Path | None:
         """Return the manifest to read, or ``None`` to generate on demand."""
-        if self._manifest is not None:
-            path = root / self._manifest
-            if not path.is_file():
-                raise DataError(f"synthetic: configured manifest not found: {path}")
-            return path
-        for name in DEFAULT_MANIFEST_NAMES:
-            candidate = root / name
-            if candidate.is_file():
-                return candidate
-        return None
+        return resolve_optional_manifest(root, self._manifest, source=SOURCE)
 
 
 __all__ = ["SyntheticLoader"]

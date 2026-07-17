@@ -51,6 +51,11 @@ import numpy as np
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.core.types import DialectLabels, Sample
+from tulip.data._synthetic_common import (
+    base_manifest_record,
+    resolve_dialect_keys,
+    validate_common_spec,
+)
 from tulip.data._synthetic_corpus import ACTIONS as _ACTIONS
 from tulip.data._synthetic_corpus import CARRIERS as _CARRIERS
 from tulip.data._synthetic_corpus import FILLERS as _FILLERS
@@ -117,23 +122,13 @@ class SyntheticSpec:
     seed: int = 7
 
     def __post_init__(self) -> None:
-        if self.n_speakers_per_dialect < 2:
-            raise ConfigurationError(
-                "n_speakers_per_dialect must be >= 2 so speaker-disjoint splitting "
-                f"is meaningful, got {self.n_speakers_per_dialect}"
-            )
-        if self.samples_per_speaker < 1:
-            raise ConfigurationError(
-                f"samples_per_speaker must be >= 1, got {self.samples_per_speaker}"
-            )
+        validate_common_spec(self.n_speakers_per_dialect, self.samples_per_speaker, self.dialects)
         if not 0.0 <= self.noise_level <= 1.0:
             raise ConfigurationError(f"noise_level must be within [0, 1], got {self.noise_level}")
         if not 0.0 <= self.marker_dropout <= 1.0:
             raise ConfigurationError(
                 f"marker_dropout must be within [0, 1], got {self.marker_dropout}"
             )
-        if self.dialects is not None and not self.dialects:
-            raise ConfigurationError("dialects must be None or a non-empty sequence of keys")
 
 
 def generate_corpus(spec: SyntheticSpec) -> list[Sample]:
@@ -157,7 +152,7 @@ def generate_corpus(spec: SyntheticSpec) -> list[Sample]:
 
     lexicon = _load_lexicon()
     all_keys = tuple(sorted(lexicon))
-    selected = _select_dialects(spec.dialects, all_keys)
+    selected = resolve_dialect_keys(spec.dialects, all_keys, kind="synthetic")
     #: Flat pool of every marker; used to inject cross-class noise.
     all_markers = tuple(sorted({marker for markers in lexicon.values() for marker in markers}))
 
@@ -241,34 +236,12 @@ def write_synthetic_manifest(spec: SyntheticSpec, root: Path) -> Path:
 
 def _to_manifest_record(sample: Sample) -> dict[str, object]:
     """Flatten one :class:`Sample` into a read_manifest-compatible record."""
-    record: dict[str, object] = {
+    return {
         "id": sample.id,
         "text": sample.text,
         "speaker_id": sample.speaker_id,
+        **base_manifest_record(sample),
     }
-    for field in ("family", "dialect", "region", "village", "voivodeship"):
-        value = getattr(sample.labels, field)
-        if value is not None:
-            record[field] = value
-    record["generator"] = sample.metadata["generator"]
-    record["spec_seed"] = sample.metadata["spec_seed"]
-    return record
-
-
-def _select_dialects(
-    dialects: tuple[str, ...] | None, all_keys: tuple[str, ...]
-) -> tuple[str, ...]:
-    """Resolve the requested dialect keys against the lexicon, sorted."""
-    if dialects is None:
-        return all_keys
-    chosen = tuple(sorted({key.strip().lower() for key in dialects}))
-    unknown = [key for key in chosen if key not in all_keys]
-    if unknown:
-        raise ConfigurationError(
-            f"unknown synthetic dialect key(s): {', '.join(unknown)}; "
-            f"available lexicon keys: {', '.join(all_keys)}"
-        )
-    return chosen
 
 
 def _make_text(

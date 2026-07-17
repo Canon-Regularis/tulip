@@ -461,7 +461,7 @@ def _is_blank(value: Any) -> bool:
 def _classify_data_error(message: str) -> str:
     """Map a :class:`DataError` message to a stable issue code."""
     lowered = message.lower()
-    if "neither a text column" in lowered or "neither text nor audio" in lowered:
+    if "neither a text column" in lowered:
         return "no-content-column"
     if "missing required column" in lowered:
         return "missing-column"

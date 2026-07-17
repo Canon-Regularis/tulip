@@ -26,6 +26,38 @@ if TYPE_CHECKING:
 DEFAULT_MANIFEST_NAMES = ("manifest.csv", "manifest.tsv", "manifest.jsonl")
 
 
+def resolve_optional_manifest(root: Path, manifest: str | None, *, source: str) -> Path | None:
+    """Resolve the manifest a generate-on-demand loader should read, or ``None``.
+
+    When ``manifest`` names a file it must exist under ``root``; otherwise the
+    default manifest names are probed, and ``None`` means "generate on demand".
+    Shared by the two synthetic loaders, which opt out of
+    :class:`ManifestBackedLoader` (whose :meth:`_resolve_manifest` raises when no
+    manifest is found, rather than falling back to generation).
+
+    Args:
+        root: The corpus root to resolve against.
+        manifest: An explicitly configured manifest name, or ``None``.
+        source: The loader's source label, used in the not-found error.
+
+    Returns:
+        The manifest path to read, or ``None`` to generate.
+
+    Raises:
+        DataError: if ``manifest`` is set but the named file is absent.
+    """
+    if manifest is not None:
+        path = root / manifest
+        if not path.is_file():
+            raise DataError(f"{source}: configured manifest not found: {path}")
+        return path
+    for name in DEFAULT_MANIFEST_NAMES:
+        candidate = root / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 class ManifestBackedLoader(DatasetLoader):
     """Base class for loaders that read a locally assembled manifest.
 
@@ -94,4 +126,4 @@ class ManifestBackedLoader(DatasetLoader):
         )
 
 
-__all__ = ["DEFAULT_MANIFEST_NAMES", "ManifestBackedLoader"]
+__all__ = ["DEFAULT_MANIFEST_NAMES", "ManifestBackedLoader", "resolve_optional_manifest"]

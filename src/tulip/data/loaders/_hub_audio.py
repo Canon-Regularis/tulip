@@ -13,11 +13,11 @@ Reading the clips back (in the features) still needs the ``audio`` extra.
 
 from __future__ import annotations
 
-import wave
 from collections.abc import Mapping
 from pathlib import Path
 
 from tulip.core.exceptions import DataError
+from tulip.data._wav import write_int16_pcm_wav
 
 __all__ = ["CLIPS_DIR", "write_hub_clip"]
 
@@ -29,9 +29,6 @@ CLIPS_DIR = "clips"
 #: Extensions treated as an audio container when sanitising a clip stem, so a
 #: sample id that already ends in ``.wav`` does not yield ``id.wav.wav``.
 _AUDIO_SUFFIXES = frozenset({".wav", ".flac", ".mp3", ".ogg", ".opus", ".m4a", ".aac"})
-
-_INT16_MAX = 32_767
-_INT16_MIN = -32_768
 
 
 def write_hub_clip(audio: object, clips_dir: Path, stem: str) -> str:
@@ -110,10 +107,4 @@ def _write_pcm_wav(path: Path, array: object, sampling_rate: int) -> None:
     signal = np.asarray(array, dtype=np.float64)
     if signal.ndim > 1:
         signal = signal.mean(axis=1)
-    signal = signal.ravel()
-    quantised = np.clip(np.round(signal * _INT16_MAX), _INT16_MIN, _INT16_MAX).astype("<i2")
-    with wave.open(str(path), "wb") as handle:
-        handle.setnchannels(1)
-        handle.setsampwidth(2)
-        handle.setframerate(sampling_rate)
-        handle.writeframes(quantised.tobytes())
+    write_int16_pcm_wav(path, signal.ravel(), sampling_rate)

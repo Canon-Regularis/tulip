@@ -38,7 +38,6 @@ needs soundfile/librosa.
 
 from __future__ import annotations
 
-import wave
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +55,12 @@ from tulip.data._synthetic_audio_corpus import (
     VIBRATO_DEPTH,
     VIBRATO_RATE_HZ,
 )
+from tulip.data._synthetic_common import (
+    base_manifest_record,
+    resolve_dialect_keys,
+    validate_common_spec,
+)
+from tulip.data._wav import write_int16_pcm_wav
 from tulip.utils.io import write_jsonl
 from tulip.utils.logging import get_logger
 
@@ -77,9 +82,6 @@ GENERATOR = "tulip-synthetic-audio"
 #: paths are stored relative to ``root`` as ``audio/<id>.wav`` (POSIX
 #: separators) so a materialised corpus is relocatable and byte-stable.
 AUDIO_SUBDIR = "audio"
-
-_INT16_MAX = 32_767
-_INT16_MIN = -32_768
 
 
 @dataclass(frozen=True)
@@ -115,15 +117,7 @@ class AudioSyntheticSpec:
     seed: int = 7
 
     def __post_init__(self) -> None:
-        if self.n_speakers_per_dialect < 2:
-            raise ConfigurationError(
-                "n_speakers_per_dialect must be >= 2 so speaker-disjoint splitting "
-                f"is meaningful, got {self.n_speakers_per_dialect}"
-            )
-        if self.samples_per_speaker < 1:
-            raise ConfigurationError(
-                f"samples_per_speaker must be >= 1, got {self.samples_per_speaker}"
-            )
+        validate_common_spec(self.n_speakers_per_dialect, self.samples_per_speaker, self.dialects)
         if self.duration_s <= 0.0:
             raise ConfigurationError(f"duration_s must be positive, got {self.duration_s}")
         if self.sample_rate <= 0:
@@ -140,8 +134,6 @@ class AudioSyntheticSpec:
             # A jitter of 0.5 would let adjacent F0 registers (spaced ~30 %)
             # overlap, dissolving the very class signal the corpus exists for.
             raise ConfigurationError(f"jitter must be within [0, 0.5), got {self.jitter}")
-        if self.dialects is not None and not self.dialects:
-            raise ConfigurationError("dialects must be None or a non-empty sequence of keys")
 
 
 def generate_audio_corpus(spec: AudioSyntheticSpec, root: Path) -> list[Sample]:
@@ -167,7 +159,7 @@ def generate_audio_corpus(spec: AudioSyntheticSpec, root: Path) -> list[Sample]:
     root = Path(root)
     audio_dir = root / AUDIO_SUBDIR
     audio_dir.mkdir(parents=True, exist_ok=True)
-    selected = _select_dialects(spec.dialects)
+    selected = resolve_dialect_keys(spec.dialects, DIALECTS, kind="synthetic audio")
 
     rng = np.random.default_rng(spec.seed)
     samples: list[Sample] = []
@@ -195,7 +187,7 @@ def generate_audio_corpus(spec: AudioSyntheticSpec, root: Path) -> list[Sample]:
                 )
                 sample_id = f"{SOURCE}-{key}-spk{speaker_index:02d}-{sample_index:03d}"
                 path = audio_dir / f"{sample_id}.wav"
-                _write_wav(path, clip, spec.sample_rate)
+                write_int16_pcm_wav(path, clip, spec.sample_rate)
                 samples.append(
                     Sample(
                         id=sample_id,
@@ -250,32 +242,12 @@ def _to_manifest_record(sample: Sample, root: Path) -> dict[str, object]:
     manifest is byte-identical regardless of the absolute directory or platform.
     """
     audio_path = Path(sample.audio_path) if sample.audio_path is not None else root
-    record: dict[str, object] = {
+    return {
         "id": sample.id,
         "audio_path": audio_path.relative_to(root).as_posix(),
         "speaker_id": sample.speaker_id,
+        **base_manifest_record(sample),
     }
-    for field in ("family", "dialect", "region", "village", "voivodeship"):
-        value = getattr(sample.labels, field)
-        if value is not None:
-            record[field] = value
-    record["generator"] = sample.metadata["generator"]
-    record["spec_seed"] = sample.metadata["spec_seed"]
-    return record
-
-
-def _select_dialects(dialects: tuple[str, ...] | None) -> tuple[str, ...]:
-    """Resolve the requested class keys against the acoustic table, sorted."""
-    if dialects is None:
-        return DIALECTS
-    chosen = tuple(sorted({key.strip().lower() for key in dialects}))
-    unknown = [key for key in chosen if key not in DIALECT_ACOUSTICS]
-    if unknown:
-        raise ConfigurationError(
-            f"unknown synthetic audio dialect key(s): {', '.join(unknown)}; "
-            f"available keys: {', '.join(DIALECTS)}"
-        )
-    return chosen
 
 
 def _synthesize_clip(
@@ -348,17 +320,3 @@ def _rms(signal: np.ndarray) -> float:
     if signal.size == 0:
         return 0.0
     return float(np.sqrt(np.mean(np.square(signal))))
-
-
-def _write_wav(path: Path, signal: np.ndarray, sample_rate: int) -> None:
-    """Quantise ``signal`` to int16 PCM (no dithering) and write a mono WAV.
-
-    The explicit little-endian ``<i2`` dtype makes the bytes platform
-    independent, which the determinism guarantee relies on.
-    """
-    quantised = np.clip(np.round(signal * _INT16_MAX), _INT16_MIN, _INT16_MAX).astype("<i2")
-    with wave.open(str(path), "wb") as handle:
-        handle.setnchannels(1)
-        handle.setsampwidth(2)
-        handle.setframerate(sample_rate)
-        handle.writeframes(quantised.tobytes())
