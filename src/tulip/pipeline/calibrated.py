@@ -27,34 +27,31 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
-
-from tulip.core.exceptions import DataError
 from tulip.models.calibration import IdentityCalibrator
 from tulip.pipeline._assembly import (
-    align_in_vocab_rows,
+    _BaseDelegating,
     predictions_from_proba,
     raws_for_task,
+    require_labelled_batch,
+    scored_in_vocab_rows,
     validate_abstain_threshold,
 )
-from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Any, Self
 
-    from tulip.core.types import Prediction, Sample, TaskType
-    from tulip.labels.taxonomy import LabelLevel
+    import numpy as np
+
+    from tulip.core.types import Prediction, Sample
     from tulip.models.calibration import ProbabilityCalibrator
     from tulip.pipeline.classifier import LabelledBatch
     from tulip.pipeline.protocols import CalibratableClassifier
 
 __all__ = ["CalibratedClassifier"]
 
-_logger = get_logger(__name__)
 
-
-class CalibratedClassifier:
+class CalibratedClassifier(_BaseDelegating):
     """Calibrate a fitted classifier's probabilities, then abstain on them.
 
     Args:
@@ -105,28 +102,21 @@ class CalibratedClassifier:
             DataError: if the calibration set yields no usable, in-vocabulary
                 labelled samples.
         """
-        batch = self.base.labelled_batch(samples)
-        if not batch.raws:
-            raise DataError(
-                f"calibration set has no usable samples for target "
-                f"{self.base.target.value!r} (skipped {batch.n_skipped}); "
-                f"fit_calibration needs held-out, labelled validation data"
-            )
-        proba = self.base.predict_proba(batch.raws)
-        kept_rows, y_index = align_in_vocab_rows(batch.labels, self.base.classes_)
-        if not kept_rows:
-            raise DataError(
+        batch = require_labelled_batch(
+            self.base,
+            samples,
+            context="fit_calibration needs held-out, labelled validation data",
+        )
+        proba_kept, y_index = scored_in_vocab_rows(
+            self.base,
+            batch,
+            log_label="calibration",
+            empty_error=(
                 "calibration set has no samples whose gold label is known to the base "
                 "classifier; cannot fit a calibrator"
-            )
-        dropped = len(batch.labels) - len(kept_rows)
-        if dropped:
-            _logger.info(
-                "calibration: dropped %d/%d rows with labels unseen at training time",
-                dropped,
-                len(batch.labels),
-            )
-        self.calibrator.fit(proba[kept_rows], np.asarray(y_index, dtype=int))
+            ),
+        )
+        self.calibrator.fit(proba_kept, y_index)
         return self
 
     # ------------------------------------------------------------ predict
@@ -169,21 +159,6 @@ class CalibratedClassifier:
         return raws_for_task(samples, self.base.task)
 
     # ----------------------------------------------------------- delegates
-
-    @property
-    def classes_(self) -> tuple[str, ...]:
-        """Class-label vocabulary, delegated to the base classifier."""
-        return self.base.classes_
-
-    @property
-    def target(self) -> LabelLevel:
-        """Target label granularity, delegated to the base classifier."""
-        return self.base.target
-
-    @property
-    def task(self) -> TaskType:
-        """Input modality, delegated to the base classifier."""
-        return self.base.task
 
     def labelled_batch(self, samples: Sequence[Sample]) -> LabelledBatch:
         """Pair raw inputs with target-level labels, delegated to the base.

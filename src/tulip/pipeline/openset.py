@@ -26,7 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from tulip.core.exceptions import DataError
 from tulip.evaluation._format import format_metric, markdown_table
-from tulip.pipeline._assembly import raws_for_task
+from tulip.pipeline._assembly import conformal_row_sets, raws_for_task
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -119,14 +119,7 @@ class OpenSetClassifier:
         proba = self.base.predict_proba(raws)
         classes = self.base.classes_
         predictions: list[OpenSetPrediction] = []
-        for row in proba:
-            nonconformity = 1.0 - row
-            included = tuple(
-                classes[index]
-                for index in np.argsort(row)[::-1]  # most probable first
-                if nonconformity[index] <= thresholds[index]
-            )
-            top_index = int(np.argmax(row))
+        for included, top_index, row in conformal_row_sets(proba, classes, thresholds):
             predictions.append(
                 OpenSetPrediction(
                     in_distribution=bool(included),

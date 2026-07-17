@@ -19,14 +19,14 @@ identical pseudo counts and an identical final classifier.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from tulip.core.exceptions import DataError
 from tulip.core.types import DialectLabels, Prediction, Sample, TaskType
 from tulip.labels.taxonomy import LabelLevel
-from tulip.pipeline._assembly import raw_input_of
+from tulip.pipeline._assembly import keep_with_raw
 from tulip.pipeline.classifier import ComponentLike, DialectClassifier
 from tulip.utils.logging import get_logger
 from tulip.utils.seed import set_global_seed
@@ -174,11 +174,7 @@ def self_train(
 
     # Precompute each unlabeled sample's raw input once; drop those without the
     # modality (they can never be predicted or pseudo-labeled).
-    candidates: list[tuple[Sample, Any]] = []
-    for sample in unlabeled:
-        raw = raw_input_of(sample, config.task)
-        if raw is not None:
-            candidates.append((sample, raw))
+    candidates = keep_with_raw(unlabeled, config.task)
     if len(candidates) < len(unlabeled):
         _logger.info(
             "self_train: %d/%d unlabeled samples lack %s input and are skipped",

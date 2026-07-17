@@ -241,13 +241,9 @@ def _teacher_labels(
     separable from gold ones.
     """
     from tulip.core.types import DialectLabels
-    from tulip.pipeline._assembly import raw_input_of
+    from tulip.pipeline._assembly import keep_with_raw
 
-    candidates: list[tuple[Sample, object]] = []
-    for sample in transfer:
-        raw = raw_input_of(sample, task)
-        if raw is not None:
-            candidates.append((sample, raw))
+    candidates = keep_with_raw(transfer, task)
     if not candidates:
         return []
 
@@ -276,9 +272,9 @@ def _agreement(
     task: TaskType,
 ) -> float:
     """Fraction of test inputs on which the student's argmax matches the teacher's."""
-    from tulip.pipeline._assembly import raw_input_of
+    from tulip.pipeline._assembly import keep_with_raw
 
-    raws = [raw for sample in test if (raw := raw_input_of(sample, task)) is not None]
+    raws = [raw for _, raw in keep_with_raw(test, task)]
     if not raws:
         return 0.0
     teacher_preds = teacher.predict_batch(raws)
@@ -306,9 +302,9 @@ def _measure_costs(
     the modality-bearing samples; the accuracy path already skipped the rest.
     """
     from tulip.evaluation.efficiency import measure_efficiency
-    from tulip.pipeline._assembly import raw_input_of
+    from tulip.pipeline._assembly import keep_with_raw
 
-    timed = [sample for sample in test if raw_input_of(sample, teacher.task) is not None]
+    timed = [sample for sample, _ in keep_with_raw(test, teacher.task)]
     teacher_dir = student_dir = None
     if workdir is not None:
         base = Path(workdir)

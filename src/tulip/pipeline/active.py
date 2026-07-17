@@ -31,7 +31,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 from tulip.core.registry import Registry
-from tulip.pipeline._assembly import raw_input_of
+from tulip.pipeline._assembly import keep_with_raw
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -222,11 +222,7 @@ def rank_for_labeling(
         STRATEGIES.create(strategy) if isinstance(strategy, str) else strategy
     )
 
-    kept: list[tuple[Sample, Any]] = []
-    for sample in unlabeled:
-        raw = raw_input_of(sample, classifier.task)
-        if raw is not None:
-            kept.append((sample, raw))
+    kept = keep_with_raw(unlabeled, classifier.task)
     if not kept:
         return []
 

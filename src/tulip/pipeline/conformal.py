@@ -38,22 +38,23 @@ from typing import TYPE_CHECKING
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-from tulip.core.exceptions import ConfigurationError, DataError
-from tulip.pipeline._assembly import align_in_vocab_rows, raws_for_task
-from tulip.utils.logging import get_logger
+from tulip.core.exceptions import ConfigurationError
+from tulip.pipeline._assembly import (
+    _BaseDelegating,
+    conformal_row_sets,
+    raws_for_task,
+    require_labelled_batch,
+    scored_in_vocab_rows,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Any, Self
 
-    from tulip.core.types import Sample, TaskType
-    from tulip.labels.taxonomy import LabelLevel
-    from tulip.pipeline.classifier import LabelledBatch
+    from tulip.core.types import Sample
     from tulip.pipeline.protocols import CalibratableClassifier
 
 __all__ = ["ConformalClassifier", "ConformalPrediction", "ConformalReport"]
-
-_logger = get_logger(__name__)
 
 
 class ConformalPrediction(BaseModel):
@@ -93,7 +94,7 @@ class ConformalReport(BaseModel):
         return 1.0 - self.alpha
 
 
-class ConformalClassifier:
+class ConformalClassifier(_BaseDelegating):
     """Wrap a fitted classifier to emit calibrated prediction sets.
 
     Args:
@@ -133,7 +134,18 @@ class ConformalClassifier:
             DataError: if the calibration set has no usable, in-vocabulary
                 labelled samples.
         """
-        proba, y_index = self._scored_calibration(samples)
+        batch = require_labelled_batch(
+            self.base, samples, context="conformal needs held-out labelled data"
+        )
+        proba, y_index = scored_in_vocab_rows(
+            self.base,
+            batch,
+            log_label="conformal",
+            empty_error=(
+                "calibration set has no samples whose gold label is known to the base "
+                "classifier; cannot compute conformal scores"
+            ),
+        )
         # LAC nonconformity: how far the true class is from certainty.
         scores = 1.0 - proba[np.arange(len(y_index)), y_index]
         if self.mondrian:
@@ -164,19 +176,12 @@ class ConformalClassifier:
         proba = self.base.predict_proba(raws)
         classes = self.base.classes_
         predictions: list[ConformalPrediction] = []
-        for row in proba:
-            nonconformity = 1.0 - row
-            included = [
-                classes[index]
-                for index in np.argsort(row)[::-1]  # most probable first
-                if nonconformity[index] <= thresholds[index]
-            ]
-            top_index = int(np.argmax(row))
+        for included, top_index, row in conformal_row_sets(proba, classes, thresholds):
             top_label = classes[top_index]
             # A conformal set is never empty; fall back to the point estimate.
             predictions.append(
                 ConformalPrediction(
-                    prediction_set=tuple(included) if included else (top_label,),
+                    prediction_set=included if included else (top_label,),
                     top_label=top_label,
                     top_probability=float(row[top_index]),
                     alpha=self.alpha,
@@ -202,7 +207,9 @@ class ConformalClassifier:
             DataError: if no sample carries the modality and an in-vocabulary
                 label.
         """
-        batch = self._require_labelled(samples)
+        batch = require_labelled_batch(
+            self.base, samples, context="conformal needs held-out labelled data"
+        )
         predictions = self.predict_set(batch.raws)
         covered = sum(
             prediction.contains(label)
@@ -241,55 +248,9 @@ class ConformalClassifier:
             raise ConfigurationError("call fit_conformal before predicting")
         return np.full(len(self.base.classes_), self.global_qhat_, dtype=float)
 
-    def _scored_calibration(self, samples: Sequence[Sample]) -> tuple[np.ndarray, np.ndarray]:
-        """Probabilities and true-class indices for in-vocabulary calibration rows."""
-        batch = self._require_labelled(samples)
-        proba = self.base.predict_proba(batch.raws)
-        kept_rows, y_index = align_in_vocab_rows(batch.labels, self.base.classes_)
-        if not kept_rows:
-            raise DataError(
-                "calibration set has no samples whose gold label is known to the base "
-                "classifier; cannot compute conformal scores"
-            )
-        dropped = len(batch.labels) - len(kept_rows)
-        if dropped:
-            _logger.info(
-                "conformal: dropped %d/%d rows with labels unseen at training time",
-                dropped,
-                len(batch.labels),
-            )
-        return proba[kept_rows], np.asarray(y_index, dtype=int)
-
-    def _require_labelled(self, samples: Sequence[Sample]) -> LabelledBatch:
-        """The base's labelled batch, erroring when it is empty."""
-        batch = self.base.labelled_batch(samples)
-        if not batch.raws:
-            raise DataError(
-                f"no usable samples for target {self.base.target.value!r} "
-                f"(skipped {batch.n_skipped}); conformal needs held-out labelled data"
-            )
-        return batch
-
     def _raws_of(self, samples: Sequence[Sample]) -> list[Any]:
         """Extract the base's raw inputs, erroring on a missing modality."""
         return raws_for_task(samples, self.base.task)
-
-    # ----------------------------------------------------------- delegates
-
-    @property
-    def classes_(self) -> tuple[str, ...]:
-        """Class-label vocabulary, delegated to the base classifier."""
-        return self.base.classes_
-
-    @property
-    def target(self) -> LabelLevel:
-        """Target label granularity, delegated to the base classifier."""
-        return self.base.target
-
-    @property
-    def task(self) -> TaskType:
-        """Input modality, delegated to the base classifier."""
-        return self.base.task
 
     def __repr__(self) -> str:
         return (
