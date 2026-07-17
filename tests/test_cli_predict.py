@@ -74,3 +74,32 @@ def test_explain_global_over_a_corpus(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.output
     json.loads(result.output)  # a well-formed report
+
+
+def test_contrast_two_dialects(tmp_path: Path) -> None:
+    corpus = write_manifest_corpus(tmp_path / "corpus", speakers=6, variants=3)
+    result = runner.invoke(
+        app,
+        [
+            "contrast",
+            str(corpus / "manifest.csv"),
+            "podhale",
+            "silesia",
+            "--min-support",
+            "3",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.output)
+    assert report["dialect_a"] == "podhale" and report["dialect_b"] == "silesia"
+    assert report["features"], "expected some distinguishing features"
+
+
+def test_contrast_rejects_unknown_level(tmp_path: Path) -> None:
+    corpus = write_manifest_corpus(tmp_path / "corpus", speakers=4, variants=2)
+    result = runner.invoke(
+        app, ["contrast", str(corpus / "manifest.csv"), "podhale", "silesia", "--level", "bogus"]
+    )
+    assert result.exit_code != 0
+    assert "unknown level" in result.output

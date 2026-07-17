@@ -127,6 +127,66 @@ def explain_global(
     )
 
 
+@app.command()
+@_tulip_errors
+def contrast(
+    data: Path = typer.Argument(..., help="A labelled corpus to analyse (jsonl/csv/...)."),
+    dialect_a: str = typer.Argument(
+        ..., help="First dialect label (positive log-odds favours it)."
+    ),
+    dialect_b: str = typer.Argument(..., help="Second dialect label."),
+    level: str = typer.Option(
+        "dialect", "--level", help="Gold label level the two labels are read at: dialect | family."
+    ),
+    top_k: int = typer.Option(
+        10, "--top-k", min=1, help="Features shown per family and direction."
+    ),
+    min_support: int = typer.Option(
+        5,
+        "--min-support",
+        min=1,
+        help="Minimum documents a feature must occur in to be contrasted.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+    out: Path | None = typer.Option(None, "--out", help="Also write the report JSON here."),
+) -> None:
+    """Rank the linguistic features that most distinguish two dialects.
+
+    Answers the dialectology question a leaderboard cannot: which lexical markers,
+    phonological isoglosses, and morphological endings separate one dialect from
+    another, in which direction, and by how much. The analysis is model-free (it
+    reads the gold-labelled text through the marker lexicon and isogloss rules) and
+    reports each feature's smoothed log-odds effect size with a Holm-corrected
+    two-proportion test. Use `--level family` to contrast, for example, silesian
+    against standard.
+    """
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.data import read_samples
+    from tulip.explain.contrast import contrast_dialects
+    from tulip.labels.taxonomy import LabelLevel
+
+    try:
+        label_level = LabelLevel(level)
+    except ValueError as exc:
+        allowed = ", ".join(member.value for member in LabelLevel)
+        raise ConfigurationError(f"unknown level {level!r}; use one of: {allowed}") from exc
+
+    report = contrast_dialects(
+        list(read_samples(data)),
+        dialect_a,
+        dialect_b,
+        level=label_level,
+        min_support=min_support,
+    )
+    _emit_report(
+        report,
+        json_output=json_output,
+        out=out,
+        saved_label="contrast report",
+        markdown=report.to_markdown(top_k=top_k),
+    )
+
+
 def _require_input_matches_task(classifier: Any, *, text: str | None, audio: Path | None) -> None:
     """Reject a text/audio input that mismatches the model's modality.
 

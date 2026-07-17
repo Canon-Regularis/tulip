@@ -16,6 +16,7 @@ from tulip.explain.aggregate import (
     PhenomenonFrequency,
     dataset_evidence,
 )
+from tulip.explain.contrast import ContrastFeature, ContrastReport, contrast_dialects
 from tulip.explain.registry import EXPLAINERS, get_explainer
 
 
@@ -35,9 +36,12 @@ _register_builtins()
 __all__ = [
     "EXPLAINERS",
     "ClassCount",
+    "ContrastFeature",
+    "ContrastReport",
     "FamilyEvidence",
     "GlobalEvidenceReport",
     "PhenomenonFrequency",
+    "contrast_dialects",
     "dataset_evidence",
     "get_explainer",
 ]
