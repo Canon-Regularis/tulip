@@ -3,17 +3,38 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from rich.table import Table
 
 from tulip.cli._context import _console, _read_json_mapping, _tulip_errors, registry_app
 
+if TYPE_CHECKING:
+    from tulip.deploy import Stage
+
 _DEFAULT_REGISTRY_ROOT = Path("artifacts/registry")
 
 
 def _registry_option() -> Path:
     return typer.Option(_DEFAULT_REGISTRY_ROOT, "--registry", help="Registry root directory.")
+
+
+def _parse_stage(value: str) -> Stage:
+    """Parse a ``--stage`` value into a :class:`Stage`, or raise a clean error.
+
+    Mirrors how the explain commands validate ``--level``: an unknown value
+    raises :class:`ConfigurationError` naming the valid stages, instead of leaking
+    the raw ``ValueError`` from ``Stage(value)`` past the CLI error boundary.
+    """
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.deploy import Stage
+
+    try:
+        return Stage(value)
+    except ValueError as exc:
+        options = ", ".join(member.value for member in Stage)
+        raise ConfigurationError(f"unknown stage {value!r}; choose from: {options}") from exc
 
 
 @registry_app.command("add")
@@ -29,11 +50,11 @@ def registry_add(
     registry: Path = _registry_option(),
 ) -> None:
     """Register a saved model artifact under a name and version (content-addressed)."""
-    from tulip.deploy import ModelRegistry, Stage
+    from tulip.deploy import ModelRegistry
 
     metrics = _report_metrics(report) if report is not None else None
     entry = ModelRegistry(registry).add(
-        model_dir, name=name, version=version, stage=Stage(stage), metrics=metrics
+        model_dir, name=name, version=version, stage=_parse_stage(stage), metrics=metrics
     )
     _console.print(
         f"[green]registered {entry.name}@{entry.version}[/green] "
@@ -50,9 +71,9 @@ def registry_promote(
     registry: Path = _registry_option(),
 ) -> None:
     """Promote a version to a stage (production archives the previous production)."""
-    from tulip.deploy import ModelRegistry, Stage
+    from tulip.deploy import ModelRegistry
 
-    entry = ModelRegistry(registry).promote(name, version, stage=Stage(stage))
+    entry = ModelRegistry(registry).promote(name, version, stage=_parse_stage(stage))
     _console.print(f"[green]{entry.name}@{entry.version} is now {entry.stage.value}[/green]")
 
 

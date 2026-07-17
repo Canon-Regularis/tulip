@@ -8,7 +8,7 @@ from typing import Any
 import typer
 from rich.table import Table
 
-from tulip.cli._context import _console, _tulip_errors, app
+from tulip.cli._context import _console, _emit_report, _tulip_errors, app
 from tulip.core.types import Prediction, TaskType
 
 
@@ -118,13 +118,13 @@ def explain_global(
         raise ConfigurationError(f"unknown level {level!r}; use one of: {allowed}") from exc
 
     report = dataset_evidence(read_samples(data), level=label_level, name=str(data))
-    if out is not None:
-        report.save(out)
-        _console.print(f"[green]evidence report written to {out}[/green]")
-    if json_output:
-        _console.print_json(report.model_dump_json())
-    else:
-        _console.print(report.to_markdown(top_k=top_k))
+    _emit_report(
+        report,
+        json_output=json_output,
+        out=out,
+        saved_label="evidence report",
+        markdown=report.to_markdown(top_k=top_k),
+    )
 
 
 def _require_input_matches_task(classifier: Any, *, text: str | None, audio: Path | None) -> None:

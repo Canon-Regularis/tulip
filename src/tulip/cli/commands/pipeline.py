@@ -11,7 +11,7 @@ from pathlib import Path
 import typer
 from rich.table import Table
 
-from tulip.cli._context import _console, _tulip_errors, app
+from tulip.cli._context import _console, _emit_report, _parse_number_csv, _tulip_errors, app
 
 
 @app.command("learning-curve")
@@ -36,23 +36,11 @@ def learning_curve_command(
     held-out test split.
     """
     from tulip.config import load_experiment_config
-    from tulip.core.exceptions import ConfigurationError
     from tulip.pipeline import learning_curve
 
-    try:
-        parsed = tuple(float(part) for part in fractions.split(",") if part.strip())
-    except ValueError as exc:
-        raise ConfigurationError(
-            f"--fractions must be comma-separated numbers, got {fractions!r}"
-        ) from exc
+    parsed = _parse_number_csv(fractions, float, name="fractions")
     report = learning_curve(load_experiment_config(config_path), fractions=parsed, seed=seed)
-    if out is not None:
-        report.save(out)
-        _console.print(f"[green]learning curve written to {out}[/green]")
-    if json_output:
-        _console.print_json(report.model_dump_json())
-    else:
-        _console.print(report.to_markdown())
+    _emit_report(report, json_output=json_output, out=out, saved_label="learning curve")
 
 
 @app.command("active-loop")
@@ -89,13 +77,7 @@ def active_loop_command(
         rounds=rounds,
         seed=seed,
     )
-    if out is not None:
-        report.save(out)
-        _console.print(f"[green]active-loop curve written to {out}[/green]")
-    if json_output:
-        _console.print_json(report.model_dump_json())
-    else:
-        _console.print(report.to_markdown())
+    _emit_report(report, json_output=json_output, out=out, saved_label="active-loop curve")
 
 
 @app.command()
@@ -182,7 +164,7 @@ def crossval(
     from tulip.pipeline import CVConfig, run_cross_validation
 
     config = load_experiment_config(config_path)
-    seed_tuple = tuple(int(part) for part in seeds.split(",") if part.strip())
+    seed_tuple = _parse_number_csv(seeds, int, name="seeds")
     report = run_cross_validation(config, CVConfig(k=k, seeds=seed_tuple), n_jobs=jobs)
 
     table = Table(title=f"cross-validation {config.model.name!r} ({report.target})")
@@ -254,7 +236,7 @@ def robustness(
     from tulip.core.exceptions import ConfigurationError
     from tulip.robustness import PerturbationConfig, run_robustness
 
-    level_tuple = tuple(float(part) for part in levels.split(",") if part.strip())
+    level_tuple = _parse_number_csv(levels, float, name="levels")
     if not level_tuple or any(not 0.0 <= level <= 1.0 for level in level_tuple):
         raise ConfigurationError("--levels must be non-empty and within [0, 1]")
     names = perturbation or ["dialect_intensity_dial"]
@@ -452,13 +434,7 @@ def distill(
         config=DistillationConfig(min_teacher_confidence=min_confidence),
         workdir=workdir,
     )
-    if out is not None:
-        report.save(out)
-        _console.print(f"[green]distillation report written to {out}[/green]")
-    if json_output:
-        _console.print_json(report.model_dump_json())
-    else:
-        _console.print(report.to_markdown())
+    _emit_report(report, json_output=json_output, out=out, saved_label="distillation report")
 
 
 @app.command("isogloss-diagnostics")
@@ -488,10 +464,4 @@ def isogloss_diagnostics_command(
     report = isogloss_diagnostics(
         classifier, list(read_samples(data)), rules_path=rules, min_support=min_support
     )
-    if out is not None:
-        report.save(out)
-        _console.print(f"[green]isogloss diagnostics written to {out}[/green]")
-    if json_output:
-        _console.print_json(report.model_dump_json())
-    else:
-        _console.print(report.to_markdown())
+    _emit_report(report, json_output=json_output, out=out, saved_label="isogloss diagnostics")
