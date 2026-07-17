@@ -80,18 +80,12 @@ def hub_readme(entry: RegistryEntry, artifact_dir: Path, *, repo_id: str) -> str
     (version, stage, digest, recorded metrics), and a load snippet for the
     given repository id.
     """
-    from tulip.core.exceptions import DataError
+    from tulip._jsonio import read_json_object
     from tulip.evaluation.cards import model_card
     from tulip.models.persistence import METADATA_FILENAME
-    from tulip.utils.io import read_json
 
     sidecar_path = artifact_dir / METADATA_FILENAME
-    try:
-        sidecar = read_json(sidecar_path)
-    except (OSError, ValueError) as exc:
-        raise DataError(f"artifact sidecar at {sidecar_path} is not readable JSON: {exc}") from exc
-    if not isinstance(sidecar, dict):
-        raise DataError(f"artifact sidecar at {sidecar_path} must be a JSON object")
+    sidecar = read_json_object(sidecar_path, what="artifact sidecar")
 
     stored = sidecar.get("metadata", {})
     is_dialect_classifier = isinstance(stored, dict) and stored.get("kind") == "DialectClassifier"

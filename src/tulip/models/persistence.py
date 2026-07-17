@@ -16,13 +16,13 @@ for experiment tracking.
 
 from __future__ import annotations
 
-import json
 import platform
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import joblib
 
+from tulip._jsonio import read_json_object
 from tulip._serialize import sorted_json_text, tulip_version
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.utils.logging import get_logger
@@ -163,15 +163,7 @@ def load_model(path: Path | str) -> tuple[Any, dict[str, Any]]:
     if missing:
         raise DataError(f"model artifact at {target} is incomplete: missing {', '.join(missing)}")
 
-    try:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
-        raise DataError(f"corrupt metadata sidecar at {metadata_path}: {exc}") from exc
-    if not isinstance(metadata, dict):
-        raise DataError(
-            f"corrupt metadata sidecar at {metadata_path}: "
-            f"expected a JSON object, got {type(metadata).__name__}"
-        )
+    metadata = read_json_object(metadata_path, what="metadata sidecar")
 
     try:
         model = joblib.load(model_path)

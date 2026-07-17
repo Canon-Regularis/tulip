@@ -23,7 +23,7 @@ from rich.console import Console
 from rich.table import Table
 
 from tulip import __version__
-from tulip.core.exceptions import TulipError
+from tulip.core.exceptions import ConfigurationError, TulipError
 from tulip.utils.logging import configure_logging, get_logger
 
 app = typer.Typer(
@@ -122,6 +122,71 @@ def _print_frame(frame: Any, title: str) -> None:
     _console.print(table)
 
 
+_NumberT = TypeVar("_NumberT", int, float)
+
+
+def _parse_number_csv(
+    value: str, cast: Callable[[str], _NumberT], *, name: str
+) -> tuple[_NumberT, ...]:
+    """Parse a comma-separated numeric CLI option, or raise a clean error.
+
+    Empty tokens are ignored, so trailing commas and stray spaces are tolerated.
+    A token ``cast`` rejects raises :class:`ConfigurationError` naming the option,
+    rather than leaking a raw ``ValueError`` past the CLI error boundary.
+
+    Args:
+        value: The raw option string, e.g. ``"0.1,0.5,1.0"``.
+        cast: Per-token parser, ``int`` or ``float``.
+        name: The option name without dashes, e.g. ``"fractions"``; it names the
+            option in the error message.
+
+    Returns:
+        The parsed numbers, in input order.
+
+    Raises:
+        ConfigurationError: if any non-empty token fails to parse.
+    """
+    try:
+        return tuple(cast(part) for part in value.split(",") if part.strip())
+    except ValueError as exc:
+        raise ConfigurationError(
+            f"--{name} must be comma-separated numbers, got {value!r}"
+        ) from exc
+
+
+def _emit_report(
+    report: Any,
+    *,
+    json_output: bool,
+    out: Path | None = None,
+    saved_label: str | None = None,
+    markdown: str | None = None,
+) -> None:
+    """Save an optional report file, then print it as JSON or markdown.
+
+    The shared tail of the pipeline report commands: when ``out`` is set, save the
+    report there and note it; then print the report as JSON (``--json``) or as its
+    rendered markdown.
+
+    Args:
+        report: A report exposing ``save``, ``model_dump_json``, and
+            ``to_markdown``.
+        json_output: When ``True``, print JSON instead of markdown.
+        out: When set, ``report.save(out)`` runs and a confirmation prints.
+        saved_label: The noun in the "written to" confirmation; used only when
+            ``out`` is set.
+        markdown: Pre-rendered markdown to print instead of
+            ``report.to_markdown()`` (e.g. a ``to_markdown(top_k=...)`` variant).
+    """
+    if out is not None:
+        report.save(out)
+        _console.print(f"[green]{saved_label} written to {out}[/green]")
+    if json_output:
+        _console.print_json(report.model_dump_json())
+    else:
+        _console.print(markdown if markdown is not None else report.to_markdown())
+
+
 def _read_json_mapping(path: Path, *, what: str) -> dict[str, Any]:
     """Read a JSON object, converting IO/parse failures into a clean ``DataError``.
 
@@ -131,15 +196,9 @@ def _read_json_mapping(path: Path, *, what: str) -> dict[str, Any]:
     CLI already fails with one clean ``error:`` line; this makes the card
     commands behave the same.
     """
+    from tulip._jsonio import read_json_object
     from tulip.core.exceptions import DataError
-    from tulip.utils.io import read_json
 
     if not path.is_file():
         raise DataError(f"{what} not found: {path}")
-    try:
-        payload = read_json(path)
-    except (OSError, ValueError) as exc:  # JSONDecodeError subclasses ValueError
-        raise DataError(f"{what} at {path} is not readable JSON: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise DataError(f"{what} at {path} must be a JSON object, got {type(payload).__name__}")
-    return payload
+    return read_json_object(path, what=what)

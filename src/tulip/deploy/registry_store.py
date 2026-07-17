@@ -31,6 +31,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from tulip._jsonio import read_json_object
 from tulip._serialize import write_sorted_json
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.deploy._registry_model import (
@@ -45,7 +46,6 @@ from tulip.deploy._registry_model import (
     artifact_digest,
 )
 from tulip.models.persistence import METADATA_FILENAME
-from tulip.utils.io import read_json
 from tulip.utils.logging import get_logger
 
 __all__ = [
@@ -241,10 +241,7 @@ class ModelRegistry:
         path = Path(model_dir) / METADATA_FILENAME
         if not path.is_file():
             raise DataError(f"{Path(model_dir)} is not a model artifact (no {METADATA_FILENAME})")
-        data = read_json(path)
-        if not isinstance(data, dict):
-            raise DataError(f"corrupt sidecar at {path}: expected a JSON object")
-        return data
+        return read_json_object(path, what="model sidecar")
 
     def _index_path(self) -> Path:
         return self.root / REGISTRY_INDEX_NAME
@@ -253,12 +250,10 @@ class ModelRegistry:
         path = self._index_path()
         if not path.is_file():
             return _Index()
-        data = read_json(path)
-        if not isinstance(data, dict) or "entries" not in data:
+        data = read_json_object(path, what="registry index")
+        if "entries" not in data:
             raise DataError(f"{path} is not a tulip registry index")
         return _Index.model_validate(data)
 
     def _save_index(self, index: _Index) -> None:
         write_sorted_json(self._index_path(), index.model_dump(mode="json"))
-
-

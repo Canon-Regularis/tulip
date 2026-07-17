@@ -32,12 +32,12 @@ edits this classifier.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from tulip._jsonio import read_json_object
 from tulip._serialize import write_sorted_json
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.types import Prediction, TaskType
@@ -281,15 +281,11 @@ class HierarchicalDialectClassifier:
         sidecar_path = root / _SIDECAR_NAME
         if not sidecar_path.is_file():
             raise DataError(f"no hierarchical classifier at {root}: missing {_SIDECAR_NAME}")
-        try:
-            raw = json.loads(sidecar_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise DataError(f"corrupt hierarchical sidecar at {sidecar_path}: {exc}") from exc
-        if not isinstance(raw, dict) or raw.get("kind") != _ARTIFACT_KIND:
-            found = raw.get("kind") if isinstance(raw, dict) else None
+        raw = read_json_object(sidecar_path, what="hierarchical sidecar")
+        if raw.get("kind") != _ARTIFACT_KIND:
             raise DataError(
                 f"artifact at {root} was not saved by HierarchicalDialectClassifier.save() "
-                f"(kind={found!r})"
+                f"(kind={raw.get('kind')!r})"
             )
         try:
             config = HierarchicalConfig.model_validate(raw.get("config", {}))

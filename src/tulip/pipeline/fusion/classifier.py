@@ -31,12 +31,12 @@ inject a cheap deterministic audio stub instead of training a real speech model.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
+from tulip._jsonio import read_json_object
 from tulip._serialize import write_sorted_json
 from tulip.core.exceptions import ConfigurationError, DataError
 from tulip.core.types import Prediction, TaskType
@@ -273,12 +273,7 @@ class MultimodalClassifier:
         sidecar_path = source / cls._SIDECAR
         if not sidecar_path.is_file():
             raise DataError(f"no MultimodalClassifier artifact at {source}: missing {cls._SIDECAR}")
-        try:
-            sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise DataError(f"corrupt fusion sidecar at {sidecar_path}: {exc}") from exc
-        if not isinstance(sidecar, dict):
-            raise DataError(f"corrupt fusion sidecar at {sidecar_path}: expected a JSON object")
+        sidecar = read_json_object(sidecar_path, what="fusion sidecar")
         if sidecar.get("kind") != cls._KIND:
             raise DataError(
                 f"artifact at {source} was not saved by MultimodalClassifier.save() "
