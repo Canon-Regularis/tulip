@@ -6,7 +6,10 @@ Polish Dialect Typology and Regional Speech Classification Analysis System
 and raw audio. It gives you classical and deep-learning models behind one API. It
 explains each prediction and can draw it on a map of Poland. It also builds
 reproducible, speaker-disjoint benchmark splits. There is no widely adopted
-benchmark for Polish dialect identification, so tulip provides one.
+benchmark for Polish dialect identification, so tulip provides the framework and
+the protocol to build one: the committed leaderboard runs on a synthetic fixture,
+so its numbers are illustrative rather than real accuracy, and the real benchmark
+runs on locally acquired corpora (see docs/benchmark.md).
 
 ## What it does
 
@@ -20,8 +23,10 @@ benchmark for Polish dialect identification, so tulip provides one.
   examples, and named dialect phenomena.
 - **Visualisation.** Interactive maps, confidence heatmaps, probability charts,
   and embedding plots.
-- **Reproducible benchmarks.** Frozen speaker-disjoint splits, audited manifests,
-  and a committed leaderboard.
+- **Reproducible benchmarking protocol.** Frozen speaker-disjoint splits, audited
+  manifests, a datasheet generator, and a committed leaderboard that runs on a
+  synthetic fixture. The real benchmark runs on locally acquired corpora and
+  commits only digests and aggregate metrics (see docs/benchmark.md).
 - **Uncertainty.** Every prediction carries the full probability distribution,
   top-k, and optional abstention.
 

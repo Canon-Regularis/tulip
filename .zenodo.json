@@ -5,7 +5,7 @@
       "name": "Miezaniec, Matthew"
     }
   ],
-  "description": "tulip detects Polish dialects from written text, transcribed speech, and raw audio. It offers classical and deep-learning models behind one API, per prediction explanations, and reproducible speaker-disjoint benchmark splits with a committed leaderboard.",
+  "description": "tulip detects Polish dialects from written text, transcribed speech, and raw audio. It offers classical and deep-learning models behind one API, per prediction explanations, and a reproducible, speaker-disjoint benchmarking protocol with a committed synthetic reference fixture.",
   "keywords": [
     "nlp",
     "dialectology",

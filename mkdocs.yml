@@ -54,6 +54,7 @@ nav:
   - Guide:
       - Quickstart: guide/quickstart.md
       - Synthetic corpora: guide/synthetic-corpora.md
+      - Real dialect benchmark: guide/real-corpus.md
       - Serving: guide/serving.md
   - API Reference:
       - Overview: reference/index.md
@@ -65,6 +66,7 @@ nav:
       - Robustness: reference/robustness.md
       - Deployment &amp; serving: reference/deploy.md
   - Project:
+      - Benchmark: benchmark.md
       - Architecture: architecture.md
       - Datasets: datasets.md
       - Development: development.md
