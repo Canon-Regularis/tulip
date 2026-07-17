@@ -128,14 +128,13 @@ def test_config_rejects_unknown_fields() -> None:
 def test_cli_data_transcribe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from typer.testing import CliRunner
 
-    import tulip.data.transcribe as transcribe_module
     from tulip.cli.app import app
 
     # A tiny audio corpus as a samples JSONL.
     corpus = tmp_path / "audio.jsonl"
     samples = [_sample("a", _clip(tmp_path, "a")), _sample("b", _clip(tmp_path, "b"))]
     corpus.write_text("\n".join(s.model_dump_json() for s in samples) + "\n", encoding="utf-8")
-    monkeypatch.setattr(transcribe_module, "_build_whisper_asr", lambda config: _FakeAsr())
+    monkeypatch.setattr("tulip.data.transcribe._build_whisper_asr", lambda config: _FakeAsr())
 
     result = CliRunner().invoke(
         app,

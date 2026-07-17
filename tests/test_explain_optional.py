@@ -108,7 +108,7 @@ def test_attention_rejects_non_transformer_pipelines(fitted_pipeline: Pipeline) 
 
 
 def _tiny_bert(tmp_path):  # -> duck-typed TransformerTextClassifier stand-in
-    torch = pytest.importorskip("torch")  # noqa: F841
+    pytest.importorskip("torch")  # transformers needs a torch backend present
     transformers = pytest.importorskip("transformers")
 
     pieces = [

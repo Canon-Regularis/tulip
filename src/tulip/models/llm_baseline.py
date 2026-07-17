@@ -100,9 +100,9 @@ def build_system_prompt(classes: Sequence[str]) -> str:
     """
     lines = [
         "You are a dialectologist classifying a short Polish text into exactly one "
-        "regional dialect.",
+        + "regional dialect.",
         "Choose the single best label id from this list. Reply with only the label id, "
-        "nothing else.",
+        + "nothing else.",
         "",
         "Labels:",
     ]

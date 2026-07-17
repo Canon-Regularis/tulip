@@ -93,7 +93,7 @@ def test_prediction_map_abstained_shows_note_and_faint_regions() -> None:
     html = _rendered(prediction_map(prediction))
     assert "abstained" in html
     # Every catalogued region is drawn faintly, not just the predicted ones.
-    for region in RegionalDialect:
+    for region in list(RegionalDialect):
         assert display_name(region) in html
 
 
@@ -116,7 +116,7 @@ def test_confidence_heatmap_includes_all_catalogued_regions() -> None:
     fmap = confidence_heatmap(_region_prediction())
     assert isinstance(fmap, folium.Map)
     html = _rendered(fmap)
-    for region in RegionalDialect:
+    for region in list(RegionalDialect):
         assert display_name(region) in html
     assert "61.0%" in html
 

@@ -7,6 +7,8 @@ registry never touches torch/transformers/speechbrain/fasttext.
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from tulip.models import MODELS
@@ -23,7 +25,7 @@ from tulip.models.neural_text import TEXT_CHECKPOINTS, TransformerTextClassifier
 def test_documented_surface_importable_from_subsystem_root() -> None:
     # architecture.md contracts these names on tulip.models, like every
     # sibling subsystem's root re-exports.
-    import tulip.models as models_root
+    models_root = sys.modules["tulip.models"]
 
     for name in (
         "EmbeddingSpeechClassifier",

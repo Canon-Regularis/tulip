@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -174,7 +175,7 @@ def test_all_strategies_are_registered() -> None:
 def test_intensity_extractor_is_imported_lazily() -> None:
     # The extractor is imported inside intensity_gated's score(), not at module
     # level, so it is never a module global of active.py.
-    import tulip.pipeline.active as active
+    active = sys.modules["tulip.pipeline.active"]
 
     assert not hasattr(active, "DialectIntensityExtractor")
 

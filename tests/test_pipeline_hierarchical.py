@@ -142,7 +142,7 @@ class TestBackoffLevels:
         # Each backed-off label is a genuine DialectFamily value.
         for prediction in predictions:
             assert prediction.label in FAMILY_VALUES
-            assert DialectFamily(prediction.label) in DialectFamily
+            assert DialectFamily(prediction.label).value == prediction.label
 
     def test_backoff_walk_returns_one_prediction_per_sample(
         self, fitted_backoff: HierarchicalDialectClassifier, corpus: list
