@@ -24,7 +24,7 @@ from rich.table import Table
 
 from tulip import __version__
 from tulip.core.exceptions import ConfigurationError, TulipError
-from tulip.utils.logging import configure_logging, get_logger
+from tulip.utils.logging import configure_logging
 
 if TYPE_CHECKING:
     from tulip.labels.taxonomy import LabelLevel
@@ -57,7 +57,6 @@ app.add_typer(explainers_app, name="explainers")
 
 _console = Console()
 _errors = Console(stderr=True, style="bold red")
-_logger = get_logger(__name__)
 
 _CommandT = TypeVar("_CommandT", bound=Callable[..., None])
 

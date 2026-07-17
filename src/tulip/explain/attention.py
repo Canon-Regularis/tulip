@@ -26,10 +26,7 @@ from tulip.core.exceptions import ConfigurationError
 from tulip.core.types import Explanation, TokenAttribution
 from tulip.explain._shared import as_text
 from tulip.explain.registry import EXPLAINERS
-from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
-
-logger = get_logger(__name__)
 
 __all__ = ["AttentionExplainer"]
 

@@ -28,14 +28,11 @@ import re
 import unicodedata
 from typing import TYPE_CHECKING, Any
 
-from tulip.utils.logging import get_logger
-
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
     from tulip.core.types import Sample
 
-_logger = get_logger(__name__)
 
 # Typographic quotes -> ASCII. Written as escapes to keep the source
 # unambiguous (and ruff RUF001-clean).

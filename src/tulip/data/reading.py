@@ -17,12 +17,10 @@ from tulip.core.exceptions import DataError
 from tulip.core.types import Sample
 from tulip.data.manifest import read_manifest
 from tulip.utils.io import read_jsonl
-from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-_logger = get_logger(__name__)
 
 __all__ = ["read_samples"]
 

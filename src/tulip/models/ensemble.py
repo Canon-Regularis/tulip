@@ -34,12 +34,10 @@ from tulip.core.exceptions import ConfigurationError
 from tulip.models._factory import pop_seed
 from tulip.models.classical import DEFAULT_SEED
 from tulip.models.registry import MODELS
-from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-logger = get_logger(__name__)
 
 __all__ = ["make_stacking", "make_voting"]
 

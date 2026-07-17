@@ -27,7 +27,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from tulip.core.exceptions import DataError
 from tulip.evaluation._format import format_metric, markdown_table
 from tulip.pipeline._assembly import conformal_row_sets, raws_for_task
-from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -39,8 +38,6 @@ if TYPE_CHECKING:
     from tulip.pipeline.protocols import CalibratableClassifier
 
 __all__ = ["OpenSetClassifier", "OpenSetPrediction", "OpenSetReport"]
-
-_logger = get_logger(__name__)
 
 
 class OpenSetPrediction(BaseModel):

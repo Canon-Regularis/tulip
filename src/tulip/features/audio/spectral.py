@@ -21,13 +21,11 @@ from tulip.features.audio.loading import DEFAULT_SAMPLE_RATE
 from tulip.features.audio.pooling import DEFAULT_STATS
 from tulip.features.registries import AUDIO_FEATURES
 from tulip.utils import optional
-from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from types import ModuleType
 
-logger = get_logger(__name__)
 
 #: STFT window size in samples (64 ms at 16 kHz).
 DEFAULT_N_FFT = 1024
