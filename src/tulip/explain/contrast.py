@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, Field
 
 from tulip._serialize import format_metric, markdown_table, save_report
+from tulip._stats import holm_correct, two_proportion_p
 from tulip.core.exceptions import ConfigurationError
 from tulip.labels.taxonomy import LabelLevel, display_name
 
@@ -201,11 +202,11 @@ def contrast_dialects(
         count_a, count_b = present_a[feature], present_b[feature]
         if count_a + count_b < min_support:
             continue
-        p_value = _two_proportion_p(count_a, n_a, count_b, n_b)
+        p_value = two_proportion_p(count_a, n_a, count_b, n_b)
         category, name = feature
         scored.append((p_value, category, name, count_a, count_b))
 
-    holm = _holm([item[0] for item in scored])
+    holm = holm_correct([item[0] for item in scored])
     features = [
         _build_feature(category, name, count_a, count_b, n_a, n_b, dialect_a, dialect_b, p, p_holm)
         for (p, category, name, count_a, count_b), p_holm in zip(scored, holm, strict=True)
@@ -304,28 +305,6 @@ def _log_odds_ratio(count_a: int, n_a: int, count_b: int, n_b: int) -> float:
     a_present, a_absent = count_a + 0.5, n_a - count_a + 0.5
     b_present, b_absent = count_b + 0.5, n_b - count_b + 0.5
     return math.log((a_present * b_absent) / (a_absent * b_present))
-
-
-def _two_proportion_p(count_a: int, n_a: int, count_b: int, n_b: int) -> float:
-    """Two-sided pooled two-proportion z-test p-value (normal tail via erfc)."""
-    pool = (count_a + count_b) / (n_a + n_b)
-    variance = pool * (1.0 - pool) * (1.0 / n_a + 1.0 / n_b)
-    if variance <= 0.0:
-        return 1.0
-    z = (count_a / n_a - count_b / n_b) / math.sqrt(variance)
-    return math.erfc(abs(z) / math.sqrt(2.0))
-
-
-def _holm(p_values: Sequence[float]) -> list[float]:
-    """Holm-Bonferroni step-down adjustment, preserving input order."""
-    order = sorted(range(len(p_values)), key=lambda index: p_values[index])
-    adjusted = [0.0] * len(p_values)
-    running = 0.0
-    remaining = len(p_values)
-    for rank, index in enumerate(order):
-        running = max(running, min(1.0, (remaining - rank) * p_values[index]))
-        adjusted[index] = running
-    return adjusted
 
 
 def _feature_table(features: Sequence[ContrastFeature], dialect_a: str, dialect_b: str) -> str:

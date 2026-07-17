@@ -9,7 +9,6 @@ import pytest
 from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation.predictions import PredictionRecord, SplitPredictions
 from tulip.evaluation.significance import (
-    _holm,
     mcnemar_exact,
     paired_significance,
 )
@@ -41,16 +40,6 @@ class TestMcNemarExact:
     def test_rejects_mismatched_lengths(self) -> None:
         with pytest.raises(ConfigurationError, match="same length"):
             mcnemar_exact([True], [True, False])
-
-
-class TestHolm:
-    def test_hand_computed_adjustment(self) -> None:
-        # p = [0.01, 0.04, 0.03]; sorted 0.01,0.03,0.04 with factors 3,2,1
-        # -> 0.03, 0.06, 0.06 (monotone), mapped back to input order.
-        assert _holm([0.01, 0.04, 0.03]) == pytest.approx([0.03, 0.06, 0.06])
-
-    def test_empty(self) -> None:
-        assert _holm([]) == []
 
 
 def _model(name: str, y_true: list[str], y_pred: list[str]) -> SplitPredictions:

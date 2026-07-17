@@ -30,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sklearn.metrics import accuracy_score, f1_score
 
 from tulip._serialize import save_report
+from tulip._stats import holm_correct
 from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation._format import format_metric, markdown_table
 
@@ -271,7 +272,7 @@ def paired_significance(
     # All unordered pairs, better-ranked model first; Holm across their p-values.
     pairs = [(ranked[i], ranked[j]) for i in range(len(ranked)) for j in range(i + 1, len(ranked))]
     raw_p = [mcnemar_exact(correct[a], correct[b])[2] for a, b in pairs]
-    holm_p = _holm(raw_p)
+    holm_p = holm_correct(raw_p)
 
     pairwise = tuple(
         _pairwise_test(a, b, y_true, preds, correct, holm, alpha)
@@ -369,20 +370,6 @@ def _mcnemar_p(discordant_a: int, discordant_b: int) -> float:
     k = min(discordant_a, discordant_b)
     tail = sum(math.comb(n, i) for i in range(k + 1)) * (0.5**n)
     return min(1.0, 2.0 * tail)
-
-
-def _holm(p_values: Sequence[float]) -> list[float]:
-    """Holm-Bonferroni step-down adjustment of ``p_values`` (order preserved)."""
-    m = len(p_values)
-    if m == 0:
-        return []
-    order = sorted(range(m), key=lambda i: p_values[i])
-    adjusted = [0.0] * m
-    running = 0.0
-    for rank, index in enumerate(order):
-        running = max(running, (m - rank) * p_values[index])
-        adjusted[index] = min(1.0, running)
-    return adjusted
 
 
 def _clip(value: float) -> float:

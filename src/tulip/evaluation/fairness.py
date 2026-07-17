@@ -8,11 +8,11 @@ the accuracy gap between them, and the min-over-max ratio.
 
 The gap is between two disjoint groups, so the test of whether it is real is an
 unpaired two-proportion z-test, not the paired McNemar the model-vs-model
-significance uses. The normal tail comes from :func:`math.erfc`, so no SciPy is
-added. The per-dimension p-values are Holm-corrected together, reusing the same
-correction as the significance report. A worst group below the support floor is
-flagged and never headlines: its gap is real but noisy, and its test rarely
-clears significance.
+significance uses. That test and the Holm-Bonferroni correction over the
+per-dimension p-values both come from the shared :mod:`tulip._stats` helpers, so
+the fairness report and the significance report cannot disagree on the statistics.
+A worst group below the support floor is flagged and never headlines: its gap is
+real but noisy, and its test rarely clears significance.
 
 Everything is pure over a :class:`~tulip.evaluation.predictions.SplitPredictions`,
 so a report is deterministic and byte-stable, like the error report it extends.
@@ -20,11 +20,11 @@ so a report is deterministic and byte-stable, like the error report it extends.
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tulip._stats import holm_correct, two_proportion_p
 from tulip.evaluation.error_analysis import DEFAULT_LOW_SUPPORT, slice_metrics
 
 if TYPE_CHECKING:
@@ -133,12 +133,12 @@ def fairness_report(
             continue
         worst = min(groups, key=lambda g: (g.accuracy, g.value))
         best = min(groups, key=lambda g: (-g.accuracy, g.value))
-        p_value = _two_proportion_p(
+        p_value = two_proportion_p(
             round(best.accuracy * best.n), best.n, round(worst.accuracy * worst.n), worst.n
         )
         pending.append((dimension, best, worst, p_value))
 
-    adjusted = _holm([p for _, _, _, p in pending])
+    adjusted = holm_correct([p for _, _, _, p in pending])
     dimensions = tuple(
         DisparityMetric(
             dimension=dimension,
@@ -171,24 +171,3 @@ def worst_group_gap(report: FairnessReport) -> DisparityMetric | None:
     reliable = [d for d in report.dimensions if not d.worst_low_support]
     pool = reliable or list(report.dimensions)
     return max(pool, key=lambda d: (d.gap, d.dimension))
-
-
-def _two_proportion_p(correct_a: int, n_a: int, correct_b: int, n_b: int) -> float:
-    """Two-sided unpaired two-proportion z-test p-value (normal approximation)."""
-    if n_a == 0 or n_b == 0:
-        return 1.0
-    pooled = (correct_a + correct_b) / (n_a + n_b)
-    if pooled in (0.0, 1.0):
-        return 1.0  # no variation to separate the groups
-    standard_error = math.sqrt(pooled * (1.0 - pooled) * (1.0 / n_a + 1.0 / n_b))
-    if standard_error == 0.0:
-        return 1.0
-    z = (correct_a / n_a - correct_b / n_b) / standard_error
-    return math.erfc(abs(z) / math.sqrt(2.0))
-
-
-def _holm(p_values: list[float]) -> list[float]:
-    """Holm-Bonferroni adjustment, reusing the significance module's rule."""
-    from tulip.evaluation.significance import _holm as holm
-
-    return holm(p_values)
