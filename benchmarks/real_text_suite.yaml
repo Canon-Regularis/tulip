@@ -7,12 +7,17 @@
 # dialektarium and dgp corpora must be acquired by hand first (a licence-bound
 # step tulip cannot automate; see benchmarks/README.md and docs/datasets.md).
 #
-# Nothing from this suite is committed. Point --out at a local directory:
+# The raw corpora are never committed; only digests and aggregates are. Run the
+# board locally, then commit the four artifact kinds documented in
+# benchmarks/results/real-text-leaderboard/README.md. The full runbook (build,
+# datasheet, report, and the verify-lock reproducibility check) is in
+# docs/guide/real-corpus.md; in short:
 #
 #   tulip leaderboard benchmarks/real_text_suite.yaml --out artifacts/real-text
 #
-# The same classical competitor set as the synthetic suite is used, so once the
-# corpora are present the track needs no heavy or optional dependencies.
+# The classical competitor set runs with no heavy or optional dependencies. The
+# majority baseline is listed first so the table opens with the floor every real
+# model must beat.
 name: real-text-leaderboard
 
 configs:
@@ -20,6 +25,7 @@ configs:
   - benchmarks/configs/real_text_lexical.yaml
 
 models:
+  - majority
   - naive_bayes
   - logistic_regression
   - linear_svm
