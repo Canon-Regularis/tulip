@@ -107,6 +107,10 @@ class LeaderboardSuite(BaseModel):
     configs: list[Path]
     models: list[str] = Field(default_factory=list)
     calibration_bins: int | None = Field(default=None, ge=1)
+    caption: str | None = Field(default=None)
+    """An optional note rendered above the ``leaderboard.md`` table, for example to
+    label a board as a synthetic fixture rather than real accuracy. Presentation
+    only: it never enters ``provenance.json``."""
 
 
 def load_suite(path: Path | str) -> LeaderboardSuite:
@@ -171,7 +175,7 @@ def run_leaderboard(
 
 
 def render_leaderboard_markdown(
-    results: Sequence[BenchmarkResult], *, split: str = DEFAULT_SPLIT
+    results: Sequence[BenchmarkResult], *, split: str = DEFAULT_SPLIT, caption: str | None = None
 ) -> str:
     """Render the deterministic leaderboard table as GitHub-flavoured markdown.
 
@@ -192,9 +196,12 @@ def render_leaderboard_markdown(
     Args:
         results: The benchmark results to rank.
         split: Which split's reports to read from each result.
+        caption: An optional note rendered as a preamble above the table (e.g. a
+            synthetic-fixture disclaimer). Deterministic, so it stays byte-stable.
 
     Returns:
-        A markdown table; unavailable ROC AUC renders as ``n/a``.
+        A markdown table (with the optional caption above it); unavailable ROC AUC
+        renders as ``n/a``.
     """
     ranked = sorted(
         results,
@@ -221,7 +228,10 @@ def render_leaderboard_markdown(
                 str(result.n_train),
             )
         )
-    return markdown_table(_LEADERBOARD_HEADERS, rows)
+    table = markdown_table(_LEADERBOARD_HEADERS, rows)
+    if caption and caption.strip():
+        return f"{caption.strip()}\n\n{table}"
+    return table
 
 
 def write_leaderboard(
@@ -265,7 +275,7 @@ def write_leaderboard(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    markdown = render_leaderboard_markdown(results)
+    markdown = render_leaderboard_markdown(results, caption=suite.caption)
     write_markdown(out_dir / LEADERBOARD_MD, markdown)
 
     save_benchmark(results, out_dir / LEADERBOARD_JSON)
