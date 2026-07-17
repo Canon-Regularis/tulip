@@ -77,9 +77,7 @@ def test_card_benchmark(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     out = tmp_path / "benchmark.md"
-    result = runner.invoke(
-        app, ["card", "benchmark", str(board), "--synthetic", "--out", str(out)]
-    )
+    result = runner.invoke(app, ["card", "benchmark", str(board), "--synthetic", "--out", str(out)])
     assert result.exit_code == 0, result.output
     doc = out.read_text(encoding="utf-8")
     assert "## Label hierarchy" in doc and "## Protocol" in doc and "## Results" in doc

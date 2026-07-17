@@ -151,11 +151,10 @@ class TestRunBenchmark:
         parallel = run_benchmark(experiment_config, models=models, n_jobs=2)
 
         def board_view(results: list) -> list:
-            return [
-                (r.model, r.n_train, r.n_test, r.reports["test"].model_dump()) for r in results
-            ]
+            return [(r.model, r.n_train, r.n_test, r.reports["test"].model_dump()) for r in results]
 
         assert board_view(sequential) == board_view(parallel)
+
     @pytest.mark.parametrize("path", sorted(CONFIGS_DIR.glob("*.yaml")), ids=lambda p: p.name)
     def test_every_shipped_config_validates(self, path: Path) -> None:
         config = load_experiment_config(path)

@@ -111,9 +111,9 @@ class TestSlicingDownstream:
 
     def test_fairness_report_flags_a_gender_gap(self) -> None:
         # Women all correct, men all wrong -> a large, real gender disparity.
-        records = tuple(
-            _record(f"f{i}", correct=True, gender="f") for i in range(8)
-        ) + tuple(_record(f"m{i}", correct=False, gender="m") for i in range(8))
+        records = tuple(_record(f"f{i}", correct=True, gender="f") for i in range(8)) + tuple(
+            _record(f"m{i}", correct=False, gender="m") for i in range(8)
+        )
         preds = SplitPredictions(model="m", split="test", labels=_LABELS, records=records)
         gender = next(d for d in fairness_report(preds).dimensions if d.dimension == "gender")
         assert gender.best_group == "f" and gender.worst_group == "m"
