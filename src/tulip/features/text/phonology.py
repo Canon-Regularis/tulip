@@ -10,13 +10,13 @@ primary diagnostics: *asynchronous soft labials* (Kurpie ``pi/bi/wi/mi`` ->
 ``c/s/z/dz``). This module detects those patterns at the character level and
 emits per-document rates the classifier can weigh.
 
-Design (OCP + DIP):
+Design:
     Each isogloss is a :class:`PhonologicalFeature`, a narrow ``Protocol`` with
-    a single :meth:`~PhonologicalFeature.rate` method (ISP). The extractor holds
+    a single :meth:`~PhonologicalFeature.rate` method. The extractor holds
     a ``Sequence[PhonologicalFeature]`` and knows nothing about their kinds; it
-    depends only on the Protocol (DIP). Concrete kinds are selected from YAML by
+    depends only on the Protocol. Concrete kinds are selected from YAML by
     a ``kind:`` key through the :data:`_FEATURE_KINDS` dict factory, so a third
-    kind of isogloss is a new factory entry, not an edit to the extractor (OCP).
+    kind of isogloss is a new factory entry, not an edit to the extractor.
 
 This is a feature extractor, not a predictor: it is a scikit-learn transformer
 and is unrelated to the ``tulip.pipeline.protocols.SamplePredictor`` hierarchy.
@@ -85,7 +85,7 @@ class PhonologicalFeature(Protocol):
     """One named, sub-lexical dialect signal reduced to a per-token rate.
 
     Implementations are frozen value objects selected from YAML by ``kind``.
-    The extractor depends on this Protocol alone (DIP) and treats every feature
+    The extractor depends on this Protocol alone and treats every feature
     identically, so new kinds never touch the extractor.
 
     ``name`` is a read-only property, not a bare ``name: str`` attribute, so that
@@ -227,7 +227,7 @@ def _make_digraph_rate(*, name: str, entry: Mapping[str, Any], source: str) -> P
 
 
 #: Isogloss ``kind`` -> factory. Adding a kind is a new entry here plus its
-#: value object; the extractor is never touched (OCP).
+#: value object; the extractor is never touched.
 _FEATURE_KINDS: dict[str, Callable[..., PhonologicalFeature]] = {
     "pattern": _make_isogloss_pattern,
     "digraph": _make_digraph_rate,
@@ -308,7 +308,7 @@ class PhonologicalMarkerExtractor(DenseTextExtractor):
 
     The extractor holds the isoglosses as an opaque ``Sequence[PhonologicalFeature]``
     and never inspects their concrete kind, so new isogloss kinds extend the
-    output without changing this class (OCP/DIP).
+    output without changing this class.
 
     Args:
         isogloss_path: YAML isogloss file replacing the bundled starter set (see

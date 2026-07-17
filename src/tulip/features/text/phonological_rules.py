@@ -27,7 +27,7 @@ One :class:`PhonologicalRule` value object covers both cases, parameterised by
 ``detectable`` and the token position it applies at, so a new isogloss is a new
 YAML entry (``lexicons/phonological_rules.yaml``), never a code change. The
 extractor holds an opaque ``Sequence[PhonologicalRule]`` and depends on nothing
-concrete (DIP/OCP), mirroring :mod:`tulip.features.text.phonology`.
+concrete, mirroring :mod:`tulip.features.text.phonology`.
 
 Detection runs on lowercased letter-only word tokens (:func:`word_tokens`), so
 this stays consistent with the other lexical features and with ``isoglosses.yaml``.

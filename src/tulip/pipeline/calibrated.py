@@ -7,7 +7,7 @@ systematically over-confident, so "abstain below 0.9" does not actually mean
 fixes this: it calibrates the base classifier's probabilities first (see
 :mod:`tulip.models.calibration`) and only then thresholds them.
 
-Why composition, not subclassing (LSP)
+Why composition, not subclassing
 ---------------------------------------
 ``CalibratedClassifier`` wraps a ``DialectClassifier`` by composition and is
 **not** a subclass of it. Subclassing would advertise substitutability that does

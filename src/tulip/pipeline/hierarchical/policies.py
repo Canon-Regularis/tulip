@@ -7,7 +7,7 @@ how the classifier walks the taxonomy. That is why the policy family lives here,
 apart from :mod:`tulip.pipeline.hierarchical.classifier`.
 
 A policy is a one-method :class:`BackoffPolicy` predicate over a single
-prediction (ISP): the small frozen-dataclass implementations
+prediction: the small frozen-dataclass implementations
 (:class:`ConfidenceThreshold`, :class:`MarginThreshold`, :class:`NotAbstained`,
 the :class:`AlwaysAccept` null object, and the :class:`AllOf`/:class:`AnyOf`
 combinators) never decide *when* to back off; that is the classifier's job.
@@ -54,7 +54,7 @@ __all__ = [
 class BackoffPolicy(Protocol):
     """Decides whether a prediction is trustworthy enough to keep.
 
-    The single method keeps the protocol narrow (ISP): a policy is *only* a
+    The single method keeps the protocol narrow: a policy is *only* a
     predicate over one prediction. Backoff, stepping to a coarser level when a
     policy rejects, is the classifier's job, not the policy's.
     """

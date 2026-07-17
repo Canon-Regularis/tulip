@@ -14,8 +14,8 @@ Neither can be a subclass of ``DialectClassifier`` without breaking it.
 :class:`~tulip.core.types.Prediction` carries ``level == self.target``, and that
 its input is a sequence of *raw* values (texts or audio paths) for a single
 modality. A subclass that violated either postcondition would not be
-substitutable for its base; the Liskov substitution principle is precisely the
-rule being obeyed by *not* subclassing here.
+substitutable for its base, which is exactly why these are related by a common
+protocol and *not* by subclassing.
 
 So the three are related by a common protocol rather than a class hierarchy.
 :class:`SamplePredictor` is stated over :class:`~tulip.core.types.Sample`, which
@@ -63,7 +63,7 @@ class SamplePredictor(Protocol):
 class ProbabilisticClassifier(Protocol):
     """The slice of a classifier that composition needs: aligned probabilities.
 
-    A deliberately narrow structural type (DIP/ISP): a consumer such as
+    A deliberately narrow structural type: a consumer such as
     :class:`~tulip.pipeline.fusion.MultimodalClassifier` needs a class
     vocabulary, a shared label level, a modality tag, and a probability matrix,
     and nothing else. :class:`~tulip.pipeline.classifier.DialectClassifier`

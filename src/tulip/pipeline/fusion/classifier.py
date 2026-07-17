@@ -13,7 +13,7 @@ expert on its own input. Modelling it as two :class:`DialectClassifier`s joined
 by a :class:`~tulip.pipeline.fusion.strategies.FusionStrategy` keeps each base
 independently trainable, swappable, and persistable.
 
-**Why this is not a DialectClassifier subclass (LSP).**
+**Why this is not a DialectClassifier subclass.**
 ``DialectClassifier.predict_batch`` guarantees every returned
 :class:`~tulip.core.types.Prediction` has ``level == self.target`` *and* that its
 inputs are raw values of one modality. A multimodal classifier reads *both*
@@ -22,7 +22,7 @@ postcondition and must not be substitutable for a ``DialectClassifier``. It
 relates to its bases by *composition* and exposes only the narrow
 :class:`~tulip.pipeline.protocols.SamplePredictor` contract.
 
-**Why the dependency is a structural type (DIP).** The classifier depends on
+**Why the dependency is a structural type.** The classifier depends on
 :class:`~tulip.pipeline.protocols.ProbabilisticClassifier` (just ``classes_``,
 ``target``, ``task``, and ``predict_proba``), not on concrete
 ``DialectClassifier``. Any object exposing those satisfies it, which lets tests
@@ -66,7 +66,7 @@ class MultimodalClassifier:
     """Fuse a text and an audio classifier into one sample-level predictor.
 
     This is *not* a :class:`~tulip.pipeline.classifier.DialectClassifier`
-    subclass (see the module docstring for the LSP reasoning): it composes two
+    subclass (see the module docstring for the reasoning): it composes two
     :class:`~tulip.pipeline.protocols.ProbabilisticClassifier` bases and exposes
     the narrow :class:`~tulip.pipeline.protocols.SamplePredictor` contract, so
     evaluation, the CLI, and visualisation treat it interchangeably with the
@@ -304,7 +304,7 @@ class MultimodalClassifier:
         """Serialise a strategy to ``{"kind", "params"}`` for the sidecar.
 
         Keeps :class:`~tulip.pipeline.fusion.strategies.FusionStrategy` narrow
-        (ISP: ``fuse`` only) by discovering ``kind``/``config`` structurally; a
+        (``fuse`` only) by discovering ``kind``/``config`` structurally; a
         strategy lacking them is not persistable, which is a configuration error
         rather than a silent gap.
         """

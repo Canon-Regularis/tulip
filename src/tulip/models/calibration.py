@@ -10,15 +10,15 @@ mapped onto the scale they claim to live on. These calibrators perform that map.
 Design
 ------
 Every calibrator implements the narrow :class:`ProbabilityCalibrator` protocol
-(ISP: two methods, nothing more) and is interchangeable behind it (DIP:
-consumers depend on the protocol, never on a concrete class, so adding a new
-calibrator never edits the code that uses one). :class:`IdentityCalibrator` is
+(two methods, nothing more) and is interchangeable behind it: consumers depend
+on the protocol, never on a concrete class, so adding a new calibrator never
+edits the code that uses one. :class:`IdentityCalibrator` is
 the Null Object: a consumer configured with "no calibration" still holds a
 real calibrator and never writes ``if calibrator is None``.
 
 The shared contract, checked against *every* implementation in
-``tests/test_pipeline_calibrated.py`` (this is the Liskov substitution principle
-made concrete, no implementation may weaken it):
+``tests/test_pipeline_calibrated.py``, holds for every calibrator and no
+implementation may weaken it:
 
 * the output has the same shape as the input;
 * every output row is a probability distribution (sums to 1, no ``NaN``/``inf``);

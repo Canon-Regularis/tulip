@@ -9,11 +9,11 @@ looks like unless the model is calibrated.
 This module reports that gap without touching the standard metrics:
 
 * :class:`CalibrationBin` / :class:`CalibrationReport` are frozen value objects
-  (SRP: they only *hold* results; :func:`compute_calibration` produces them).
+  (they only *hold* results; :func:`compute_calibration` produces them).
 * :func:`compute_calibration` computes top-label Expected/Maximum Calibration
   Error and the multiclass Brier score, binning confidences by a pluggable
   ``strategy`` selected through a dict factory rather than an ``if``/``elif``
-  chain, so a new binning scheme is added without editing the consumer (OCP).
+  chain, so a new binning scheme is added without editing the consumer.
 
 It deliberately imports nothing from :mod:`tulip.evaluation.report`: the report
 holds an optional :class:`CalibrationReport`, so the dependency runs one way and
@@ -150,7 +150,7 @@ def _quantile_edges(confidences: np.ndarray, n_bins: int) -> np.ndarray:
 
 #: Confidence-binning strategies, keyed by the name a caller (or a YAML) passes.
 #: A dict factory keeps :func:`compute_calibration` closed to modification: a new
-#: strategy is a new entry here, not a new branch in the consumer (OCP).
+#: strategy is a new entry here, not a new branch in the consumer.
 _BIN_STRATEGIES: dict[str, Callable[[np.ndarray, int], np.ndarray]] = {
     "uniform": _uniform_edges,
     "quantile": _quantile_edges,

@@ -10,7 +10,7 @@ sample*; that variation is the whole point of the taxonomy note
 (``taxonomy.py``) that "hierarchical classifiers can back off from fine-grained
 to coarse-grained predictions".
 
-Why this is *not* a ``DialectClassifier`` subclass (Liskov)
+Why this is *not* a ``DialectClassifier`` subclass
 ----------------------------------------------------------
 ``DialectClassifier.predict_batch`` carries a postcondition: every returned
 :class:`~tulip.core.types.Prediction` has ``level == self.target``, one fixed
@@ -108,8 +108,8 @@ class HierarchicalDialectClassifier:
     """Predict at the finest confident level, backing off to coarser ones.
 
     Composes one :class:`~tulip.pipeline.classifier.DialectClassifier` per
-    label level (never subclasses it; see the module docstring for the Liskov
-    argument) and satisfies :class:`~tulip.pipeline.protocols.SamplePredictor`.
+    label level (never subclasses it; see the module docstring for why) and
+    satisfies :class:`~tulip.pipeline.protocols.SamplePredictor`.
 
     Args:
         levels: Label granularities ordered **coarse -> fine**, e.g.
