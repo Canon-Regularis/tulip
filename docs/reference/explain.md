@@ -40,3 +40,21 @@ roll-up needs no fitted model and is byte-stable.
 ::: tulip.explain.FamilyEvidence
 
 ::: tulip.explain.ClassCount
+
+## Contrastive analysis
+
+Where `dataset_evidence` asks which phenomenon most identifies a class one versus
+rest, `contrast_dialects` asks the pairwise question dialectology cares about:
+given two dialects, which lexical markers, phonological isoglosses, and
+morphological endings separate them, in which direction, and by how much. For each
+feature it reports the document-occurrence rate in each group, a smoothed log-odds
+ratio (the effect size and its sign), and a two-proportion z-test p-value,
+Holm-corrected across the whole comparison. It is model-free and byte-stable, and
+is exposed as `tulip contrast DATA DIALECT_A DIALECT_B` (use `--level family` to
+contrast, for example, silesian against standard).
+
+::: tulip.explain.contrast_dialects
+
+::: tulip.explain.ContrastReport
+
+::: tulip.explain.ContrastFeature
