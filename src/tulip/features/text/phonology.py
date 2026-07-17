@@ -100,7 +100,6 @@ class PhonologicalFeature(Protocol):
     @property
     def name(self) -> str:
         """Stable identifier; becomes the ``phon:<name>`` output column."""
-        ...
 
     def rate(self, text: str, tokens: Sequence[str]) -> float:
         """Return the feature's occurrence rate as a fraction of ``tokens``.
@@ -115,7 +114,6 @@ class PhonologicalFeature(Protocol):
             Occurrences per token (``>= 0.0``); ``0.0`` when ``tokens`` is empty.
             The extractor scales this by its ``per_tokens`` base.
         """
-        ...
 
 
 @dataclass(frozen=True)

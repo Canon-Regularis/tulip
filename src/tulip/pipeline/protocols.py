@@ -56,7 +56,6 @@ class SamplePredictor(Protocol):
         Raises:
             DataError: if a sample lacks the input(s) the implementation needs.
         """
-        ...
 
 
 @runtime_checkable
@@ -81,7 +80,6 @@ class ProbabilisticClassifier(Protocol):
 
     def predict_proba(self, raws: Sequence[Any]) -> np.ndarray:
         """Return the probability matrix for ``raws``, columns aligned to ``classes_``."""
-        ...
 
 
 @runtime_checkable
@@ -105,4 +103,3 @@ class CalibratableClassifier(ProbabilisticClassifier, Protocol):
 
     def labelled_batch(self, samples: Sequence[Sample]) -> LabelledBatch:
         """Pair each usable sample's raw model input with its label at ``target``."""
-        ...

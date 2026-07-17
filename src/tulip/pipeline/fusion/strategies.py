@@ -66,7 +66,6 @@ class FusionStrategy(Protocol):
 
     def fuse(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
         """Fuse ``stack`` under ``mask`` into one distribution per sample."""
-        ...
 
 
 def _check_weights(weights: tuple[float, ...]) -> None:

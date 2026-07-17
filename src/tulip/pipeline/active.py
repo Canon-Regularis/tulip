@@ -64,7 +64,6 @@ class AcquisitionStrategy(Protocol):
 
     def score(self, context: AcquisitionContext) -> np.ndarray:
         """Return one non-negative score per sample; higher means label sooner."""
-        ...
 
 
 #: Canonical name -> acquisition strategy class. ``STRATEGIES.create(name,

@@ -45,11 +45,9 @@ class ExemplarSelector(Protocol):
         self, by_label: Mapping[str, list[str]], class_ids: Sequence[str], few_shot: int, seed: int
     ) -> ExemplarSelector:
         """Record the per-class example pools and selection parameters."""
-        ...
 
     def select(self, query: str, *, variant: int = 0) -> tuple[tuple[str, str], ...]:
         """Return ``(text, label)`` demonstrations for ``query`` and this variant."""
-        ...
 
 
 #: Canonical name -> exemplar selector class. ``EXEMPLAR_SELECTORS.create(name)``

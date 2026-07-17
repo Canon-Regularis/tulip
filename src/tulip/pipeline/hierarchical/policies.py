@@ -61,7 +61,6 @@ class BackoffPolicy(Protocol):
 
     def accepts(self, prediction: Prediction) -> bool:
         """Return ``True`` to keep ``prediction``, ``False`` to back off."""
-        ...
 
 
 class PolicySpec(BaseModel):

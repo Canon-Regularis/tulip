@@ -73,11 +73,9 @@ class ProbabilityCalibrator(Protocol):
             y_index: True class *index* per row (a column into ``proba``), not a
                 label string.
         """
-        ...
 
     def transform(self, proba: np.ndarray) -> np.ndarray:
         """Return a calibrated copy of ``proba`` with the same shape."""
-        ...
 
 
 def _as_proba_matrix(proba: np.ndarray) -> np.ndarray:

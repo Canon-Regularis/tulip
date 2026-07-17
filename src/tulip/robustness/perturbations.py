@@ -50,7 +50,6 @@ class Perturbation(Protocol):
 
     def perturb(self, text: str, *, level: float, rng: np.random.Generator) -> str:
         """Return ``text`` perturbed at ``level`` in ``[0, 1]`` (0 is identity)."""
-        ...
 
 
 def _rewrite_fraction(
