@@ -43,7 +43,7 @@ import numpy as np
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.features.registries import TEXT_FEATURES
-from tulip.features.text._base import DenseTextExtractor
+from tulip.features.text._base import DenseTextExtractor, check_per_tokens
 from tulip.features.text._resource import read_versioned_entries
 from tulip.features.text._tokenize import word_tokens
 from tulip.utils.logging import get_logger
@@ -365,8 +365,7 @@ class PhonologicalRuleExtractor(DenseTextExtractor):
             ConfigurationError: If ``per_tokens`` is not positive or the rule set
                 is missing/malformed.
         """
-        if self.per_tokens <= 0:
-            raise ConfigurationError(f"per_tokens must be > 0, got {self.per_tokens}")
+        check_per_tokens(self.per_tokens)
         self.rules_: tuple[PhonologicalRule, ...] = load_phonological_rules(self.rules_path)
         names: list[str] = []
         for rule in self.rules_:

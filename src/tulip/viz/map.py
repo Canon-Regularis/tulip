@@ -264,7 +264,7 @@ def confidence_heatmap(prediction: Prediction, *, polish_labels: bool = False) -
     """
     folium_mod = optional_import("folium", extra="viz", purpose="confidence heatmaps")
     fmap = _base_map(folium_mod)
-    probabilities = {label.strip().lower(): p for label, p in prediction.as_dict().items()}
+    probabilities = _normalized_probabilities(prediction)
     table = _centroid_table(prediction.level)
 
     for label, centroid in table.items():

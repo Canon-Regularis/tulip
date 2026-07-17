@@ -23,16 +23,17 @@ total and explicit, so a committed error report regenerates byte-for-byte.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tulip.evaluation._format import format_metric, markdown_table, write_sorted_json
+from tulip._serialize import save_report
+from tulip.evaluation._format import format_metric, markdown_table
 from tulip.evaluation.metrics import compute_metrics
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
     from tulip.evaluation.predictions import PredictionRecord, SplitPredictions
 
@@ -153,7 +154,7 @@ class ErrorReport(BaseModel):
 
     def save(self, path: Path | str) -> None:
         """Write the report as deterministic JSON (sorted keys)."""
-        write_sorted_json(Path(path), self.model_dump(mode="json"))
+        save_report(self, path)
 
 
 def top_confused_pairs(predictions: SplitPredictions, *, top_k: int = 10) -> list[ConfusedPair]:

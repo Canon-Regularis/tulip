@@ -32,17 +32,17 @@ same bytes, and every stored float is rounded to a fixed precision.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tulip._serialize import write_sorted_json
+from tulip._serialize import save_report
 from tulip.explain.dialect_evidence import DialectEvidenceExplainer
 from tulip.labels.taxonomy import LabelLevel
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from pathlib import Path
 
     from tulip.core.types import Sample
 
@@ -187,7 +187,7 @@ class GlobalEvidenceReport(BaseModel):
 
     def save(self, path: Path | str) -> None:
         """Write the report as deterministic JSON (sorted keys)."""
-        write_sorted_json(Path(path), self.model_dump(mode="json"))
+        save_report(self, path)
 
 
 class _Tally:
