@@ -37,6 +37,7 @@ from tulip.evaluation._format import write_sorted_json
 from tulip.utils.io import read_json
 
 __all__ = [
+    "OPTIONAL_SLICE_KEYS",
     "PREDICTION_FLOAT_DIGITS",
     "PredictionRecord",
     "SplitPredictions",
@@ -46,6 +47,18 @@ __all__ = [
 #: predictions dump is byte-identical across re-runs even under trivial
 #: floating-point noise (mirrors ``leaderboard.PROVENANCE_FLOAT_DIGITS``).
 PREDICTION_FLOAT_DIGITS = 6
+
+#: The optional geographic and demographic slice keys a record may carry, in a
+#: single fixed order. Persistence (omit-if-None) and slicing both read this, so
+#: adding a field updates the two paths together instead of drifting apart.
+OPTIONAL_SLICE_KEYS: tuple[str, ...] = (
+    "region",
+    "voivodeship",
+    "family",
+    "dialect",
+    "age_band",
+    "gender",
+)
 
 
 class PredictionRecord(BaseModel):
@@ -171,7 +184,7 @@ class SplitPredictions(BaseModel):
                 "y_pred": record.y_pred,
                 "y_true": record.y_true,
             }
-            for key in ("region", "voivodeship", "family", "dialect", "age_band", "gender"):
+            for key in OPTIONAL_SLICE_KEYS:
                 value = getattr(record, key)
                 if value is not None:
                     entry[key] = value

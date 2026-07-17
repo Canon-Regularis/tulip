@@ -34,6 +34,7 @@ __all__ = [
     "DEMOGRAPHIC_KEYS",
     "GEOGRAPHIC_LEVELS",
     "age_band",
+    "bucket_by_upper_edge",
     "record_slice_keys",
 ]
 
@@ -67,6 +68,19 @@ _AGE_BANDS: tuple[tuple[str, int | None], ...] = (
 )
 
 
+def bucket_by_upper_edge(value: int, bands: tuple[tuple[str, int | None], ...]) -> str:
+    """Return the label of the first band whose inclusive upper edge covers ``value``.
+
+    ``bands`` runs coarse-to-fine as ``(label, upper)`` pairs, the last with an open
+    top (``upper is None``) that catches everything larger. A value at or below a
+    band's edge takes that band.
+    """
+    for label, upper in bands:
+        if upper is None or value <= upper:
+            return label
+    return bands[-1][0]  # pragma: no cover - the open top always matches
+
+
 def age_band(value: object) -> str:
     """Bucket a numeric age into a fixed band, or pass a non-numeric group through.
 
@@ -80,10 +94,7 @@ def age_band(value: object) -> str:
         age = int(float(text))
     except (TypeError, ValueError):
         return text
-    for label, upper in _AGE_BANDS:
-        if upper is None or age <= upper:
-            return label
-    return _AGE_BANDS[-1][0]  # pragma: no cover - the open top always matches
+    return bucket_by_upper_edge(age, _AGE_BANDS)
 
 
 def _first_alias(metadata: Mapping[str, Any], aliases: tuple[str, ...]) -> str | None:

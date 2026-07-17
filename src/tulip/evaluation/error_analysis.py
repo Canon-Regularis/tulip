@@ -30,6 +30,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from tulip._serialize import save_report
 from tulip.evaluation._format import format_metric, markdown_table
 from tulip.evaluation.metrics import compute_metrics
+from tulip.evaluation.predictions import OPTIONAL_SLICE_KEYS
+from tulip.evaluation.slicing import bucket_by_upper_edge
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -192,13 +194,12 @@ def slice_metrics(
     # The geographic (region/voivodeship/family/dialect) and demographic
     # (age_band/gender) dimensions are populated only for records that carry them,
     # so a corpus without those keys produces no phantom slice.
-    optional_dimensions = ("region", "voivodeship", "family", "dialect", "age_band", "gender")
     dimensions: dict[str, list[tuple[str, PredictionRecord]]] = {
         "source": [],
         "speaker_id": [],
         "modality": [],
         "length": [],
-        **{name: [] for name in optional_dimensions},
+        **{name: [] for name in OPTIONAL_SLICE_KEYS},
     }
     for record in predictions.records:
         dimensions["source"].append((record.source, record))
@@ -207,7 +208,7 @@ def slice_metrics(
         dimensions["modality"].append((record.modality, record))
         if record.n_chars is not None:
             dimensions["length"].append((_length_band(record.n_chars), record))
-        for name in optional_dimensions:
+        for name in OPTIONAL_SLICE_KEYS:
             value = getattr(record, name)
             if value is not None:
                 dimensions[name].append((value, record))
@@ -288,7 +289,4 @@ def _exemplar(record: PredictionRecord, texts: Mapping[str, str] | None) -> Exem
 
 def _length_band(n_chars: int) -> str:
     """Bucket a character count into a fixed, ordered length band."""
-    for label, upper in _LENGTH_BANDS:
-        if upper is None or n_chars <= upper:
-            return label
-    return _LENGTH_BANDS[-1][0]  # pragma: no cover - the open top always matches
+    return bucket_by_upper_edge(n_chars, _LENGTH_BANDS)
