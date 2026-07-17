@@ -27,15 +27,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from tulip._serialize import write_markdown
 from tulip.config.loader import load_experiment_config
-from tulip.core.exceptions import ConfigurationError
 from tulip.evaluation._format import format_metric, markdown_table, write_sorted_json
 from tulip.evaluation._provenance import PROVENANCE_JSON, build_provenance
+from tulip.evaluation._suite_loader import load_yaml_model
 from tulip.evaluation.benchmark import BenchmarkResult, save_benchmark
-from tulip.utils.io import read_yaml
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -123,19 +122,7 @@ def load_suite(path: Path | str) -> LeaderboardSuite:
         ConfigurationError: If the file is missing, unparsable, not a mapping,
             or fails schema validation.
     """
-    path = Path(path)
-    if not path.is_file():
-        raise ConfigurationError(f"leaderboard suite file not found: {path}")
-    try:
-        raw = read_yaml(path)
-    except Exception as exc:
-        raise ConfigurationError(f"could not parse YAML suite {path}: {exc}") from exc
-    if not isinstance(raw, dict):
-        raise ConfigurationError(f"suite {path} must be a YAML mapping, got {type(raw).__name__}")
-    try:
-        return LeaderboardSuite.model_validate(raw)
-    except ValidationError as exc:
-        raise ConfigurationError(f"invalid leaderboard suite {path}:\n{exc}") from exc
+    return load_yaml_model(path, LeaderboardSuite, noun="leaderboard suite")
 
 
 def run_leaderboard(
