@@ -46,6 +46,46 @@ def test_card_model(prepared) -> None:
     assert "logistic_regression" in result.output
 
 
+def test_card_datasheet(tmp_path: Path) -> None:
+    from tulip.config import load_experiment_config, save_experiment_config
+    from tulip.data import DatasetBuilder
+
+    corpus = write_manifest_corpus(tmp_path / "corpus", speakers=6, variants=3)
+    config = make_manifest_experiment_config(corpus, tmp_path / "artifacts", name="ds-cli")
+    save_experiment_config(config, tmp_path / "config.yaml")
+    config = load_experiment_config(tmp_path / "config.yaml")
+    splits_dir = tmp_path / "splits"
+    DatasetBuilder(config.data).build(config.split, target=config.target, output_dir=splits_dir)
+
+    spec = tmp_path / "spec.yaml"
+    spec.write_text("motivation: benchmark study\nuses: research only\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["card", "datasheet", str(splits_dir), "--spec", str(spec), "--dataset", "dialektarium"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "# Datasheet: dialektarium" in result.output
+    assert "## Composition" in result.output
+    assert "## Geographic distribution" in result.output
+
+
+def test_card_benchmark(tmp_path: Path) -> None:
+    board = tmp_path / "board"
+    board.mkdir()
+    (board / "leaderboard.md").write_text(
+        "| Experiment | Model | F1 (macro) |\n| :--- | ---: | ---: |\n| real | majority | 0.1 |\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "benchmark.md"
+    result = runner.invoke(
+        app, ["card", "benchmark", str(board), "--synthetic", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    doc = out.read_text(encoding="utf-8")
+    assert "## Label hierarchy" in doc and "## Protocol" in doc and "## Results" in doc
+    assert "Synthetic fixture" in doc
+
+
 def test_card_model_to_file(prepared, tmp_path: Path) -> None:
     model_dir, _ = prepared
     out = tmp_path / "model_card.md"

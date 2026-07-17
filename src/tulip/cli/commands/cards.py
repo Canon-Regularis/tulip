@@ -56,6 +56,102 @@ def card_dataset(
     _emit(dataset_card(info, manifest), out)
 
 
+@cards_app.command("datasheet")
+@_tulip_errors
+def card_datasheet(
+    build_dir: Path = typer.Argument(
+        ..., help="A build directory (train/validation/test.jsonl) from `data prepare`."
+    ),
+    spec: Path = typer.Option(
+        ..., "--spec", help="Datasheet prose spec YAML (see benchmarks/datasheets/)."
+    ),
+    dataset: str | None = typer.Option(
+        None, "--dataset", help="Catalogued corpus name (default: inferred from the samples)."
+    ),
+    manifest: Path | None = typer.Option(
+        None, "--manifest", help="Source manifest to embed a `data validate` conformance section."
+    ),
+    out: Path | None = typer.Option(
+        None, "--out", help="Write the datasheet here instead of stdout."
+    ),
+) -> None:
+    """Render a Gebru-style datasheet from a built dataset and a prose spec.
+
+    Composes the corpus's catalog metadata, its split/speaker/class distributions
+    at every taxonomy level, its geographic and demographic composition, and the
+    prose fields in ``--spec`` into one byte-stable document. For a benchmark that
+    merges corpora, render one datasheet per source corpus.
+    """
+    from tulip.core.exceptions import ConfigurationError, DataError
+    from tulip.data import DATASETS, get_dataset_info
+    from tulip.data.splitting import load_splits
+    from tulip.evaluation.datasheet import datasheet, load_datasheet_spec
+
+    splits = load_splits(build_dir)
+    spec_model = load_datasheet_spec(spec)
+
+    name = dataset
+    if name is None:
+        sources = sorted({s.source for group in splits.as_dict().values() for s in group})
+        if len(sources) != 1:
+            raise ConfigurationError(
+                f"cannot infer the corpus from {len(sources)} source(s) {sources}; "
+                "pass --dataset NAME (render one datasheet per source corpus)"
+            )
+        name = sources[0]
+    try:
+        info = get_dataset_info(name)
+    except DataError:
+        info = DATASETS.create(name).info
+
+    conformance = None
+    if manifest is not None:
+        from tulip.data.validation import validate_manifest
+
+        conformance = validate_manifest(manifest).to_markdown()
+    _emit(datasheet(info, splits, spec_model, conformance=conformance), out)
+
+
+@cards_app.command("benchmark")
+@_tulip_errors
+def card_benchmark(
+    board_dir: Path = typer.Argument(
+        ..., help="A leaderboard output directory (leaderboard.md, significance-*.md)."
+    ),
+    datasheet: Path | None = typer.Option(
+        None, "--datasheet", help="A rendered datasheet markdown to embed as the Dataset section."
+    ),
+    bias: Path | None = typer.Option(
+        None,
+        "--bias",
+        help="A fairness/bias analysis markdown to embed (from `analyze --fairness`).",
+    ),
+    title: str | None = typer.Option(None, "--title", help="Override the report title."),
+    synthetic: bool = typer.Option(
+        False, "--synthetic", help="Stamp a 'synthetic fixture, not real accuracy' caption."
+    ),
+    out: Path | None = typer.Option(None, "--out", help="Write the report here instead of stdout."),
+) -> None:
+    """Assemble a paper-style benchmark report from a board plus an optional datasheet.
+
+    Composes the label hierarchy, the protocol, the committed ``leaderboard.md`` and
+    ``significance-*.md`` from ``board_dir``, and any supplied datasheet/bias
+    sections into one byte-stable document (the seed for ``docs/benchmark.md``).
+    """
+    from tulip.evaluation.benchmark_report import DEFAULT_TITLE, benchmark_report
+
+    datasheet_md = datasheet.read_text(encoding="utf-8") if datasheet is not None else None
+    bias_md = bias.read_text(encoding="utf-8") if bias is not None else None
+    report = benchmark_report(
+        board_dir,
+        title=title or DEFAULT_TITLE,
+        datasheet_md=datasheet_md,
+        bias_md=bias_md,
+        synthetic=synthetic,
+    )
+    _emit(report, out)
+
+
 @cards_app.command("model")
 @_tulip_errors
 def card_model(

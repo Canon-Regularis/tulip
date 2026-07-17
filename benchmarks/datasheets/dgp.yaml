@@ -1,0 +1,38 @@
+# Datasheet prose for the dgp corpus (TEMPLATE).
+# "Dialekty i gwary polskie" material, assembled manually and not redistributed
+# with tulip; only aggregate digests and metrics are committed. Fill each TODO
+# from your own collection notes, then render with `tulip card datasheet`.
+
+motivation: >-
+  TODO: why this corpus was assembled. For example: to complement dialektarium
+  with a second, independently sourced real dialect corpus, so cross-corpus
+  transfer can be measured and a model cannot simply memorise one source.
+
+funding: "TODO: funding source, or 'none'."
+
+collection_process: >-
+  TODO: how the material was obtained and transcribed. There is no bulk download,
+  so describe the manual assembly, who did it, and over what period.
+
+sampling_strategy: >-
+  TODO: how localities and samples were selected, and any geographic or
+  demographic skew relative to dialektarium.
+
+preprocessing: >-
+  TODO: cleaning, normalisation, and deduplication applied before building the
+  manifest.
+
+uses: >-
+  Speaker-disjoint dialect identification benchmarking and cross-corpus transfer
+  against dialektarium. TODO: note any out-of-scope uses.
+
+distribution_terms: >-
+  TODO: licence and redistribution terms. The raw corpus is not redistributed with
+  tulip; only the split fingerprint, provenance, and aggregate metrics are
+  committed.
+
+maintenance_contact: "TODO: contact for corrections and updates."
+
+ethical_legal: >-
+  TODO: consent and anonymisation of speakers, and any community sensitivities
+  around attributing speech to a named dialect or locality.

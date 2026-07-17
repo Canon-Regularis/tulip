@@ -1,0 +1,47 @@
+# Datasheet prose for the synthetic reference corpus.
+# This corpus is a procedurally generated fixture, not real speech; the prose
+# below says so plainly. Rendered by `tulip card datasheet`.
+
+motivation: >-
+  The synthetic corpus is a procedurally generated fixture that exercises the
+  whole tulip pipeline end to end with zero data acquisition. It injects real,
+  learnable dialect signal, a seeded subset of genuine marker lexemes plus
+  deterministic phonological transforms, so the classifiers have something to
+  learn; but it is not real speech, and its scores say nothing about real dialect
+  accuracy. It exists so the toolkit and its reproducibility guarantees can be
+  demonstrated and tested without any redistributable corpus.
+
+funding: >-
+  None. The corpus is generated in process by tulip.data.synthetic.
+
+collection_process: >-
+  Not collected: generated deterministically from a fixed seed. Each speaker is a
+  seeded draw over a dialect's genuine marker lexemes and its phonological rules;
+  see src/tulip/data/synthetic.py. The same spec and seed always reproduce the
+  same corpus byte for byte.
+
+sampling_strategy: >-
+  A fixed number of speakers per dialect and samples per speaker, controlled by
+  the generator spec (n_speakers_per_dialect, samples_per_speaker, seed). Classes
+  are balanced by construction, which is itself unrealistic and another reason the
+  scores are not comparable to real data.
+
+preprocessing: >-
+  None beyond the deterministic generation; the generator emits text already
+  lowercased where its phonological rules require it.
+
+uses: >-
+  Continuous integration, reproducibility demonstrations, and smoke-testing new
+  models and features. It must not be used to report real dialect-classification
+  accuracy, and any leaderboard built from it is labelled a synthetic fixture.
+
+distribution_terms: >-
+  Nothing is distributed: the corpus is regenerated in process from the committed
+  generator and seed.
+
+maintenance_contact: >-
+  Maintained with the tulip repository; see CITATION.cff.
+
+ethical_legal: >-
+  No human-subjects data is involved. The dialect signal is a stylised caricature
+  of real markers and represents no actual speaker or community.
