@@ -20,6 +20,7 @@ import numpy as np
 from tulip.core.exceptions import DataError
 from tulip.evaluation.metrics import compute_metrics
 from tulip.evaluation.predictions import PREDICTION_FLOAT_DIGITS, PredictionRecord, SplitPredictions
+from tulip.evaluation.slicing import record_slice_keys
 from tulip.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -158,6 +159,7 @@ def _predictions_from(
             speaker_id=sample.speaker_id,
             n_chars=len(sample.text) if sample.text is not None else None,
             modality=classifier.task.value,
+            **record_slice_keys(sample),
         )
         for sample, true_label, pred_label, row in zip(
             batch.samples, batch.labels, y_pred, probabilities, strict=True

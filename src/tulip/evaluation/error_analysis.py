@@ -179,18 +179,26 @@ def top_confused_pairs(predictions: SplitPredictions, *, top_k: int = 10) -> lis
 def slice_metrics(
     predictions: SplitPredictions, *, low_support: int = DEFAULT_LOW_SUPPORT
 ) -> list[SliceMetric]:
-    """Recompute accuracy and macro-F1 for each source/speaker/modality/length slice.
+    """Recompute accuracy and macro-F1 for each data slice.
 
-    Slices are produced for every dimension whose key is present, sorted by
-    ``(dimension, value)``. A slice with fewer than ``low_support`` samples is
-    flagged rather than dropped, so a fairness gap on a rare group is still
-    visible but never mistaken for a headline result.
+    Slices cover source, speaker, modality, and length, plus the geographic
+    (region, voivodeship, family, dialect) and demographic (age band, gender)
+    dimensions whenever the records carry them. Slices are produced for every
+    dimension whose key is present, sorted by ``(dimension, value)``. A slice with
+    fewer than ``low_support`` samples is flagged rather than dropped, so a
+    fairness gap on a rare group is still visible but never mistaken for a
+    headline result.
     """
+    # The geographic (region/voivodeship/family/dialect) and demographic
+    # (age_band/gender) dimensions are populated only for records that carry them,
+    # so a corpus without those keys produces no phantom slice.
+    optional_dimensions = ("region", "voivodeship", "family", "dialect", "age_band", "gender")
     dimensions: dict[str, list[tuple[str, PredictionRecord]]] = {
         "source": [],
         "speaker_id": [],
         "modality": [],
         "length": [],
+        **{name: [] for name in optional_dimensions},
     }
     for record in predictions.records:
         dimensions["source"].append((record.source, record))
@@ -199,6 +207,10 @@ def slice_metrics(
         dimensions["modality"].append((record.modality, record))
         if record.n_chars is not None:
             dimensions["length"].append((_length_band(record.n_chars), record))
+        for name in optional_dimensions:
+            value = getattr(record, name)
+            if value is not None:
+                dimensions[name].append((value, record))
 
     metrics: list[SliceMetric] = []
     for dimension, tagged in dimensions.items():

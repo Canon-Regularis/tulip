@@ -51,9 +51,12 @@ PREDICTION_FLOAT_DIGITS = 6
 class PredictionRecord(BaseModel):
     """One evaluated sample: its gold label, prediction, and full distribution.
 
-    ``proba`` is aligned to :attr:`SplitPredictions.labels`. The slice keys
-    (``source``/``speaker_id``/``n_chars``/``modality``) are copied from the
-    :class:`~tulip.core.types.Sample` so downstream slicing needs no corpus.
+    ``proba`` is aligned to :attr:`SplitPredictions.labels`. The slice keys are
+    copied from the :class:`~tulip.core.types.Sample` so downstream slicing needs
+    no corpus: ``source``/``speaker_id``/``n_chars``/``modality``, plus the
+    optional geographic (``region``/``voivodeship``/``family``/``dialect``) and
+    demographic (``age_band``/``gender``) keys, each ``None`` when the sample
+    carries no value for it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -66,6 +69,12 @@ class PredictionRecord(BaseModel):
     speaker_id: str | None = None
     n_chars: int | None = Field(default=None, ge=0)
     modality: str = "text"
+    region: str | None = None
+    voivodeship: str | None = None
+    family: str | None = None
+    dialect: str | None = None
+    age_band: str | None = None
+    gender: str | None = None
 
     @property
     def confidence(self) -> float:
@@ -145,24 +154,33 @@ class SplitPredictions(BaseModel):
         write_sorted_json(Path(path), self._payload())
 
     def _payload(self) -> dict[str, Any]:
-        """The deterministic, JSON-native payload with probabilities rounded."""
+        """The deterministic, JSON-native payload with probabilities rounded.
+
+        The optional geographic/demographic slice keys are written only when
+        present (omit-if-None), so a dump for a corpus without them is unchanged.
+        """
+        records: list[dict[str, Any]] = []
+        for record in self.records:
+            entry: dict[str, Any] = {
+                "id": record.id,
+                "modality": record.modality,
+                "n_chars": record.n_chars,
+                "proba": [round(value, PREDICTION_FLOAT_DIGITS) for value in record.proba],
+                "source": record.source,
+                "speaker_id": record.speaker_id,
+                "y_pred": record.y_pred,
+                "y_true": record.y_true,
+            }
+            for key in ("region", "voivodeship", "family", "dialect", "age_band", "gender"):
+                value = getattr(record, key)
+                if value is not None:
+                    entry[key] = value
+            records.append(entry)
         return {
             "labels": list(self.labels),
             "metadata": dict(self.metadata),
             "model": self.model,
-            "records": [
-                {
-                    "id": record.id,
-                    "modality": record.modality,
-                    "n_chars": record.n_chars,
-                    "proba": [round(value, PREDICTION_FLOAT_DIGITS) for value in record.proba],
-                    "source": record.source,
-                    "speaker_id": record.speaker_id,
-                    "y_pred": record.y_pred,
-                    "y_true": record.y_true,
-                }
-                for record in self.records
-            ],
+            "records": records,
             "split": self.split,
         }
 
