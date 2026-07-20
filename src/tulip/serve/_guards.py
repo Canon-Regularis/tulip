@@ -171,6 +171,13 @@ class AuthMiddleware(_ScopedMiddleware):
         await self.app(scope, receive, send)
 
 
+#: Cap on the number of clients the rate limiter tracks. Beyond it, idle (fully
+#: refilled) buckets are swept and then the least-recently-seen client is evicted,
+#: so a flood of distinct source addresses cannot grow the store without bound. A
+#: swept client simply starts fresh with a full bucket, exactly the state it held.
+_MAX_TRACKED_CLIENTS = 8192
+
+
 class RateLimitMiddleware(_ScopedMiddleware):
     """Per-client token-bucket rate limit (``per_minute`` requests, refilled continuously)."""
 
@@ -192,11 +199,30 @@ class RateLimitMiddleware(_ScopedMiddleware):
         now = time.monotonic()
         tokens, last = self._buckets.get(client, (self.capacity, now))
         tokens = min(self.capacity, tokens + (now - last) * self.refill_per_second)
+        if client not in self._buckets and len(self._buckets) >= _MAX_TRACKED_CLIENTS:
+            self._prune(now)
         if tokens < 1.0:
             self._buckets[client] = (tokens, now)
             return False
         self._buckets[client] = (tokens - 1.0, now)
         return True
+
+    def _prune(self, now: float) -> None:
+        """Keep the bucket store bounded against a flood of one-shot clients.
+
+        First drop every fully refilled (idle) client: its bucket is back to full,
+        indistinguishable from a fresh one, so eviction loses no state. If that still
+        leaves the store at the cap, evict the least-recently-seen client.
+        """
+        for client in [
+            key
+            for key, (tokens, last) in self._buckets.items()
+            if min(self.capacity, tokens + (now - last) * self.refill_per_second) >= self.capacity
+        ]:
+            del self._buckets[client]
+        if len(self._buckets) >= _MAX_TRACKED_CLIENTS:
+            oldest = min(self._buckets, key=lambda key: self._buckets[key][1])
+            del self._buckets[oldest]
 
 
 class ConcurrencyLimitMiddleware(_ScopedMiddleware):

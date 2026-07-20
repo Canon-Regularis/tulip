@@ -88,7 +88,9 @@ def _substitute(
         variants = mapping.get(char.lower())
         if variants and rng.random() < level:
             choice = variants[int(rng.integers(len(variants)))]
-            out.append(choice.upper() if char.isupper() else choice)
+            # Title-case a capitalised source: a multi-character variant (e.g. "rz")
+            # becomes "Rz", not "RZ"; for a single character this is just its upper form.
+            out.append((choice[:1].upper() + choice[1:]) if char.isupper() else choice)
         else:
             out.append(char)
     return "".join(out)

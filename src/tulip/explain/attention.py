@@ -113,6 +113,9 @@ def _merge_by_markers(
     unavailable.
     """
     prefix_scheme = any(token.startswith(_START_MARKERS) for token in tokens)
+    end_of_word_scheme = not prefix_scheme and any(
+        token.endswith(_END_OF_WORD_SUFFIX) for token in tokens
+    )
     merged: list[tuple[str, float]] = []
     open_word = False
     for token, weight in zip(tokens, weights, strict=True):
@@ -121,6 +124,10 @@ def _merge_by_markers(
             continue
         if prefix_scheme:
             starts_new = token.startswith(_START_MARKERS)
+        elif end_of_word_scheme:
+            # No "##" marks in this scheme; a piece continues the word only when the
+            # previous piece did not close it with the end-of-word suffix.
+            starts_new = not open_word
         else:
             starts_new = not token.startswith(_WORDPIECE_PREFIX)
         piece = _clean_piece(token)

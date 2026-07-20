@@ -122,7 +122,10 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
             inputs = {key: value.to(device) for key, value in inputs.items()}
             with torch.no_grad():
                 hidden = model(**inputs).last_hidden_state
-            pooled = self._masked_mean(torch, model, hidden, inputs.get("attention_mask"))
+            # True per-clip sample counts before padding. Group-norm checkpoints
+            # return no attention mask, so these, not the mask, must drive the pool.
+            signal_lengths = torch.tensor([len(signal) for signal in signals], device=device)
+            pooled = self._masked_mean(torch, model, hidden, signal_lengths)
             rows.append(pooled.cpu().numpy().astype(np.float32))
         return np.vstack(rows)
 
@@ -172,13 +175,20 @@ class Wav2Vec2EmbeddingExtractor(TransformerMixin, BaseEstimator):
         return self._model, self._processor, self._torch_device
 
     @staticmethod
-    def _masked_mean(torch: Any, model: Any, hidden: Any, attention_mask: Any) -> Any:
-        """Mean over time excluding padded frames when lengths are recoverable."""
+    def _masked_mean(torch: Any, model: Any, hidden: Any, signal_lengths: Any) -> Any:
+        """Mean over time excluding padded frames.
+
+        ``signal_lengths`` are the true per-clip sample counts before the batch was
+        padded to a common width, mapped to output-frame counts by the model's own
+        conv-stride formula. Deriving the mask from these rather than from an
+        attention mask keeps a clip's embedding independent of its batch neighbours,
+        including for group-norm checkpoints that return no attention mask at all.
+        """
         get_lengths = getattr(model, "_get_feat_extract_output_lengths", None)
-        if attention_mask is None or get_lengths is None:
+        if get_lengths is None:
             return hidden.mean(dim=1)
-        lengths = get_lengths(attention_mask.sum(-1)).to(torch.long)
+        frame_lengths = get_lengths(signal_lengths).to(torch.long)
         frame_index = torch.arange(hidden.shape[1], device=hidden.device)[None, :]
-        mask = (frame_index < lengths[:, None]).unsqueeze(-1).to(hidden.dtype)
+        mask = (frame_index < frame_lengths[:, None]).unsqueeze(-1).to(hidden.dtype)
         denominator = mask.sum(dim=1).clamp(min=1.0)
         return (hidden * mask).sum(dim=1) / denominator
