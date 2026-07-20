@@ -53,6 +53,10 @@ __all__ = [
 #: metrics are noisy and must not be read as headline fairness findings.
 DEFAULT_LOW_SUPPORT = 5
 
+#: Fixed rounding applied before serialising, so a saved error report regenerates
+#: byte-for-byte (mirrors the discipline in significance/provenance/contrast).
+ERROR_REPORT_FLOAT_DIGITS = 6
+
 #: Inclusive upper edges (in characters) of the length bands, plus an open top.
 _LENGTH_BANDS: tuple[tuple[str, int | None], ...] = (
     ("<=40", 40),
@@ -155,8 +159,8 @@ class ErrorReport(BaseModel):
         return "\n\n".join(parts)
 
     def save(self, path: Path | str) -> None:
-        """Write the report as deterministic JSON (sorted keys)."""
-        save_report(self, path)
+        """Write the report as deterministic JSON (sorted keys, rounded floats)."""
+        save_report(self, path, digits=ERROR_REPORT_FLOAT_DIGITS)
 
 
 def top_confused_pairs(predictions: SplitPredictions, *, top_k: int = 10) -> list[ConfusedPair]:
