@@ -161,10 +161,13 @@ def crossval(
     single lucky split cannot flatter the model. Folds are speaker-disjoint.
     """
     from tulip.config import load_experiment_config
+    from tulip.core.exceptions import ConfigurationError
     from tulip.pipeline import CVConfig, run_cross_validation
 
     config = load_experiment_config(config_path)
     seed_tuple = _parse_number_csv(seeds, int, name="seeds")
+    if not seed_tuple:
+        raise ConfigurationError("--seeds must list at least one integer seed")
     report = run_cross_validation(config, CVConfig(k=k, seeds=seed_tuple), n_jobs=jobs)
 
     table = Table(title=f"cross-validation {config.model.name!r} ({report.target})")

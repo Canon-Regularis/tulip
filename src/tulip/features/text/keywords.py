@@ -118,6 +118,11 @@ def load_lexicon(path: str | Path | None = None) -> dict[str, tuple[str, ...]]:
             cleaned.append(normalised)
         if not cleaned:
             raise ConfigurationError(f"{source}: dialect {key!r} has no usable markers")
+        if key in lexicon:
+            raise ConfigurationError(
+                f"{source}: duplicate dialect key {key!r} after case-folding; "
+                "merge the entries under one key"
+            )
         lexicon[key] = tuple(dict.fromkeys(cleaned))
     return lexicon
 

@@ -60,7 +60,7 @@ class CVConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     k: int = Field(default=5, ge=2)
-    seeds: tuple[int, ...] = (0,)
+    seeds: tuple[int, ...] = Field(default=(0,), min_length=1)
     group_by: str = "speaker_id"
 
     @property
