@@ -310,6 +310,13 @@ def _row_to_sample(
             value = defaults.get(field)
         if value is not None:
             label_values[field] = value
+    # A defaulted family must not pre-empt dialect-to-family derivation. When the
+    # row carries a dialect, DialectLabels derives the family from it, so a default
+    # family (for example the Spokes loader's "standard") would otherwise mislabel
+    # a dialectal row as standard. An explicit family cell still wins; only a
+    # defaulted family is dropped, so the derived family takes over.
+    if "dialect" in label_values and "family" in label_values and _cell(row, cols.family) is None:
+        del label_values["family"]
 
     speaker = _cell(row, cols.speaker_id)
     if speaker is None:
