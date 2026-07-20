@@ -50,6 +50,22 @@ def _resolve_dataset_info(name: str | None, sources: list[str], *, hint: str = "
         return DATASETS.create(name).info
 
 
+def _read_optional_text(path: Path | None, *, what: str) -> str | None:
+    """Read an optional markdown argument, or raise a clean error on a bad file.
+
+    A missing or undecodable file otherwise escapes the command's error boundary as
+    a raw traceback that leaks an absolute path; this converts it to a ``DataError``.
+    """
+    if path is None:
+        return None
+    from tulip.core.exceptions import DataError
+
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise DataError(f"could not read {what} {path}: {exc}") from exc
+
+
 @cards_app.command("dataset")
 @_tulip_errors
 def card_dataset(
@@ -138,8 +154,8 @@ def card_benchmark(
     """
     from tulip.evaluation.benchmark_report import DEFAULT_TITLE, benchmark_report
 
-    datasheet_md = datasheet.read_text(encoding="utf-8") if datasheet is not None else None
-    bias_md = bias.read_text(encoding="utf-8") if bias is not None else None
+    datasheet_md = _read_optional_text(datasheet, what="datasheet")
+    bias_md = _read_optional_text(bias, what="bias analysis")
     report = benchmark_report(
         board_dir,
         title=title or DEFAULT_TITLE,

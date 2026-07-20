@@ -66,7 +66,11 @@ def read_yaml_resource(
         if not file_path.is_file():
             raise ConfigurationError(f"{noun} file not found: {file_path}")
         raw = file_path.read_text(encoding="utf-8")
-    return source, yaml.safe_load(raw)
+    try:
+        parsed = yaml.safe_load(raw)
+    except yaml.YAMLError as exc:
+        raise ConfigurationError(f"{source}: invalid YAML: {exc}") from exc
+    return source, parsed
 
 
 def read_versioned_entries(

@@ -64,7 +64,10 @@ def _as_dense_2d(data: Any) -> np.ndarray:
     """Coerce array-like or scipy-sparse input to a dense 2-D float matrix."""
     if hasattr(data, "toarray"):  # scipy sparse matrices from TF-IDF pipelines
         data = data.toarray()
-    matrix = np.asarray(data, dtype=np.float64)
+    try:
+        matrix = np.asarray(data, dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        raise DataError(f"embedding input is not a numeric matrix: {exc}") from exc
     if matrix.ndim != 2:
         raise DataError(f"expected a 2-D embedding matrix, got shape {matrix.shape}")
     return matrix

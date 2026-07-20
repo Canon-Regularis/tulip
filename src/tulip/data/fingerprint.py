@@ -85,10 +85,18 @@ class SplitFingerprint(BaseModel):
         Raises:
             DataError: if the file is not a split lock.
         """
-        data = read_json(Path(path))
+        from pydantic import ValidationError
+
+        try:
+            data = read_json(Path(path))
+        except ValueError as exc:  # includes json.JSONDecodeError on a corrupt file
+            raise DataError(f"{path} is not a valid tulip split lock: {exc}") from exc
         if not isinstance(data, dict) or "combined" not in data or "digests" not in data:
             raise DataError(f"{path} is not a tulip split lock (expected 'digests' and 'combined')")
-        return cls.model_validate(data)
+        try:
+            return cls.model_validate(data)
+        except ValidationError as exc:
+            raise DataError(f"{path} is not a valid tulip split lock: {exc}") from exc
 
 
 def sample_digest(sample: Sample) -> str:
