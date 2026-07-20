@@ -20,6 +20,13 @@ from typing import Any
 
 import numpy as np
 
+# sklearn.base is imported at module level (unlike the factory estimators below,
+# which stay lazy) because LabelEncodedClassifier must subclass these to be a
+# real estimator: without the sklearn tags they supply, scikit-learn >= 1.6
+# raises AttributeError when it resolves tags on the wrapper during predict or
+# inside voting/stacking ensembles.
+from sklearn.base import BaseEstimator, ClassifierMixin
+
 from tulip.core.exceptions import ConfigurationError
 from tulip.models._factory import pop_seed
 from tulip.models.registry import MODELS
@@ -55,7 +62,7 @@ def _pop_seed(params: dict[str, Any], *, default: int | None = DEFAULT_SEED) -> 
     return pop_seed(params, default=default)
 
 
-class LabelEncodedClassifier:
+class LabelEncodedClassifier(ClassifierMixin, BaseEstimator):
     """Adapter exposing string class labels over an integer-label estimator.
 
     XGBoost rejects non-integer class labels, and LightGBM's handling of them
