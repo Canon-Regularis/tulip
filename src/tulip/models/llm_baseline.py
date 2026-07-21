@@ -3,41 +3,36 @@
 :class:`LLMClassifier` asks Claude to label a short Polish text with exactly one
 dialect from the taxonomy, wrapped in the scikit-learn estimator API so it drops
 into ``benchmark`` and ``train`` as ``-m llm_zeroshot`` or ``-m llm_fewshot``
-alongside the classical and neural models. Zero-shot sends only the label
-glossary; few-shot prepends a few seeded worked examples per class.
+alongside the classical and neural models. Zero-shot sends only the label glossary;
+few-shot prepends a few seeded worked examples per class.
 
-The determinism problem this baseline poses is real: an API call is
-network-bound and its output is not reproducible from a seed. Current Claude
-models do not accept a sampling temperature, so there is no in-band knob to pin
-the output either. The reproducibility boundary is therefore a content-addressed
-response cache. Every request is keyed by a digest of the model id, the system
-prompt, and the full message list; the first run records each response, and any
-later run replays them, byte-identical and fully offline. A run that has to hit
-the network (a cache miss) is non-deterministic and must never feed a committed
+The determinism problem this baseline poses is real: an API call is network-bound
+and its output is not reproducible from a seed. Current Claude models do not accept
+a sampling temperature, so there is no in-band knob to pin the output either. The
+reproducibility boundary is therefore a content-addressed response cache
+(:class:`~tulip.models._llm_cache.LLMResponseCache`). A run that has to hit the
+network (a cache miss) is non-deterministic and must never feed a committed
 artifact; the leaderboard's byte-for-byte guarantee is preserved by keeping this
 baseline out of the committed suite and gating it behind a populated cache.
 
-``anthropic`` is an optional extra, imported lazily inside the one method that
-calls the API, so importing this module (and registering the baseline) never
-pulls the SDK. The prompt-building and response-parsing helpers are pure
-functions, unit-testable without the SDK or a network.
+``anthropic`` is an optional extra, imported lazily inside the one method that calls
+the API, so importing this module (and registering the baseline) never pulls the
+SDK. The request and response protocol, prompt building, reply parsing, voting, and
+cache keying, lives in :mod:`tulip.models._llm_protocol` as pure functions unit
+tested without the SDK or a network; the three names the public surface has always
+carried (:func:`build_system_prompt`, :func:`build_messages`, :func:`parse_label`)
+are re-exported here unchanged.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import re
-from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 
-from tulip._serialize import sorted_json_text, write_sorted_json
 from tulip.core.exceptions import ConfigurationError, TulipError
-from tulip.labels.taxonomy import display_name
 from tulip.models._common import (
     ArgmaxPredictMixin,
     empty_proba,
@@ -45,33 +40,32 @@ from tulip.models._common import (
     require_fitted,
     validate_fit_inputs,
 )
+from tulip.models._llm_cache import LLMResponseCache
 from tulip.models._llm_exemplars import EXEMPLAR_SELECTORS
+from tulip.models._llm_protocol import (
+    _cache_key,
+    _majority_vote,
+    build_messages,
+    build_system_prompt,
+    parse_label,
+)
 from tulip.models.registry import MODELS
-from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-logger = get_logger(__name__)
-
 #: Default Claude model: the balanced tier, a sensible cost/latency/quality point
 #: for a baseline over many short texts. Override via the ``model`` parameter.
 DEFAULT_MODEL = "claude-sonnet-5"
 
-#: Output cap: a label id is a few tokens, so a small ceiling keeps the model
-#: terse and the cost down.
+#: Output cap: a label id is a few tokens, so a small ceiling keeps the model terse
+#: and the cost down.
 DEFAULT_MAX_TOKENS = 64
 
-#: The pip extra that provides the SDK, named in the install hint and the
-#: registry metadata.
+#: The pip extra that provides the SDK, named in the install hint and the registry
+#: metadata.
 ANTHROPIC_EXTRA = "anthropic"
-
-#: Prompt-protocol version folded into every cache key. Bump it when the prompt
-#: or message shape changes so stale cached responses are not reused.
-_CACHE_VERSION = 1
-
-_WORD_RE = re.compile(r"[a-z0-9]+")
 
 __all__ = [
     "ANTHROPIC_EXTRA",
@@ -83,200 +77,6 @@ __all__ = [
     "build_system_prompt",
     "parse_label",
 ]
-
-
-# --------------------------------------------------------------- pure helpers
-
-
-def build_system_prompt(classes: Sequence[str]) -> str:
-    """Build the instruction and label glossary the model classifies against.
-
-    Args:
-        classes: The label ids the model must choose between.
-
-    Returns:
-        A system prompt naming each label id with its English and Polish
-        display names, so the model has the dialectology in front of it.
-    """
-    lines = [
-        "You are a dialectologist classifying a short Polish text into exactly one "
-        + "regional dialect.",
-        "Choose the single best label id from this list. Reply with only the label id, "
-        + "nothing else.",
-        "",
-        "Labels:",
-    ]
-    for label in classes:
-        english = display_name(label)
-        polish = display_name(label, polish=True)
-        if polish and polish != english:
-            lines.append(f"- {label}: {english} ({polish})")
-        else:
-            lines.append(f"- {label}: {english}")
-    return "\n".join(lines)
-
-
-def build_messages(text: str, exemplars: Sequence[tuple[str, str]]) -> list[dict[str, str]]:
-    """Build the message list: few-shot example turns, then the target text.
-
-    Args:
-        text: The document to classify.
-        exemplars: ``(text, label)`` demonstrations, shown as prior turns.
-
-    Returns:
-        A messages list for the Messages API.
-    """
-    messages: list[dict[str, str]] = []
-    for example_text, example_label in exemplars:
-        messages.append({"role": "user", "content": example_text})
-        messages.append({"role": "assistant", "content": example_label})
-    messages.append({"role": "user", "content": str(text)})
-    return messages
-
-
-def parse_label(response_text: str, classes: Sequence[Any] | np.ndarray) -> str:
-    """Resolve a model reply to one known label id, defensively.
-
-    Tried in order: an exact (case-insensitive) match on the whole reply; a
-    ``{"label": ...}`` JSON object (covering a structured-output reply); the
-    label's words appearing as a contiguous phrase in the reply, preferring the
-    most specific (longest) match so a compound id like ``cieszyn_silesia`` wins
-    over an embedded sibling like ``silesia``. When none of those resolve, or the
-    longest phrase match is ambiguous, the first class is returned so the
-    classifier always yields a valid, deterministic label rather than raising.
-
-    Args:
-        response_text: The raw text the model returned.
-        classes: The known label ids.
-
-    Returns:
-        One label id from ``classes``.
-    """
-    class_list = [str(label) for label in classes]
-    text = response_text.strip()
-    lowered = text.lower()
-
-    for label in class_list:
-        if lowered == label.lower():
-            return label
-
-    json_label = _json_label(text)
-    if json_label is not None:
-        for label in class_list:
-            if json_label.lower() == label.lower():
-                return label
-
-    # Words, not underscore-tokens, so the display form ("Cieszyn Silesia") and
-    # the id form ("cieszyn_silesia") tokenise the same way and both resolve.
-    reply_words = _WORD_RE.findall(lowered)
-    matches = [label for label in class_list if _contains_phrase(reply_words, _label_words(label))]
-    if matches:
-        longest = max(len(_label_words(label)) for label in matches)
-        best = [label for label in matches if len(_label_words(label)) == longest]
-        if len(best) == 1:
-            return best[0]
-
-    logger.debug("could not resolve LLM reply %r to a label; falling back", text[:80])
-    return class_list[0]
-
-
-def _label_words(label: str) -> tuple[str, ...]:
-    """Split a label id into its lowercased word components."""
-    return tuple(_WORD_RE.findall(label.lower()))
-
-
-def _contains_phrase(words: Sequence[str], phrase: tuple[str, ...]) -> bool:
-    """Whether ``phrase`` occurs as a contiguous run inside ``words``."""
-    length = len(phrase)
-    if length == 0:
-        return False
-    return any(tuple(words[i : i + length]) == phrase for i in range(len(words) - length + 1))
-
-
-def _json_label(text: str) -> str | None:
-    """Return the ``label`` field of a JSON-object reply, or ``None``."""
-    try:
-        parsed = json.loads(text)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if isinstance(parsed, dict) and "label" in parsed:
-        return str(parsed["label"])
-    return None
-
-
-def _majority_vote(votes: Sequence[str], classes: Sequence[Any] | np.ndarray) -> str:
-    """The most-voted label, ties broken by class order for a deterministic result.
-
-    ``votes`` are all valid label ids (:func:`parse_label` always returns one),
-    so a simple count suffices; ``max`` keeps the first class in ``classes`` order
-    on a tie.
-    """
-    counts = Counter(votes)
-    class_list = [str(label) for label in classes]
-    return max(class_list, key=lambda label: counts.get(label, 0))
-
-
-def _cache_key(model: str, max_tokens: int, system: str, messages: Sequence[dict[str, str]]) -> str:
-    """Content-address a request by everything that determines its response."""
-    payload = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "system": system,
-        "messages": list(messages),
-        "v": _CACHE_VERSION,
-    }
-    return hashlib.sha256(sorted_json_text(payload).encode("utf-8")).hexdigest()
-
-
-# --------------------------------------------------------------- response cache
-
-
-class LLMResponseCache:
-    """A content-addressed store of model responses, keyed by request digest.
-
-    An in-memory layer backs an optional on-disk directory. With a directory,
-    responses survive across processes, which is what lets a second run replay
-    them offline; without one, the cache lives only for the process (useful in
-    tests). Files are written with :func:`write_sorted_json`, so a committed
-    cache stays diff-friendly and regenerable.
-    """
-
-    def __init__(self, directory: Path | str | None = None) -> None:
-        self.directory = Path(directory) if directory is not None else None
-        self._memory: dict[str, str] = {}
-
-    def get(self, key: str) -> str | None:
-        """Return the cached response for ``key``, or ``None`` on a miss.
-
-        A corrupt or partial cache file (invalid JSON, or missing the
-        ``response`` key) is treated as a miss, so one bad entry re-queries and
-        overwrites itself rather than aborting the whole prediction.
-        """
-        if key in self._memory:
-            return self._memory[key]
-        if self.directory is not None:
-            path = self.directory / f"{key}.json"
-            if path.is_file():
-                try:
-                    response = str(json.loads(path.read_text(encoding="utf-8"))["response"])
-                except (json.JSONDecodeError, KeyError, ValueError, OSError) as exc:
-                    logger.debug("ignoring unreadable cache file %s: %s", path, exc)
-                    return None
-                self._memory[key] = response
-                return response
-        return None
-
-    def put(self, key: str, response: str, *, request: dict[str, Any] | None = None) -> None:
-        """Record ``response`` for ``key`` in memory and (if set) on disk."""
-        self._memory[key] = response
-        if self.directory is not None:
-            payload: dict[str, Any] = {"response": response}
-            if request is not None:
-                payload["request"] = request
-            write_sorted_json(self.directory / f"{key}.json", payload)
-
-
-# --------------------------------------------------------------- classifier
 
 
 class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
@@ -312,8 +112,8 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
             model: Claude model id.
             few_shot: Worked examples per class to include (0 is zero-shot).
             max_tokens: Output token cap per request.
-            cache_dir: Directory backing the response cache; ``None`` caches only
-                in memory (so a fresh process re-queries).
+            cache_dir: Directory backing the response cache; ``None`` caches only in
+                memory (so a fresh process re-queries).
             system_prompt: Override for the auto-built instruction and glossary.
             exemplar_selection: Few-shot selection strategy (``"random"`` or
                 ``"similar"``; see :data:`~tulip.models._llm_exemplars.EXEMPLAR_SELECTORS`).
@@ -415,8 +215,8 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
 
         With ``self_consistency == 1`` this is one constrained-choice request
         (variant 0), identical to the base behaviour. Above 1, the same text is
-        classified through several prompt variants (each a different exemplar
-        set) and the labels are majority-voted, ties broken by class order.
+        classified through several prompt variants (each a different exemplar set)
+        and the labels are majority-voted, ties broken by class order.
         """
         if self.self_consistency <= 1:
             return self._classify_variant(text, variant=0)
@@ -482,8 +282,8 @@ def _complete(
             model=model, max_tokens=max_tokens, system=system, messages=list(messages)
         )
     except Exception as exc:
-        # Network/SDK boundary: any SDK or transport error is re-raised as a
-        # clean tulip error rather than surfacing a raw traceback.
+        # Network/SDK boundary: any SDK or transport error is re-raised as a clean
+        # tulip error rather than surfacing a raw traceback.
         raise TulipError(f"Anthropic API call failed: {exc}") from exc
     return _extract_text(response)
 
