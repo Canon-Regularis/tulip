@@ -61,7 +61,7 @@ class TestBuildClassifierTrainingKnobs:
     def test_declared_knobs_restrict_the_injection(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # The OCP fix: a training-aware model that accepts only ``epochs`` gets
+        # A training-aware model that accepts only ``epochs`` gets
         # only that knob, not the neural fine-tuners' full set.
         from tulip.models import MODELS
         from tulip.pipeline.experiment import build_classifier

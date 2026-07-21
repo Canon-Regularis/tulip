@@ -122,7 +122,7 @@ def _text_classifier(corpus: list[Sample]) -> DialectClassifier:
 
 @pytest.mark.parametrize("strategy", STRATEGIES, ids=STRATEGY_IDS)
 class TestFusionStrategyContract:
-    """The identical postcondition every FusionStrategy must satisfy (LSP)."""
+    """The identical postcondition every FusionStrategy must satisfy."""
 
     def test_output_shape_and_rows_sum_to_one(self, strategy: FusionStrategy) -> None:
         stack, mask = _stack_and_mask()

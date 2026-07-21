@@ -260,8 +260,8 @@ class TestProtocolAndSubstitutability:
         assert isinstance(fitted_always, SamplePredictor)
 
     def test_is_not_a_dialect_classifier_subclass(self) -> None:
-        # Pinned so a future refactor cannot silently reintroduce the Liskov
-        # violation of inheriting DialectClassifier's fixed-level postcondition.
+        # Pinned so a future refactor cannot silently reintroduce inheritance from
+        # DialectClassifier, whose fixed-level postcondition a backoff model cannot honour.
         assert not issubclass(HierarchicalDialectClassifier, DialectClassifier)
 
 

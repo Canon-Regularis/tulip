@@ -130,7 +130,7 @@ def test_temperature_fit_is_deterministic() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Shared calibrator contract (LSP made concrete)                              #
+# Shared calibrator contract, checked for every implementation                #
 # --------------------------------------------------------------------------- #
 
 

@@ -230,7 +230,7 @@ def test_empty_input_sequence_keeps_column_count() -> None:
     assert matrix.shape == (0, 2)
 
 
-# ------------------------------------------------- custom isogloss files (OCP)
+# ------------------------------------------------- custom isogloss files
 
 
 def test_custom_digraph_isogloss_counts_per_tokens(tmp_path: Path) -> None:

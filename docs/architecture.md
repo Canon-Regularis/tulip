@@ -442,9 +442,10 @@ against the `pyproject.toml` version, which is the single source of truth.
 -> list[Prediction]`. It exists because the classifiers below **must not**
 subclass `DialectClassifier`. `predict_batch` guarantees every `Prediction` has
 `level == self.target` over a single modality. Each of these violates one of
-those postconditions. Relating them by protocol instead of inheritance obeys the
-Liskov substitution principle. `DialectClassifier`
-satisfies the protocol via a `predict_samples` adapter.
+those postconditions, so relating them by a common protocol instead of by
+subclassing is what keeps them substitutable without inheriting a contract they
+cannot honour. `DialectClassifier` satisfies the protocol via a `predict_samples`
+adapter.
 
 - `hierarchical/`: `HierarchicalDialectClassifier` composes one
   `DialectClassifier` per `LabelLevel` (coarse to fine). It returns the finest
