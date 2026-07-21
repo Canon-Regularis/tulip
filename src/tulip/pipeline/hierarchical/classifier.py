@@ -24,8 +24,8 @@ only "one :class:`Prediction` per input :class:`Sample`, in order", a contract
 a per-sample-varying level honours without strain.
 
 Whether a prediction is "confident enough" to keep is decided by a
-:class:`~tulip.pipeline.hierarchical.policies.BackoffPolicy`, an open/closed
-family of predicates that lives in its own leaf module
+:class:`~tulip.pipeline.hierarchical.policies.BackoffPolicy`, a family of
+predicates that lives in its own leaf module
 (:mod:`tulip.pipeline.hierarchical.policies`) so that adding a policy never
 edits this classifier.
 """
