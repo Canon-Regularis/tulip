@@ -353,14 +353,19 @@ class DialectClassifier:
                 f"artifact at {path} was not saved by DialectClassifier.save() "
                 f"(kind={stored.get('kind')!r})"
             )
-        classifier = cls(
-            model=stored["model"],
-            features=stored.get("features", ()),
-            task=TaskType(stored.get("task", TaskType.TEXT.value)),
-            target=LabelLevel(stored.get("target", LabelLevel.DIALECT.value)),
-            abstain_threshold=stored.get("abstain_threshold"),
-            seed=int(stored.get("seed", 42)),
-        )
+        from pydantic import ValidationError
+
+        try:
+            classifier = cls(
+                model=stored["model"],
+                features=stored.get("features", ()),
+                task=TaskType(stored.get("task", TaskType.TEXT.value)),
+                target=LabelLevel(stored.get("target", LabelLevel.DIALECT.value)),
+                abstain_threshold=stored.get("abstain_threshold"),
+                seed=int(stored.get("seed", 42)),
+            )
+        except (KeyError, ValueError, TypeError, ValidationError) as exc:
+            raise DataError(f"corrupt DialectClassifier artifact at {path}: {exc}") from exc
         classifier.pipeline_ = pipeline
         classes = sidecar.get("classes") or np.asarray(pipeline.classes_).tolist()
         classifier.classes_ = tuple(str(label) for label in classes)
