@@ -241,8 +241,10 @@ def _stratified_seed(
     """
     by_class: dict[str, list[Sample]] = {}
     for sample in pool:
-        label = str(sample.labels.at_level(config.target))
-        by_class.setdefault(label, []).append(sample)
+        label = sample.labels.at_level(config.target)
+        if label is None:
+            continue  # unlabelled at the target level; it cannot seed or train
+        by_class.setdefault(str(label), []).append(sample)
     order: dict[str, list[Sample]] = {}
     for label in sorted(by_class):
         members = by_class[label]
