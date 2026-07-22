@@ -59,13 +59,19 @@ def read_yaml_resource(
         label = bundled_label if bundled_label is not None else noun
         source = f"bundled {label} {bundled_name!r}"
         resource = resources.files(_RESOURCE_PACKAGE).joinpath(_RESOURCE_DIR).joinpath(bundled_name)
-        raw = resource.read_text(encoding="utf-8")
+        try:
+            raw = resource.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as exc:
+            raise ConfigurationError(f"could not read {source}: {exc}") from exc
     else:
         file_path = Path(path)
         source = str(file_path)
         if not file_path.is_file():
             raise ConfigurationError(f"{noun} file not found: {file_path}")
-        raw = file_path.read_text(encoding="utf-8")
+        try:
+            raw = file_path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as exc:
+            raise ConfigurationError(f"could not read {noun} file {file_path}: {exc}") from exc
     try:
         parsed = yaml.safe_load(raw)
     except yaml.YAMLError as exc:

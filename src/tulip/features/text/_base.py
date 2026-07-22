@@ -17,6 +17,7 @@ behaviour that does not touch construction.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -40,8 +41,8 @@ def check_per_tokens(per_tokens: float) -> None:
     Raises:
         ConfigurationError: If ``per_tokens`` is not greater than zero.
     """
-    if per_tokens <= 0:
-        raise ConfigurationError(f"per_tokens must be > 0, got {per_tokens}")
+    if not math.isfinite(per_tokens) or per_tokens <= 0:
+        raise ConfigurationError(f"per_tokens must be a finite number > 0, got {per_tokens}")
 
 
 class DenseTextExtractor(TransformerMixin, BaseEstimator):
