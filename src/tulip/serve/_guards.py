@@ -165,7 +165,10 @@ class AuthMiddleware(_ScopedMiddleware):
         provided = _header(scope, b"authorization") or ""
         # Constant-time compare so a wrong token cannot be guessed byte-by-byte
         # from response timing.
-        if not hmac.compare_digest(provided, self._expected):
+        # Compare as bytes: a non-ASCII Authorization header (a latin-1 decode can
+        # hold bytes 128-255) makes hmac.compare_digest raise TypeError on str
+        # inputs, which would turn a wrong token into a 500 instead of a 401.
+        if not hmac.compare_digest(provided.encode("utf-8"), self._expected.encode("utf-8")):
             await _send_json(send, 401, "missing or invalid bearer token")
             return
         await self.app(scope, receive, send)

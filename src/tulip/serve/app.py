@@ -427,9 +427,9 @@ def create_app(
         # NamedTemporaryFile must be closed before reopening on Windows, hence
         # delete=False plus explicit cleanup.
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
-            handle.write(file)
             temp_path = Path(handle.name)
         try:
+            temp_path.write_bytes(file)
             prediction = classifier.predict(temp_path)
         except DataError as exc:
             # The suffix is validated above, but the *bytes* are not: a caller can
