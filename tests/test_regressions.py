@@ -172,3 +172,69 @@ def test_uncertainty_single_member_reports_configuration_error() -> None:
 
     with pytest.raises(ConfigurationError):
         decompose_uncertainty(np.zeros((1, 3, 2)))  # one member, needs >= 2
+
+
+def test_generic_manifest_loader_rejects_a_bad_columns_mapping() -> None:
+    from tulip.data.registry import DATASETS
+
+    with pytest.raises(DataError):
+        DATASETS.create("manifest", columns={"speaker": "who"})  # not a ManifestColumns field
+
+
+def test_check_per_tokens_rejects_non_finite() -> None:
+    from tulip.features.text._base import check_per_tokens
+
+    for bad in (float("nan"), float("inf")):
+        with pytest.raises(ConfigurationError):
+            check_per_tokens(bad)
+
+
+def test_age_band_passes_a_non_finite_age_through() -> None:
+    from tulip.evaluation.slicing import age_band
+
+    assert age_band("1e999") == "1e999"  # int(float("1e999")) is int(inf) -> OverflowError
+
+
+def test_load_benchmark_reports_configuration_error(tmp_path) -> None:
+    from tulip.evaluation.benchmark import load_benchmark
+
+    with pytest.raises(ConfigurationError):
+        load_benchmark(tmp_path / "missing.json")
+    corrupt = tmp_path / "benchmark.json"
+    corrupt.write_text("{not json", encoding="utf-8")
+    with pytest.raises(ConfigurationError):
+        load_benchmark(corrupt)
+
+
+def test_project_embeddings_rejects_a_zero_feature_matrix() -> None:
+    from tulip.viz.embedding_space import project_embeddings
+
+    with pytest.raises(DataError):
+        project_embeddings([[], []], ["a", "b"])
+
+
+def test_load_datasheet_spec_reports_configuration_error(tmp_path) -> None:
+    from tulip.evaluation.datasheet import load_datasheet_spec
+
+    bad = tmp_path / "spec.yaml"
+    bad.write_text("motivation:\n  - not\n  - a string\n", encoding="utf-8")
+    with pytest.raises(ConfigurationError):
+        load_datasheet_spec(bad)
+
+
+def test_read_samples_reports_dataerror_on_corrupt_jsonl(tmp_path) -> None:
+    from tulip.data.reading import read_samples
+
+    corrupt = tmp_path / "split.jsonl"
+    corrupt.write_text("{not valid json\n", encoding="utf-8")
+    with pytest.raises(DataError):
+        list(read_samples(corrupt))
+
+
+def test_non_utf8_lexicon_reports_configuration_error(tmp_path) -> None:
+    from tulip.features.text.keywords import load_lexicon
+
+    bad = tmp_path / "lexicon.yaml"
+    bad.write_bytes("podhale: [godał]\n".encode("cp1250"))  # 'ł' -> 0xB3, invalid UTF-8
+    with pytest.raises(ConfigurationError):
+        load_lexicon(bad)
