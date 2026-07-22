@@ -181,7 +181,14 @@ def _guarded_calibration(
             "calibration skipped: y_proba shape %s incompatible", getattr(proba, "shape", None)
         )
         return None
-    return compute_calibration(true_list, proba, label_list, n_bins=n_bins)
+    try:
+        return compute_calibration(true_list, proba, label_list, n_bins=n_bins)
+    except ConfigurationError as exc:
+        # Keep calibration a graceful opt-in: a NaN or out-of-range probability
+        # disables it rather than failing an otherwise-valid metrics computation,
+        # matching the roc_auc guard above.
+        logger.debug("calibration skipped: %s", exc)
+        return None
 
 
 def _guarded_roc_auc(
