@@ -52,7 +52,10 @@ def read_samples(path: Path | str) -> Iterator[Sample]:
     if path.suffix.lower() in _SPLIT_FILE_SUFFIXES:
         # Parse fully before yielding: a mid-stream failure must not emit
         # partial results.
-        records = list(read_jsonl(path))
+        try:
+            records = list(read_jsonl(path))
+        except (OSError, ValueError) as exc:  # unreadable, non-UTF-8, or invalid JSON
+            raise DataError(f"could not read {path}: {exc}") from exc
         if not records:
             return
         # Shape decides the format, not mere validity. A split file's records are

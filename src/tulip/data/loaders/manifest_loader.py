@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+from tulip.core.exceptions import DataError
 from tulip.core.types import DatasetInfo, Sample
 from tulip.data.loaders._base import ManifestBackedLoader
 from tulip.data.manifest import ManifestColumns, read_manifest
@@ -52,7 +53,10 @@ class GenericManifestLoader(ManifestBackedLoader):
         source: str = "manifest",
     ) -> None:
         super().__init__(manifest)
-        self._columns = ManifestColumns(**dict(columns)) if columns else ManifestColumns()
+        try:
+            self._columns = ManifestColumns(**dict(columns)) if columns else ManifestColumns()
+        except (TypeError, ValueError) as exc:
+            raise DataError(f"invalid manifest columns mapping: {exc}") from exc
         self._label_defaults = dict(label_defaults or {})
         self._source = source
 
