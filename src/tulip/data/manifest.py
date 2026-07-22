@@ -216,29 +216,39 @@ def _iter_csv_rows(path: Path, delimiter: str | None) -> Iterator[tuple[int, dic
     ``utf-8-sig`` tolerates the BOM that Excel prepends when saving CSV.
     """
     sep = delimiter or _DELIMITERS.get(path.suffix.lower(), ",")
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter=sep)
-        if reader.fieldnames is None:
-            raise DataError(f"manifest {path} is empty (no header row)")
-        for row in reader:
-            row.pop(None, None)  # extra unnamed cells beyond the header
-            yield reader.line_num, {k: v for k, v in row.items() if k is not None}
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter=sep)
+            if reader.fieldnames is None:
+                raise DataError(f"manifest {path} is empty (no header row)")
+            for row in reader:
+                row.pop(None, None)  # extra unnamed cells beyond the header
+                yield reader.line_num, {k: v for k, v in row.items() if k is not None}
+    except UnicodeDecodeError as exc:
+        raise DataError(
+            f"manifest {path} is not valid UTF-8 (readers expect utf-8/utf-8-sig): {exc}"
+        ) from exc
 
 
 def _iter_jsonl_rows(path: Path) -> Iterator[tuple[int, dict[str, Any]]]:
     """Yield ``(line_number, record)`` from a JSON Lines manifest."""
-    with path.open("r", encoding="utf-8-sig") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise DataError(f"{path}:{line_number}: invalid JSON: {exc}") from exc
-            if not isinstance(record, dict):
-                raise DataError(f"{path}:{line_number}: expected a JSON object per line")
-            yield line_number, record
+    try:
+        with path.open("r", encoding="utf-8-sig") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise DataError(f"{path}:{line_number}: invalid JSON: {exc}") from exc
+                if not isinstance(record, dict):
+                    raise DataError(f"{path}:{line_number}: expected a JSON object per line")
+                yield line_number, record
+    except UnicodeDecodeError as exc:
+        raise DataError(
+            f"manifest {path} is not valid UTF-8 (readers expect utf-8/utf-8-sig): {exc}"
+        ) from exc
 
 
 def _check_required_columns(cols: ManifestColumns, available: Any, path: Path) -> None:

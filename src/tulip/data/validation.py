@@ -461,6 +461,8 @@ def _is_blank(value: Any) -> bool:
 def _classify_data_error(message: str) -> str:
     """Map a :class:`DataError` message to a stable issue code."""
     lowered = message.lower()
+    if "not valid utf-8" in lowered:
+        return "encoding"
     if "neither a text column" in lowered:
         return "no-content-column"
     if "missing required column" in lowered:

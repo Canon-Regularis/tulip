@@ -49,9 +49,9 @@ def test_disagreement_raises_epistemic_uncertainty() -> None:
 
 
 def test_decompose_rejects_bad_input() -> None:
-    with pytest.raises(ValueError, match="n_members"):
+    with pytest.raises(ConfigurationError, match="n_members"):
         decompose_uncertainty(np.zeros((2, 3)))  # not 3-D
-    with pytest.raises(ValueError, match="two members"):
+    with pytest.raises(ConfigurationError, match="two members"):
         decompose_uncertainty(np.zeros((1, 2, 3)))  # one member
 
 

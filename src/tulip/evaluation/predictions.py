@@ -204,9 +204,17 @@ class SplitPredictions(BaseModel):
         Raises:
             ConfigurationError: if the file is not a predictions dump.
         """
-        data = read_json(Path(path))
+        from pydantic import ValidationError
+
+        try:
+            data = read_json(Path(path))
+        except (OSError, ValueError) as exc:  # missing file, or invalid JSON
+            raise ConfigurationError(f"{path} is not a readable predictions dump: {exc}") from exc
         if not isinstance(data, dict) or "records" not in data or "labels" not in data:
             raise ConfigurationError(
                 f"{path} is not a tulip predictions dump (expected 'labels' and 'records')"
             )
-        return cls.model_validate(data)
+        try:
+            return cls.model_validate(data)
+        except ValidationError as exc:
+            raise ConfigurationError(f"{path} is not a valid predictions dump: {exc}") from exc

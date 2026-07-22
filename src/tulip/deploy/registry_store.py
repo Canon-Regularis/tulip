@@ -250,10 +250,15 @@ class ModelRegistry:
         path = self._index_path()
         if not path.is_file():
             return _Index()
+        from pydantic import ValidationError
+
         data = read_json_object(path, what="registry index")
         if "entries" not in data:
             raise DataError(f"{path} is not a tulip registry index")
-        return _Index.model_validate(data)
+        try:
+            return _Index.model_validate(data)
+        except ValidationError as exc:
+            raise DataError(f"{path} is not a valid tulip registry index: {exc}") from exc
 
     def _save_index(self, index: _Index) -> None:
         write_sorted_json(self._index_path(), index.model_dump(mode="json"))

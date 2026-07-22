@@ -19,7 +19,9 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from tulip.core.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -106,33 +108,54 @@ class ServeSettings(BaseModel):
             The parsed, validated settings.
         """
         env = os.environ if environ is None else environ
-        return cls(
-            api_token=env.get(f"{ENV_PREFIX}API_TOKEN") or None,
-            rate_limit_per_minute=_positive_or_none(env.get(f"{ENV_PREFIX}RATE_LIMIT")),
-            max_concurrency=_positive_or_none(env.get(f"{ENV_PREFIX}MAX_CONCURRENCY")),
-            max_body_bytes=_positive_or_none(
-                env.get(f"{ENV_PREFIX}MAX_BODY_BYTES"), default=_DEFAULT_MAX_BODY_BYTES
-            ),
-            max_batch=_positive_or_default(env.get(f"{ENV_PREFIX}MAX_BATCH"), _DEFAULT_MAX_BATCH),
-            cors_allow_origins=_csv(env.get(f"{ENV_PREFIX}CORS_ORIGINS")),
-            security_headers=_flag(env.get(f"{ENV_PREFIX}SECURITY_HEADERS"), default=True),
-            hsts=_flag(env.get(f"{ENV_PREFIX}HSTS"), default=False),
-        )
+        try:
+            return cls(
+                api_token=env.get(f"{ENV_PREFIX}API_TOKEN") or None,
+                rate_limit_per_minute=_positive_or_none(
+                    env.get(f"{ENV_PREFIX}RATE_LIMIT"), f"{ENV_PREFIX}RATE_LIMIT"
+                ),
+                max_concurrency=_positive_or_none(
+                    env.get(f"{ENV_PREFIX}MAX_CONCURRENCY"), f"{ENV_PREFIX}MAX_CONCURRENCY"
+                ),
+                max_body_bytes=_positive_or_none(
+                    env.get(f"{ENV_PREFIX}MAX_BODY_BYTES"),
+                    f"{ENV_PREFIX}MAX_BODY_BYTES",
+                    default=_DEFAULT_MAX_BODY_BYTES,
+                ),
+                max_batch=_positive_or_default(
+                    env.get(f"{ENV_PREFIX}MAX_BATCH"), f"{ENV_PREFIX}MAX_BATCH", _DEFAULT_MAX_BATCH
+                ),
+                cors_allow_origins=_csv(env.get(f"{ENV_PREFIX}CORS_ORIGINS")),
+                security_headers=_flag(env.get(f"{ENV_PREFIX}SECURITY_HEADERS"), default=True),
+                hsts=_flag(env.get(f"{ENV_PREFIX}HSTS"), default=False),
+            )
+        except ValidationError as exc:
+            raise ConfigurationError(f"invalid {ENV_PREFIX}* server configuration: {exc}") from exc
 
 
-def _positive_or_none(value: str | None, *, default: int | None = None) -> int | None:
-    """Parse a positive int; a missing value yields ``default``, ``<= 0`` yields ``None``."""
+def _env_int(value: str | None, name: str) -> int | None:
+    """Parse an environment integer, or raise a clean error naming the variable."""
     if value is None or not value.strip():
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be an integer, got {value!r}") from exc
+
+
+def _positive_or_none(value: str | None, name: str, *, default: int | None = None) -> int | None:
+    """Parse a positive int; a missing value yields ``default``, ``<= 0`` yields ``None``."""
+    parsed = _env_int(value, name)
+    if parsed is None:
         return default
-    parsed = int(value)
     return parsed if parsed > 0 else None
 
 
-def _positive_or_default(value: str | None, default: int) -> int:
+def _positive_or_default(value: str | None, name: str, default: int) -> int:
     """Parse a positive int, falling back to ``default`` when unset/non-positive."""
-    if value is None or not value.strip():
+    parsed = _env_int(value, name)
+    if parsed is None:
         return default
-    parsed = int(value)
     return parsed if parsed > 0 else default
 
 
