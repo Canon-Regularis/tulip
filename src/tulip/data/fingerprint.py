@@ -89,7 +89,7 @@ class SplitFingerprint(BaseModel):
 
         try:
             data = read_json(Path(path))
-        except ValueError as exc:  # includes json.JSONDecodeError on a corrupt file
+        except (OSError, ValueError) as exc:  # missing file, or invalid JSON on a corrupt one
             raise DataError(f"{path} is not a valid tulip split lock: {exc}") from exc
         if not isinstance(data, dict) or "combined" not in data or "digests" not in data:
             raise DataError(f"{path} is not a tulip split lock (expected 'digests' and 'combined')")
@@ -100,8 +100,17 @@ class SplitFingerprint(BaseModel):
 
 
 def sample_digest(sample: Sample) -> str:
-    """Canonical content digest of one sample (order-independent JSON)."""
-    canonical = json.dumps(sample.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
+    """Canonical content digest of one sample (order-independent JSON).
+
+    An audio clip is digested by its filename, not the machine-specific absolute
+    path pydantic renders (OS-native separators, per-machine location), so an audio
+    split lock reproduces across machines and operating systems.
+    """
+    payload = sample.model_dump(mode="json")
+    audio = payload.get("audio_path")
+    if audio is not None:
+        payload["audio_path"] = str(audio).replace("\\", "/").rsplit("/", 1)[-1]
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return _digest(canonical.encode("utf-8"))
 
 
