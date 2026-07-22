@@ -49,6 +49,7 @@ class DisparityMetric(BaseModel):
     ratio: float = Field(ge=0.0, le=1.0)
     worst_low_support: bool
     p_value: float | None = None
+    p_value_holm: float | None = None
     significant: bool = False
 
 
@@ -151,6 +152,7 @@ def fairness_report(
             ratio=worst.accuracy / best.accuracy if best.accuracy > 0.0 else 0.0,
             worst_low_support=worst.low_support,
             p_value=p_value,
+            p_value_holm=adjusted_p,
             significant=adjusted_p < alpha,
         )
         for (dimension, best, worst, p_value), adjusted_p in zip(pending, adjusted, strict=True)

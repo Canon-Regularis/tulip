@@ -311,8 +311,11 @@ def _summarise_bins(
         count = int(mask.sum())
         if count == 0:
             continue
-        confidence = float(confidences[mask].mean())
-        accuracy = float(correct[mask].mean())
+        # Clamp against floating-point drift past [0, 1]: _as_proba_matrix accepts a
+        # top probability up to 1 + _RANGE_TOL, which would otherwise push a bin's
+        # mean confidence past the CalibrationBin bound and raise.
+        confidence = min(1.0, max(0.0, float(confidences[mask].mean())))
+        accuracy = min(1.0, max(0.0, float(correct[mask].mean())))
         gap = abs(accuracy - confidence)
         ece += (count / n) * gap
         mce = max(mce, gap)

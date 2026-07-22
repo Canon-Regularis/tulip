@@ -169,6 +169,8 @@ def _class_orders(
     grouped: dict[str, list[Sample]] = {}
     for sample in train:
         label = sample.labels.at_level(config.target)
+        if label is None:
+            continue  # unlabelled at the target level; the classifier drops it at fit
         grouped.setdefault(str(label), []).append(sample)
     rng = np.random.default_rng(seed)
     ordered: dict[str, list[Sample]] = {}

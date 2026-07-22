@@ -90,15 +90,15 @@ def decompose_uncertainty(
         floating-point error.
 
     Raises:
-        ValueError: if the array is not 3-D or has fewer than two members.
+        ConfigurationError: if the array is not 3-D or has fewer than two members.
     """
     arr = np.asarray(member_proba, dtype=np.float64)
     if arr.ndim != 3:
-        raise ValueError(
+        raise ConfigurationError(
             f"member_proba must be (n_members, n_samples, n_classes), got shape {arr.shape}"
         )
     if arr.shape[0] < 2:
-        raise ValueError("uncertainty decomposition needs at least two members")
+        raise ConfigurationError("uncertainty decomposition needs at least two members")
     total = _entropy(arr.mean(axis=0))
     aleatoric = _entropy(arr).mean(axis=0)
     epistemic = np.clip(total - aleatoric, 0.0, None)
