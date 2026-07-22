@@ -134,6 +134,8 @@ def project_embeddings(
         raise DataError(f"got {len(labels)} labels for {n_samples} embedding rows")
     if n_samples < 2:
         raise DataError("embedding projection needs at least two samples")
+    if matrix.shape[1] == 0:
+        raise DataError("embedding matrix has zero features; nothing to project")
 
     logger.debug("projecting %d x %d embeddings with %s", *matrix.shape, method_key)
     if method_key == "tsne":
