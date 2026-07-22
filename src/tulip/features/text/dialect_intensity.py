@@ -200,7 +200,7 @@ class DialectIntensityExtractor(DenseTextExtractor):
     @staticmethod
     def _marker_density(tokens: Sequence[str], markers: frozenset[str]) -> float:
         """Fraction of ``tokens`` that are one of ``markers``."""
-        if not markers:
+        if not tokens or not markers:
             return 0.0
         return sum(token in markers for token in tokens) / len(tokens)
 

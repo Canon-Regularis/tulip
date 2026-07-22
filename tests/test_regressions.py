@@ -238,3 +238,13 @@ def test_non_utf8_lexicon_reports_configuration_error(tmp_path) -> None:
     bad.write_bytes("podhale: [godał]\n".encode("cp1250"))  # 'ł' -> 0xB3, invalid UTF-8
     with pytest.raises(ConfigurationError):
         load_lexicon(bad)
+
+
+def test_marker_density_guards_the_denominator_not_the_marker_set() -> None:
+    from tulip.features.text.dialect_intensity import DialectIntensityExtractor
+
+    # The per-token density divides by len(tokens), so the empty-guard must key on
+    # tokens. A non-empty marker set with zero tokens must return 0.0, not raise
+    # ZeroDivisionError (which the earlier `if not markers` guard let through).
+    assert DialectIntensityExtractor._marker_density([], frozenset({"baca"})) == 0.0
+    assert DialectIntensityExtractor._marker_density(["baca", "kaj"], frozenset()) == 0.0
