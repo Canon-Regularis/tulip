@@ -92,7 +92,7 @@ def age_band(value: object) -> str:
     text = str(value).strip()
     try:
         age = int(float(text))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # OverflowError: int(inf) from "1e999"
         return text
     return bucket_by_upper_edge(age, _AGE_BANDS)
 

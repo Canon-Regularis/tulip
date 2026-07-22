@@ -76,7 +76,12 @@ def load_datasheet_spec(path: Path | str) -> DatasheetSpec:
         raw = {}
     if not isinstance(raw, dict):
         raise ConfigurationError(f"datasheet spec {path} must be a YAML mapping")
-    return DatasheetSpec.model_validate(raw)
+    from pydantic import ValidationError
+
+    try:
+        return DatasheetSpec.model_validate(raw)
+    except ValidationError as exc:
+        raise ConfigurationError(f"invalid datasheet spec {path}: {exc}") from exc
 
 
 def datasheet(

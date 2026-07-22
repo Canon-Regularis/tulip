@@ -197,7 +197,12 @@ def load_benchmark(path: Path | str) -> list[BenchmarkResult]:
         ConfigurationError: If the file is not a benchmark artifact or its
             schema version is unsupported.
     """
-    data: Any = read_json(Path(path))
+    from pydantic import ValidationError
+
+    try:
+        data: Any = read_json(Path(path))
+    except (OSError, ValueError) as exc:  # missing file, or invalid JSON
+        raise ConfigurationError(f"{path} is not a readable benchmark file: {exc}") from exc
     if not isinstance(data, dict) or "schema_version" not in data or "results" not in data:
         raise ConfigurationError(
             f"{path} is not a tulip benchmark file (expected 'schema_version' and 'results')"
@@ -208,4 +213,7 @@ def load_benchmark(path: Path | str) -> list[BenchmarkResult]:
             f"unsupported benchmark schema version {version!r} in {path}; "
             f"this tulip version reads version {BENCHMARK_SCHEMA_VERSION}"
         )
-    return [BenchmarkResult.model_validate(record) for record in data["results"]]
+    try:
+        return [BenchmarkResult.model_validate(record) for record in data["results"]]
+    except ValidationError as exc:
+        raise ConfigurationError(f"{path} is not a valid benchmark file: {exc}") from exc
