@@ -242,6 +242,8 @@ def robustness(
     level_tuple = _parse_number_csv(levels, float, name="levels")
     if not level_tuple or any(not 0.0 <= level <= 1.0 for level in level_tuple):
         raise ConfigurationError("--levels must be non-empty and within [0, 1]")
+    if seed < 0:
+        raise ConfigurationError(f"--seed must be non-negative, got {seed}")
     names = perturbation or ["dialect_intensity_dial"]
     specs = [PerturbationConfig(name=name, levels=level_tuple, seed=seed) for name in names]
 
