@@ -368,7 +368,12 @@ def _mcnemar_p(discordant_a: int, discordant_b: int) -> float:
     if n == 0:
         return 1.0
     k = min(discordant_a, discordant_b)
-    tail = sum(math.comb(n, i) for i in range(k + 1)) * (0.5**n)
+    # Divide the exact integer tail by the exact integer 2**n rather than scaling
+    # by 0.5**n. Past a few hundred discordant pairs the binomial sum outgrows the
+    # float range, and multiplying it by a float forces a conversion that raises
+    # OverflowError; the integer quotient is correctly rounded at any size, and
+    # still exact for the small counts a modest split produces.
+    tail = sum(math.comb(n, i) for i in range(k + 1)) / (1 << n)
     return min(1.0, 2.0 * tail)
 
 

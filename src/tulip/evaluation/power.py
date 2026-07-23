@@ -110,12 +110,35 @@ def minimum_detectable_effect(
 
 
 def _binomial_tail(n: int, k: int, p: float) -> float:
-    """``P(Binomial(n, p) >= k)`` via the exact sum."""
+    """``P(Binomial(n, p) >= k)`` summed in log space.
+
+    Beyond roughly a thousand samples ``math.comb(n, i)`` outgrows the float
+    range, so forming ``comb * p**i`` directly raises OverflowError on the very
+    split sizes a real benchmark reports on. Accumulating log-terms keeps every
+    intermediate in range, and ``fsum`` keeps the many small addends accurate.
+    """
     if k <= 0:
         return 1.0
     if k > n:
         return 0.0
-    return sum(math.comb(n, i) * p**i * (1.0 - p) ** (n - i) for i in range(k, n + 1))
+    if p <= 0.0:
+        return 0.0  # at least one success is impossible
+    if p >= 1.0:
+        return 1.0  # every trial succeeds and k <= n
+    log_p = math.log(p)
+    log_q = math.log1p(-p)
+    log_n_factorial = math.lgamma(n + 1)
+    terms = (
+        math.exp(
+            log_n_factorial
+            - math.lgamma(i + 1)
+            - math.lgamma(n - i + 1)
+            + i * log_p
+            + (n - i) * log_q
+        )
+        for i in range(k, n + 1)
+    )
+    return min(1.0, math.fsum(terms))
 
 
 def _search_mde(n: int, wins: int, power: float, *, tolerance: float = 1e-6) -> float:
