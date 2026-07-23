@@ -48,7 +48,7 @@ _DEFAULT_FINAL = "logistic_regression"
 @MODELS.register("voting")
 def make_voting(
     *,
-    estimators: Sequence[Any],
+    estimators: Sequence[Any] | None = None,
     weights: Sequence[float] | None = None,
     voting: str = "soft",
     **params: Any,
@@ -74,6 +74,11 @@ def make_voting(
     """
     from sklearn.ensemble import VotingClassifier
 
+    if estimators is None:
+        raise ConfigurationError(
+            "the 'voting' model needs an 'estimators' list naming its base models, "
+            "e.g. params: {estimators: [logistic_regression, naive_bayes]}"
+        )
     seed = pop_seed(params, default=None)
     _reject_extra(params, "voting")
     if voting not in ("soft", "hard"):
@@ -90,7 +95,7 @@ def make_voting(
 @MODELS.register("stacking")
 def make_stacking(
     *,
-    estimators: Sequence[Any],
+    estimators: Sequence[Any] | None = None,
     final_estimator: str = _DEFAULT_FINAL,
     cv: int = 5,
     **params: Any,
@@ -119,6 +124,11 @@ def make_stacking(
     from sklearn.ensemble import StackingClassifier
     from sklearn.model_selection import StratifiedKFold
 
+    if estimators is None:
+        raise ConfigurationError(
+            "the 'stacking' model needs an 'estimators' list naming its base models, "
+            "e.g. params: {estimators: [logistic_regression, naive_bayes]}"
+        )
     seed = pop_seed(params, default=DEFAULT_SEED)
     _reject_extra(params, "stacking")
     if cv < 2:
