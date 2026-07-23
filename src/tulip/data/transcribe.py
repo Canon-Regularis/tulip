@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict
 
 from tulip._serialize import write_sorted_json
+from tulip.data._paths import ensure_directory
 from tulip.utils.io import write_jsonl
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
@@ -84,7 +85,7 @@ class TranscriptCache:
     def __init__(self, directory: Path | str | None = None) -> None:
         self.directory = Path(directory) if directory is not None else None
         if self.directory is not None:
-            self.directory.mkdir(parents=True, exist_ok=True)
+            self.directory = ensure_directory(self.directory, purpose="transcript cache")
         self._memory: dict[str, str] = {}
 
     @staticmethod
@@ -200,7 +201,7 @@ def write_transcribed_manifest(samples: Sequence[Sample], root: Path | str) -> P
         The path to the written ``manifest.jsonl``.
     """
     root = Path(root)
-    root.mkdir(parents=True, exist_ok=True)
+    root = ensure_directory(root, purpose="transcribed manifest")
     path = root / "manifest.jsonl"
     written = write_jsonl(path, (_to_manifest_record(sample) for sample in samples))
     _logger.info("wrote %d transcribed samples to %s", written, path)

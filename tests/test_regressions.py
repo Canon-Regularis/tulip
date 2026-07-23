@@ -240,6 +240,89 @@ def test_non_utf8_lexicon_reports_configuration_error(tmp_path) -> None:
         load_lexicon(bad)
 
 
+def test_mcnemar_survives_a_large_discordant_count() -> None:
+    from tulip.evaluation.significance import _mcnemar_p, mcnemar_exact
+
+    # The exact binomial sum outgrows the float range past a few hundred discordant
+    # pairs; scaling it by 0.5**n forced an int->float conversion that raised
+    # OverflowError on any split big enough to matter.
+    assert _mcnemar_p(520, 520) == pytest.approx(1.0)
+    assert 0.0 < _mcnemar_p(5000, 4000) < 1e-20
+    a = [True] * 900 + [False] * 900
+    b = [False] * 900 + [True] * 900
+    _, _, p = mcnemar_exact(a, b)
+    assert p == pytest.approx(1.0)
+
+
+def test_minimum_detectable_effect_survives_a_large_split() -> None:
+    from tulip.evaluation.power import minimum_detectable_effect
+
+    # math.comb(n, i) exceeds the float range around n=1030, so the direct
+    # comb * p**i product raised OverflowError on realistic benchmark splits.
+    small = minimum_detectable_effect(500).mde
+    large = minimum_detectable_effect(2000).mde
+    assert small is not None and large is not None
+    assert 0.0 < large < small  # more samples detect a smaller effect
+
+
+def test_load_benchmark_rejects_a_non_list_results_field(tmp_path) -> None:
+    import json
+
+    from tulip.evaluation.benchmark import load_benchmark
+
+    path = tmp_path / "benchmark.json"
+    path.write_text(json.dumps({"schema_version": 1, "results": 5}), encoding="utf-8")
+    with pytest.raises(ConfigurationError):
+        load_benchmark(path)
+
+
+def test_ensemble_models_without_estimators_report_configuration_error() -> None:
+    from tulip.models.registry import MODELS
+
+    for name in ("voting", "stacking"):
+        with pytest.raises(ConfigurationError, match="estimators"):
+            MODELS.create(name)
+
+
+def test_dataset_entry_with_an_unknown_param_reports_dataerror() -> None:
+    from tulip.config.schemas import ComponentConfig, DataConfig
+    from tulip.data.builder import DatasetBuilder
+
+    config = DataConfig(
+        root="data/raw", datasets=[ComponentConfig(name="synthetic", params={"nope": 1})]
+    )
+    with pytest.raises(DataError):
+        DatasetBuilder(config).load_samples()
+
+
+def test_unreadable_manifest_reports_dataerror(tmp_path) -> None:
+    from tulip.data.manifest import _iter_csv_rows, _iter_jsonl_rows
+
+    # is_file() upstream cannot vouch for openability (a locked or unreadable file);
+    # a directory stands in for the OSError that open() raises in that case.
+    with pytest.raises(DataError):
+        list(_iter_csv_rows(tmp_path, None))
+    with pytest.raises(DataError):
+        list(_iter_jsonl_rows(tmp_path))
+
+
+def test_writers_reject_an_output_root_that_is_a_file(tmp_path) -> None:
+    from tulip.data.synthetic import SyntheticSpec, write_synthetic_manifest
+    from tulip.data.synthetic_audio import AudioSyntheticSpec, write_synthetic_audio_manifest
+    from tulip.data.transcribe import TranscriptCache, write_transcribed_manifest
+
+    occupied = tmp_path / "already_a_file"
+    occupied.write_text("x", encoding="utf-8")
+    with pytest.raises(DataError):
+        write_synthetic_manifest(SyntheticSpec(), occupied)
+    with pytest.raises(DataError):
+        write_synthetic_audio_manifest(AudioSyntheticSpec(), occupied)
+    with pytest.raises(DataError):
+        write_transcribed_manifest([], occupied)
+    with pytest.raises(DataError):
+        TranscriptCache(occupied)
+
+
 def test_marker_density_guards_the_denominator_not_the_marker_set() -> None:
     from tulip.features.text.dialect_intensity import DialectIntensityExtractor
 
