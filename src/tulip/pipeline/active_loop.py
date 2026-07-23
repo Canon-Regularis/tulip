@@ -152,7 +152,11 @@ def active_learning_loop(
     from tulip.pipeline.experiment import build_classifier, evaluate_samples
 
     splits = DatasetBuilder(config.data).build(config.split, target=config.target)
-    pool = list(splits.train)
+    # The simulated oracle labels from the gold annotation, so a sample carrying no
+    # label at the target level can never be labeled. Leaving it in the pool would
+    # spend acquisition budget on it and count it in n_labeled without it ever
+    # reaching the fit, tilting the curve against the strategy that picked it.
+    pool = [sample for sample in splits.train if sample.labels.at_level(config.target) is not None]
     if seed_size > len(pool):
         raise ConfigurationError(
             f"seed_size ({seed_size}) exceeds the training pool ({len(pool)} samples)"
