@@ -45,6 +45,7 @@ import numpy as np
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.core.types import DialectLabels, Sample
+from tulip.data._paths import ensure_directory
 from tulip.data._synthetic_audio_corpus import (
     DIALECT_ACOUSTICS,
     DIALECTS,
@@ -227,7 +228,7 @@ def write_synthetic_audio_manifest(spec: AudioSyntheticSpec, root: Path) -> Path
         The path to the written ``manifest.jsonl``.
     """
     root = Path(root)
-    root.mkdir(parents=True, exist_ok=True)
+    root = ensure_directory(root, purpose="synthetic audio manifest")
     corpus = generate_audio_corpus(spec, root)
     path = root / "manifest.jsonl"
     written = write_jsonl(path, (_to_manifest_record(sample, root) for sample in corpus))

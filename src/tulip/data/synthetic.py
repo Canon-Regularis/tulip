@@ -51,6 +51,7 @@ import numpy as np
 
 from tulip.core.exceptions import ConfigurationError
 from tulip.core.types import DialectLabels, Sample
+from tulip.data._paths import ensure_directory
 from tulip.data._synthetic_common import (
     base_manifest_record,
     resolve_dialect_keys,
@@ -226,7 +227,7 @@ def write_synthetic_manifest(spec: SyntheticSpec, root: Path) -> Path:
         The path to the written ``manifest.jsonl``.
     """
     root = Path(root)
-    root.mkdir(parents=True, exist_ok=True)
+    root = ensure_directory(root, purpose="synthetic manifest")
     path = root / "manifest.jsonl"
     corpus = generate_corpus(spec)
     written = write_jsonl(path, (_to_manifest_record(sample) for sample in corpus))
