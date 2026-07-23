@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tulip.core.exceptions import DataError
 from tulip.utils.logging import get_logger
 from tulip.utils.optional import optional_import
 
@@ -56,7 +57,13 @@ def push_to_hub(
     readme = hub_readme(entry, artifact_dir, repo_id=repo_id)
 
     api = hub.HfApi()
-    url = str(api.create_repo(repo_id, private=private, exist_ok=True, repo_type="model"))
+    try:
+        # huggingface_hub validates the repo id here and raises HFValidationError,
+        # a ValueError subclass, for a malformed one; report it cleanly rather than
+        # leaking a raw traceback past the CLI boundary.
+        url = str(api.create_repo(repo_id, private=private, exist_ok=True, repo_type="model"))
+    except ValueError as exc:
+        raise DataError(f"invalid Hub repository id {repo_id!r}: {exc}") from exc
     api.upload_folder(
         folder_path=str(artifact_dir),
         repo_id=repo_id,
