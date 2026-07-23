@@ -56,7 +56,15 @@ def build_feature_union(registry: Registry[Any], configs: Sequence[ConfigEntry])
     used_names: set[str] = set()
     for entry in configs:
         config = _coerce_config(registry, entry)
-        extractor = registry.create(config.name, **config.params)
+        try:
+            extractor = registry.create(config.name, **config.params)
+        except (TypeError, ValueError) as exc:
+            # A mistyped params entry reaches the extractor constructor as an
+            # unexpected keyword; name the feature, don't leak a raw traceback.
+            raise ConfigurationError(
+                f"cannot build {registry.kind} {config.name!r} from its configured "
+                f"params {dict(config.params)!r}: {exc}"
+            ) from exc
         base = config.name.strip().lower().replace("-", "_")
         step_name = base
         suffix = 2
