@@ -261,7 +261,14 @@ class LLMClassifier(ArgmaxPredictMixin, ClassifierMixin, BaseEstimator):
             anthropic = optional_import(
                 "anthropic", extra=ANTHROPIC_EXTRA, purpose="LLM dialect classification baseline"
             )
-            client = self._client_ = anthropic.Anthropic()
+            try:
+                client = self._client_ = anthropic.Anthropic()
+            except anthropic.AnthropicError as exc:
+                # The SDK raises when no credential is resolvable; report how to set
+                # one rather than leaking the raw SDK error past the CLI boundary.
+                raise ConfigurationError(
+                    f"could not initialise the Anthropic client; set ANTHROPIC_API_KEY: {exc}"
+                ) from exc
         return client
 
     def __getstate__(self) -> dict[str, Any]:
