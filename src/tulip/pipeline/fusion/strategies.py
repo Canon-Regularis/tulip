@@ -8,12 +8,13 @@ strategies free of the classifier they serve is what lets them be unit-tested on
 hand-built numpy stacks and reused by any future consumer.
 
 Every :class:`FusionStrategy` maps a ``(n_modalities, n_samples, n_classes)``
-stack of aligned probabilities, under a ``(n_modalities, n_samples)`` presence
-mask, to one ``(n_samples, n_classes)`` distribution per sample. The identical
-postcondition all three concrete strategies must honour (lone-modality
-passthrough, per-row renormalisation, and rejecting a sample with no present
-modality) is centralised in :class:`_FusionBase` so the strategies are provably
-substitutable rather than each re-deriving it.
+stack of aligned probabilities, under a presence mask (per-sample, or per-sample
+and per-class so a base can abstain on a class outside its vocabulary), to one
+``(n_samples, n_classes)`` distribution per sample. The identical postcondition
+all three concrete strategies must honour (lone-modality passthrough, per-row
+renormalisation, and rejecting a sample with no present modality) is centralised
+in :class:`_FusionBase` so the strategies are provably substitutable rather than
+each re-deriving it.
 """
 
 from __future__ import annotations
@@ -46,9 +47,12 @@ class FusionStrategy(Protocol):
     """Combines per-modality probabilities into one distribution per sample.
 
     ``stack`` has shape ``(n_modalities, n_samples, n_classes)``, every
-    modality's probabilities already aligned to the same class columns, and
-    ``mask`` has shape ``(n_modalities, n_samples)`` with ``True`` where that
-    modality is present for that sample. The return has shape
+    modality's probabilities already aligned to the same class columns. ``mask``
+    marks which modalities contribute: a 2-D ``(n_modalities, n_samples)`` mask is
+    per-sample presence (every present modality is taken to cover every class),
+    while a 3-D ``(n_modalities, n_samples, n_classes)`` mask additionally says, per
+    class, whether that modality can express it, so a base whose vocabulary omits a
+    class abstains on it rather than voting it down. The return has shape
     ``(n_samples, n_classes)`` with every row summing to 1.
 
     Postconditions every implementation must honour (verified by the
@@ -88,6 +92,16 @@ def _check_weights(weights: tuple[float, ...]) -> None:
         )
 
 
+def _safe_divide(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
+    """Element-wise ``numerator / denominator``, yielding 0 where the divisor is 0.
+
+    A class no present modality covers has a zero divisor; it takes 0 rather than a
+    ``NaN``, and the caller's per-row renormalisation (or the singleton passthrough)
+    settles the final distribution.
+    """
+    return np.divide(numerator, denominator, out=np.zeros_like(numerator), where=denominator > 0.0)
+
+
 class _FusionBase(abc.ABC):
     """Template enforcing the identical :class:`FusionStrategy` postcondition.
 
@@ -110,32 +124,55 @@ class _FusionBase(abc.ABC):
     def fuse(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
         """See :meth:`FusionStrategy.fuse`."""
         stack = np.asarray(stack, dtype=np.float64)
-        mask = np.asarray(mask, dtype=bool)
         if stack.ndim != 3:
             raise ConfigurationError(
                 f"fusion stack must be 3-D (modalities, samples, classes), got shape {stack.shape}"
             )
-        n_modalities, n_samples = stack.shape[0], stack.shape[1]
-        if mask.shape != (n_modalities, n_samples):
-            raise ConfigurationError(
-                f"fusion mask shape {mask.shape} does not match the stack's "
-                f"(modalities, samples) = {(n_modalities, n_samples)}"
-            )
-        present_counts = mask.sum(axis=0)
+        coverage = self._coverage_mask(np.asarray(mask, dtype=bool), stack.shape)
+        presence = np.asarray(coverage.any(axis=2))
+        present_counts = presence.sum(axis=0)
         absent = np.flatnonzero(present_counts == 0)
         if absent.size:
             raise DataError(
                 f"{absent.size} sample(s) have no present modality to fuse "
                 f"(first at column index {int(absent[0])})"
             )
-        combined = self._pool(stack, mask)
-        self._passthrough_singletons(stack, mask, combined, present_counts)
+        combined = self._pool(stack, coverage)
+        self._passthrough_singletons(stack, presence, combined, present_counts)
         return self._renormalise(combined)
+
+    @staticmethod
+    def _coverage_mask(mask: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
+        """Normalise the mask to a 3-D ``(modalities, samples, classes)`` coverage array.
+
+        A 2-D ``(modalities, samples)`` presence mask is the historical form; it
+        broadcasts to full class coverage (every present modality has an opinion on
+        every class). A 3-D mask additionally says, per class, whether that modality
+        can express it, so a base whose vocabulary omits a class abstains on it
+        rather than voting it down.
+        """
+        if mask.ndim == 2:
+            if mask.shape != shape[:2]:
+                raise ConfigurationError(
+                    f"fusion mask shape {mask.shape} does not match the stack's "
+                    f"(modalities, samples) = {shape[:2]}"
+                )
+            return np.broadcast_to(mask[:, :, None], shape)
+        if mask.ndim == 3:
+            if mask.shape != shape:
+                raise ConfigurationError(
+                    f"fusion mask shape {mask.shape} does not match the stack shape {shape}"
+                )
+            return mask
+        raise ConfigurationError(
+            "fusion mask must be 2-D (modalities, samples) or 3-D "
+            f"(modalities, samples, classes), got shape {mask.shape}"
+        )
 
     @staticmethod
     def _passthrough_singletons(
         stack: np.ndarray,
-        mask: np.ndarray,
+        presence: np.ndarray,
         combined: np.ndarray,
         present_counts: np.ndarray,
     ) -> None:
@@ -147,7 +184,7 @@ class _FusionBase(abc.ABC):
         """
         singletons = np.flatnonzero(present_counts == 1)
         if singletons.size:
-            modality = np.argmax(mask[:, singletons], axis=0)
+            modality = np.argmax(presence[:, singletons], axis=0)
             combined[singletons] = stack[modality, singletons]
 
     @staticmethod
@@ -174,9 +211,12 @@ class _FusionBase(abc.ABC):
     def _pool(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
         """Combine present modalities into an unnormalised ``(n_samples, n_classes)`` score.
 
-        Implementations must exclude absent modalities (``mask[m, s]`` false)
-        from sample ``s``. The template handles renormalisation and the
-        lone-modality passthrough, so ``_pool`` need not.
+        ``mask`` is the 3-D ``(modalities, samples, classes)`` coverage array the
+        template built: ``mask[m, s, c]`` is true when modality ``m`` is present for
+        sample ``s`` *and* can express class ``c``. Implementations must combine, per
+        class, only the modalities the mask marks there, so a modality that never saw
+        a class neither contributes to nor vetoes it. The template handles
+        renormalisation and the lone-modality passthrough, so ``_pool`` need not.
         """
 
 
@@ -216,8 +256,13 @@ class WeightedAverageFusion(_WeightedFusion):
 
     def _pool(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
         weights = self._weight_array(stack.shape[0])
-        effective = weights[:, None, None] * mask[:, :, None]
-        return (effective * stack).sum(axis=0)
+        effective = weights[:, None, None] * mask
+        # Per class, average only the covering modalities: dividing by their weight
+        # sum keeps a class judged by one modality on the same scale as one judged by
+        # both. With homogeneous vocabularies that divisor is constant across classes
+        # and cancels in the row renormalisation, so this matches the plain weighted
+        # mean; it differs only where the two bases disagree on the class set.
+        return _safe_divide((effective * stack).sum(axis=0), effective.sum(axis=0))
 
 
 @dataclass(frozen=True)
@@ -231,8 +276,11 @@ class MaximumFusion(_FusionBase):
     kind: ClassVar[str] = "maximum"
 
     def _pool(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
-        masked = np.where(mask[:, :, None], stack, -np.inf)
-        return masked.max(axis=0)
+        masked = np.where(mask, stack, -np.inf)
+        pooled = masked.max(axis=0)
+        # A class no present modality covers is -inf; give it 0 so the row
+        # renormalisation and singleton passthrough can settle the distribution.
+        return np.where(np.isfinite(pooled), pooled, 0.0)
 
 
 @dataclass(frozen=True)
@@ -253,14 +301,14 @@ class ConfidenceWeightedFusion(_FusionBase):
     kind: ClassVar[str] = "confidence"
 
     def _pool(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
-        confidence = stack.max(axis=2)  # (modalities, samples): each expert's top prob
-        weights = confidence * mask  # absent modalities carry zero weight
-        totals = weights.sum(axis=0, keepdims=True)
-        # A zero total (both experts flat at zero confidence) is left to the base
-        # renormalise/passthrough guards; avoid dividing by it here.
-        safe_totals = np.where(totals > 0.0, totals, 1.0)
-        normalised = weights / safe_totals
-        return (normalised[:, :, None] * stack).sum(axis=0)
+        presence = mask.any(axis=2)  # (modalities, samples)
+        confidence = stack.max(axis=2)  # each expert's top prob over its own classes
+        weights = confidence * presence  # absent modalities carry zero weight
+        # Per class, attend over only the covering modalities; the divisor renormalises
+        # their confidence weights so a class one expert cannot express is decided by
+        # the expert(s) that can, rather than diluted by a phantom zero vote.
+        effective = weights[:, :, None] * mask
+        return _safe_divide((effective * stack).sum(axis=0), effective.sum(axis=0))
 
 
 @dataclass(frozen=True)
@@ -282,10 +330,20 @@ class LogarithmicPoolingFusion(_WeightedFusion):
     def _pool(self, stack: np.ndarray, mask: np.ndarray) -> np.ndarray:
         weights = self._weight_array(stack.shape[0])
         logs = np.log(np.clip(stack, self.EPS, 1.0))
-        effective = weights[:, None, None] * mask[:, :, None]
-        weighted = (effective * logs).sum(axis=0)
-        weighted -= weighted.max(axis=1, keepdims=True)  # stabilise exp; cancels on renorm
-        return np.exp(weighted)
+        effective = weights[:, None, None] * mask
+        weight_sum = effective.sum(axis=0)
+        # Per class, the weighted geometric mean of only the covering modalities:
+        # dividing the log-sum by their weight sum excludes a base that never saw the
+        # class, so its clipped ``log(EPS)`` cannot drag the class to a near-zero
+        # veto. With homogeneous vocabularies the divisor is constant and cancels in
+        # the row renormalisation, reproducing the plain weighted geometric mean.
+        covered = weight_sum > 0.0
+        mean_log = _safe_divide((effective * logs).sum(axis=0), weight_sum)
+        # Stabilise the exponential over covered classes only; an uncovered class
+        # (present only on soon-to-be-overwritten singleton rows) stays at 0.
+        shift = np.where(covered, mean_log, -np.inf).max(axis=1, keepdims=True)
+        shift = np.where(np.isfinite(shift), shift, 0.0)
+        return np.where(covered, np.exp(mean_log - shift), 0.0)
 
 
 #: Strategy registry: a new named strategy registers here without editing any consumer.

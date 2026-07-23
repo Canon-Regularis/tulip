@@ -171,8 +171,22 @@ class MultimodalClassifier:
         text_matrix = self._modality_matrix(self.text, texts, text_present, union, n_classes)
         audio_matrix = self._modality_matrix(self.audio, audios, audio_present, union, n_classes)
         stack = np.stack([text_matrix, audio_matrix], axis=0)
-        mask = np.array([text_present, audio_present], dtype=bool)
+        present = np.array([text_present, audio_present], dtype=bool)
+        # A base has an opinion on a union class only if that class is in its own
+        # vocabulary. Marking the classes a base never saw as absent (rather than
+        # letting their aligned probability 0 stand) stops a modality that cannot
+        # express a class from vetoing it under geometric-mean pooling.
+        covers = np.array(
+            [self._class_coverage(self.text, union), self._class_coverage(self.audio, union)]
+        )
+        mask = present[:, :, None] & covers[:, None, :]
         return self.strategy.fuse(stack, mask)
+
+    @staticmethod
+    def _class_coverage(base: ProbabilisticClassifier, union: tuple[str, ...]) -> np.ndarray:
+        """Boolean mask over ``union`` marking the classes ``base`` can actually score."""
+        known = set(base.classes_)
+        return np.array([label in known for label in union], dtype=bool)
 
     def predict_samples(self, samples: Sequence[Sample]) -> list[Prediction]:
         """Fuse both modalities and return one :class:`Prediction` per sample, in order.
@@ -205,7 +219,9 @@ class MultimodalClassifier:
 
         The base scores only the samples that carry its modality; its columns
         are scattered into the union, leaving 0 for any class the base never saw
-        and for any absent row (the fusion mask excludes those rows anyway).
+        and for any absent row. Those 0 cells are never read: the coverage mask
+        built in :meth:`predict_proba_samples` excludes both the absent rows and
+        the classes the base cannot express.
         """
         matrix = np.zeros((len(present), n_classes), dtype=np.float64)
         present_idx = [i for i, is_present in enumerate(present) if is_present]

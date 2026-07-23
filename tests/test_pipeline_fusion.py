@@ -172,6 +172,29 @@ class TestFusionStrategyContract:
 # ----------------------------------------------------------- per-strategy semantics
 
 
+@pytest.mark.parametrize("strategy", STRATEGIES, ids=STRATEGY_IDS)
+def test_three_dimensional_mask_lets_a_modality_abstain_per_class(
+    strategy: FusionStrategy,
+) -> None:
+    # A 3-D coverage mask: modality 1 abstains on class 2 (its column is False).
+    # Every strategy must combine class 2 from modality 0 alone and still return a
+    # clean distribution, never a NaN or a vetoed-to-zero class.
+    stack = np.array([[[0.5, 0.2, 0.3]], [[0.1, 0.6, 0.3]]])
+    mask = np.array([[[True, True, True]], [[True, True, False]]])
+    fused = strategy.fuse(stack, mask)
+    assert fused.shape == (1, 3)
+    assert not np.isnan(fused).any()
+    np.testing.assert_allclose(fused.sum(axis=1), 1.0)
+    assert fused[0, 2] > 0.0  # class 2 survives on modality 0's opinion alone
+
+
+def test_mask_with_a_mismatched_class_dimension_raises() -> None:
+    stack = np.zeros((2, 1, 3))
+    mask = np.ones((2, 1, 4), dtype=bool)  # 4 classes, stack has 3
+    with pytest.raises(ConfigurationError, match="does not match the stack shape"):
+        MaximumFusion().fuse(stack, mask)
+
+
 def test_weighted_average_is_convex_combination() -> None:
     stack = np.array([[[0.6, 0.4]], [[0.2, 0.8]]])
     mask = np.ones((2, 1), dtype=bool)
@@ -318,6 +341,48 @@ def test_class_union_alignment_zeroes_unknown_class() -> None:
     assert proba[0, fused.classes_.index("c")] == 0.0
     np.testing.assert_allclose(proba[0], [0.4, 0.6, 0.0])
     assert not np.isnan(proba).any()
+
+
+def test_log_pool_does_not_veto_a_class_one_modality_cannot_express() -> None:
+    # Audio's vocabulary omits class "c". Under geometric-mean pooling that used to
+    # be read as a near-total veto (audio implicitly scoring "c" at ~0), collapsing
+    # the fused probability of "c" to nearly zero however sure the text expert was.
+    # A modality with no opinion on a class must abstain on it, not vote it down.
+    text = StubClassifier(
+        classes=("a", "b", "c"), task=TaskType.TEXT, distribution=np.array([0.2, 0.3, 0.5])
+    )
+    audio = StubClassifier(
+        classes=("a", "b"), task=TaskType.AUDIO, distribution=np.array([0.4, 0.6])
+    )
+    fused = MultimodalClassifier(
+        text=text, audio=audio, strategy=LogarithmicPoolingFusion((0.5, 0.5))
+    )
+    sample = Sample(id="s1", text="tekst", audio_path=Path("s1.wav"), speaker_id="spk")
+    proba = fused.predict_proba_samples([sample])[0]
+    c = fused.classes_.index("c")
+    # "c" is decided by the text expert alone (audio abstains), so it carries real
+    # mass rather than the ~0 the veto produced.
+    assert proba[c] > 0.3
+    np.testing.assert_allclose(proba, [0.2343, 0.3515, 0.4142], atol=1e-4)
+    assert proba.sum() == pytest.approx(1.0)
+
+
+def test_log_pool_unchanged_when_both_modalities_share_a_vocabulary() -> None:
+    # The coverage handling must leave the homogeneous case exactly as it was: a
+    # plain weighted geometric mean over the shared classes.
+    text = StubClassifier(
+        classes=("a", "b", "c"), task=TaskType.TEXT, distribution=np.array([0.2, 0.3, 0.5])
+    )
+    audio = StubClassifier(
+        classes=("a", "b", "c"), task=TaskType.AUDIO, distribution=np.array([0.4, 0.5, 0.1])
+    )
+    fused = MultimodalClassifier(
+        text=text, audio=audio, strategy=LogarithmicPoolingFusion((0.5, 0.5))
+    )
+    sample = Sample(id="s1", text="tekst", audio_path=Path("s1.wav"), speaker_id="spk")
+    proba = fused.predict_proba_samples([sample])[0]
+    geometric = np.sqrt(np.array([0.2, 0.3, 0.5]) * np.array([0.4, 0.5, 0.1]))
+    np.testing.assert_allclose(proba, geometric / geometric.sum())
 
 
 def test_sample_with_no_modality_raises_naming_it() -> None:
