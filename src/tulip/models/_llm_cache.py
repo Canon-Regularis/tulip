@@ -52,7 +52,9 @@ class LLMResponseCache:
             if path.is_file():
                 try:
                     response = str(json.loads(path.read_text(encoding="utf-8"))["response"])
-                except (json.JSONDecodeError, KeyError, ValueError, OSError) as exc:
+                except (json.JSONDecodeError, KeyError, ValueError, OSError, TypeError) as exc:
+                    # TypeError covers a valid-JSON file whose top level is not an
+                    # object (null, a list, a scalar), which is not subscriptable.
                     logger.debug("ignoring unreadable cache file %s: %s", path, exc)
                     return None
                 self._memory[key] = response
