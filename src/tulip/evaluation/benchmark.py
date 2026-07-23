@@ -213,7 +213,13 @@ def load_benchmark(path: Path | str) -> list[BenchmarkResult]:
             f"unsupported benchmark schema version {version!r} in {path}; "
             f"this tulip version reads version {BENCHMARK_SCHEMA_VERSION}"
         )
+    records = data["results"]
+    if not isinstance(records, list):
+        raise ConfigurationError(
+            f"{path} is not a tulip benchmark file: 'results' must be a list, "
+            f"got {type(records).__name__}"
+        )
     try:
-        return [BenchmarkResult.model_validate(record) for record in data["results"]]
+        return [BenchmarkResult.model_validate(record) for record in records]
     except ValidationError as exc:
         raise ConfigurationError(f"{path} is not a valid benchmark file: {exc}") from exc
