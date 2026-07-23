@@ -228,6 +228,10 @@ def _iter_csv_rows(path: Path, delimiter: str | None) -> Iterator[tuple[int, dic
         raise DataError(
             f"manifest {path} is not valid UTF-8 (readers expect utf-8/utf-8-sig): {exc}"
         ) from exc
+    except OSError as exc:
+        # is_file() upstream cannot vouch for openability: the file may be locked
+        # by another program or unreadable by this user.
+        raise DataError(f"could not read manifest {path}: {exc}") from exc
 
 
 def _iter_jsonl_rows(path: Path) -> Iterator[tuple[int, dict[str, Any]]]:
@@ -249,6 +253,10 @@ def _iter_jsonl_rows(path: Path) -> Iterator[tuple[int, dict[str, Any]]]:
         raise DataError(
             f"manifest {path} is not valid UTF-8 (readers expect utf-8/utf-8-sig): {exc}"
         ) from exc
+    except OSError as exc:
+        # is_file() upstream cannot vouch for openability: the file may be locked
+        # by another program or unreadable by this user.
+        raise DataError(f"could not read manifest {path}: {exc}") from exc
 
 
 def _check_required_columns(cols: ManifestColumns, available: Any, path: Path) -> None:

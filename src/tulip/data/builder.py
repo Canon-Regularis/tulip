@@ -78,7 +78,15 @@ class DatasetBuilder:
         for entry in self.config.datasets:
             params = dict(entry.params)
             root = self._resolve_root(entry.name, params.pop("root", None))
-            loader = DATASETS.create(entry.name, **params)
+            try:
+                loader = DATASETS.create(entry.name, **params)
+            except (TypeError, ValueError) as exc:
+                # A mistyped params key reaches the loader constructor as an
+                # unexpected keyword; name the dataset entry rather than traceback.
+                raise DataError(
+                    f"cannot build dataset {entry.name!r} from its configured "
+                    f"params {params!r}: {exc}"
+                ) from exc
             loaded = list(loader.load(root))
             _logger.info("loaded %d samples from %s (%s)", len(loaded), entry.name, root)
             samples.extend(loaded)
