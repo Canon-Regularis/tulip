@@ -49,7 +49,7 @@ class PerturbationConfig(BaseModel):
 
     name: str
     levels: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
-    seed: int = 0
+    seed: int = Field(default=0, ge=0)  # feeds numpy's default_rng, which rejects negatives
     params: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("levels")
@@ -169,4 +169,4 @@ class AugmentSpec(BaseModel):
 
     perturbations: tuple[PerturbationConfig, ...]
     multiplier: int = Field(default=1, ge=1)
-    seed: int = 0
+    seed: int = Field(default=0, ge=0)  # feeds numpy's default_rng, which rejects negatives

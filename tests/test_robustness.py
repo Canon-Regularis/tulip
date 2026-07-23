@@ -152,6 +152,18 @@ def test_augment_grows_and_is_deterministic() -> None:
     assert first[: len(samples)] == list(samples)  # originals preserved first
 
 
+def test_negative_seed_is_rejected_at_config_construction() -> None:
+    from pydantic import ValidationError
+
+    # Both seeds feed numpy's default_rng, which rejects a negative value; the
+    # constraint lives on the config so a bad seed is caught when the config is
+    # built rather than crashing mid-run inside the rng.
+    with pytest.raises(ValidationError):
+        PerturbationConfig(name="typo_noise", seed=-1)
+    with pytest.raises(ValidationError):
+        AugmentSpec(perturbations=(PerturbationConfig(name="typo_noise"),), seed=-1)
+
+
 # ------------------------------------------------------------------ report
 
 
