@@ -149,7 +149,15 @@ class DialectClassifier:
                 self.target.value,
             )
         set_global_seed(self.seed)
-        estimator = MODELS.create(self.model_config.name, **self.model_config.params)
+        try:
+            estimator = MODELS.create(self.model_config.name, **self.model_config.params)
+        except (TypeError, ValueError) as exc:
+            # A mistyped or unsupported params entry reaches the estimator
+            # constructor as an unexpected keyword; report the config, not a traceback.
+            raise ConfigurationError(
+                f"cannot build model {self.model_config.name!r} from its configured "
+                f"params {dict(self.model_config.params)!r}: {exc}"
+            ) from exc
         self._require_raw_capable_model()
         if self.feature_configs:
             self.pipeline_ = Pipeline([("features", self._build_features()), ("model", estimator)])
