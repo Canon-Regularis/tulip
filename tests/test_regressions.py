@@ -323,6 +323,37 @@ def test_writers_reject_an_output_root_that_is_a_file(tmp_path) -> None:
         TranscriptCache(occupied)
 
 
+def test_feature_config_with_an_unknown_param_reports_configuration_error() -> None:
+    from tulip.features.text.composite import build_text_features
+
+    with pytest.raises(ConfigurationError):
+        build_text_features([{"name": "char_tfidf", "params": {"bogus_kw": 1}}])
+
+
+def test_llm_cache_treats_a_non_object_json_file_as_a_miss(tmp_path) -> None:
+    from tulip.models._llm_cache import LLMResponseCache
+
+    cache = LLMResponseCache(tmp_path)
+    entry = tmp_path / "k.json"
+    for payload in ("null", "[]", '"a string"', "5"):
+        entry.write_text(payload, encoding="utf-8")  # valid JSON, not an object
+        cache._memory.clear()
+        assert cache.get("k") is None  # a miss, not a TypeError
+    entry.write_text('{"response": "ok"}', encoding="utf-8")
+    cache._memory.clear()
+    assert cache.get("k") == "ok"  # a real object still hits
+
+
+def test_robustness_cli_rejects_a_negative_seed() -> None:
+    from typer.testing import CliRunner
+
+    from tulip.cli.app import app
+
+    result = CliRunner().invoke(app, ["robustness", "missing.yaml", "--seed=-1"])
+    assert result.exit_code != 0
+    assert "seed" in result.output.lower()
+
+
 def test_marker_density_guards_the_denominator_not_the_marker_set() -> None:
     from tulip.features.text.dialect_intensity import DialectIntensityExtractor
 
