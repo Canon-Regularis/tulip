@@ -72,3 +72,28 @@ def test_analyze_fairness(tmp_path: Path) -> None:
     result_json = runner.invoke(app, ["analyze", str(path), "--fairness", "--json"])
     assert result_json.exit_code == 0, result_json.output
     assert "fairness" in json.loads(result_json.output)
+
+
+def test_analyze_writes_markdown_to_out_file(tmp_path: Path) -> None:
+    # The real-corpus runbook feeds analyze's report to `card benchmark --bias`, so
+    # it must land in a file as clean markdown, not via a rich-console redirect that
+    # would mangle a table cell like "[0.5, 0.9]" as console markup.
+    path = tmp_path / "predictions_test.json"
+    _save_predictions(path)
+    out = tmp_path / "bias.md"
+    result = runner.invoke(app, ["analyze", str(path), "--fairness", "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    body = out.read_text(encoding="utf-8")
+    assert "Fairness" in body
+    assert "Selective prediction" in body  # the base report is written too
+    assert "\x1b[" not in body  # no ANSI escapes leaked into the file
+
+
+def test_analyze_writes_json_to_out_file(tmp_path: Path) -> None:
+    path = tmp_path / "predictions_test.json"
+    _save_predictions(path)
+    out = tmp_path / "analysis.json"
+    result = runner.invoke(app, ["analyze", str(path), "--power", "--json", "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert "power" in payload and "selective" in payload

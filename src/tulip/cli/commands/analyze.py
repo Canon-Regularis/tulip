@@ -27,6 +27,9 @@ def analyze(
     fairness: bool = typer.Option(
         False, "--fairness", help="Also report subgroup disparity across slices."
     ),
+    out: Path | None = typer.Option(
+        None, "--out", help="Write the reports to this file instead of the console."
+    ),
 ) -> None:
     """Analyse a saved per-sample predictions dump: selective prediction + errors.
 
@@ -66,12 +69,26 @@ def analyze(
             payload["power"] = mde.model_dump()
         if fair is not None:
             payload["fairness"] = fair.model_dump()
-        _console.print_json(data=payload)
+        if out is not None:
+            from tulip._serialize import write_sorted_json
+
+            write_sorted_json(out, payload)
+            _console.print(f"[green]analysis written to {out}[/green]")
+        else:
+            _console.print_json(data=payload)
         return
-    _console.print(selective.to_markdown())
-    _console.print()
-    _console.print(errors.to_markdown())
-    for extra in (hier, mde, fair):
-        if extra is not None:
+
+    sections = [selective.to_markdown(), errors.to_markdown()]
+    sections += [extra.to_markdown() for extra in (hier, mde, fair) if extra is not None]
+    if out is not None:
+        # Write the raw markdown; routing the rich console to a file would let its
+        # markup parsing mangle a table cell like "[0.5, 0.9]".
+        from tulip._serialize import write_markdown
+
+        write_markdown(out, "\n\n".join(sections))
+        _console.print(f"[green]analysis written to {out}[/green]")
+        return
+    for index, section in enumerate(sections):
+        if index:
             _console.print()
-            _console.print(extra.to_markdown())
+        _console.print(section)

@@ -113,7 +113,10 @@ def data_download(
 def data_prepare(
     config_path: Path = typer.Argument(..., help="Experiment config YAML."),
     output: Path | None = typer.Option(
-        None, help="Split output directory (default: <output_dir>/<name>/splits)."
+        None,
+        "--out",
+        "--output",
+        help="Split output directory (default: <output_dir>/<name>/splits).",
     ),
 ) -> None:
     """Build speaker-disjoint splits (load, clean, dedup, split, persist)."""

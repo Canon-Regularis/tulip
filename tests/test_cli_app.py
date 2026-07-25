@@ -98,6 +98,14 @@ class TestDatasets:
         assert (out / "train.jsonl").is_file()
         assert "train:" in result.output
 
+    def test_prepare_accepts_the_out_alias(self, mini_config: Path, tmp_path: Path) -> None:
+        # Every other output-writing command spells this --out, and the real-corpus
+        # runbook uses --out here too; the command must accept it, not only --output.
+        out = tmp_path / "splits"
+        result = runner.invoke(app, ["data", "prepare", str(mini_config), "--out", str(out)])
+        assert result.exit_code == 0, result.output
+        assert (out / "train.jsonl").is_file()
+
 
 class TestSynthesize:
     def test_synthesize_writes_a_labelled_manifest(self, tmp_path: Path) -> None:
