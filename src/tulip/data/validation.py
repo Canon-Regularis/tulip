@@ -248,6 +248,7 @@ def validate_manifest(
             )
         )
 
+    issues.extend(_duplicate_id_issues(samples))
     issues.extend(_taxonomy_issues(samples))
     issues.append(_speaker_issue(cols, present_columns, n_rows, n_with_speaker))
     issues.extend(_audio_issues(samples))
@@ -279,6 +280,40 @@ def _assemble(
         counts=counts,
         issues=tuple(ordered),
     )
+
+
+def _duplicate_id_issues(samples: list[Sample]) -> list[ManifestIssue]:
+    """Flag sample ids that repeat across the parsed samples.
+
+    ``id`` is the primary key: the manifest schema documents it as unique, and a
+    collision silently corrupts every id-keyed lookup downstream (exemplar text in
+    the error report, the ``by_id`` maps active learning and isogloss diagnostics
+    build), where one of the colliding rows is dropped or mis-mapped with no error.
+    An error, not a warning: unlike the corpus-specific labels the taxonomy permits,
+    a duplicate id is never intended.
+    """
+    counts: dict[str, int] = {}
+    for sample in samples:
+        counts[sample.id] = counts.get(sample.id, 0) + 1
+    duplicates = {sample_id: n for sample_id, n in counts.items() if n > 1}
+    if not duplicates:
+        return []
+    ordered = sorted(duplicates.items())
+    shown = ", ".join(f"{sample_id!r} (x{n})" for sample_id, n in ordered[:5])
+    more = "" if len(ordered) <= 5 else f", and {len(ordered) - 5} more"
+    affected = sum(duplicates.values())
+    return [
+        ManifestIssue(
+            severity="error",
+            code="duplicate-id",
+            message=(
+                f"{len(duplicates)} sample id(s) repeat across {affected} rows "
+                f"({shown}{more}); ids must be unique, since id-keyed lookups (exemplar "
+                "text, active-learning acquisition, isogloss diagnostics) silently drop or "
+                "mis-map a colliding row"
+            ),
+        )
+    ]
 
 
 def _taxonomy_issues(samples: list[Sample]) -> list[ManifestIssue]:

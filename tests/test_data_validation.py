@@ -48,6 +48,38 @@ def test_clean_manifest_is_ok_with_no_errors(tmp_path: Path) -> None:
     assert report.n_usable == 2
 
 
+def test_duplicate_sample_id_is_an_error(tmp_path: Path) -> None:
+    # id is the primary key; a collision silently corrupts id-keyed lookups
+    # (exemplar text, the active-learning / isogloss by_id maps), so validation
+    # must fail rather than let it flow into a training run.
+    manifest = _write(
+        tmp_path / "manifest.csv",
+        [
+            "id,text,speaker_id,dialect",
+            "s1,Baca poseł na grań.,spk-a,podhale",
+            "s1,Kaj żeś boł wczorej?,spk-b,silesia",  # duplicate id, different row
+            "s2,Trzecia wypowiedź.,spk-c,kurpie",
+        ],
+    )
+    report = validate_manifest(manifest)
+    assert "duplicate-id" in _errors(report)
+    assert report.ok is False
+
+
+def test_unique_ids_do_not_trigger_the_duplicate_check(tmp_path: Path) -> None:
+    manifest = _write(
+        tmp_path / "manifest.csv",
+        [
+            "id,text,speaker_id,dialect",
+            "s1,Baca poseł na grań.,spk-a,podhale",
+            "s2,Kaj żeś boł wczorej?,spk-b,silesia",
+        ],
+    )
+    report = validate_manifest(manifest)
+    assert "duplicate-id" not in [issue.code for issue in report.issues]
+    assert report.ok is True
+
+
 def test_out_of_enum_dialect_is_a_single_warning_not_an_error(tmp_path: Path) -> None:
     manifest = _write(
         tmp_path / "manifest.csv",
