@@ -48,6 +48,10 @@ __all__ = [
 #: floating-point noise (mirrors ``leaderboard.PROVENANCE_FLOAT_DIGITS``).
 PREDICTION_FLOAT_DIGITS = 6
 
+#: Slack allowed when range-checking a loaded probability, so trivial rounding
+#: drift is tolerated while genuine corruption (e.g. 1.5) is rejected.
+_PROBA_TOL = 1e-6
+
 #: The optional geographic and demographic slice keys a record may carry, in a
 #: single fixed order. Persistence (omit-if-None) and slicing both read this, so
 #: adding a field updates the two paths together instead of drifting apart.
@@ -91,8 +95,13 @@ class PredictionRecord(BaseModel):
 
     @property
     def confidence(self) -> float:
-        """Top predicted probability (0.0 when no distribution is present)."""
-        return max(self.proba) if self.proba else 0.0
+        """Top predicted probability (0.0 when no distribution is present).
+
+        Clamped to ``[0, 1]`` so trivial floating-point drift in a loaded dump
+        cannot push a downstream ``confidence`` field (e.g. the error report's
+        ``Exemplar``, bounded ``le=1.0``) past its bound.
+        """
+        return min(1.0, max(0.0, max(self.proba))) if self.proba else 0.0
 
     @property
     def correct(self) -> bool:
@@ -131,6 +140,12 @@ class SplitPredictions(BaseModel):
                     f"record {record.id!r} has {len(record.proba)} probabilities, "
                     f"expected {n_labels} to align with labels"
                 )
+            for value in record.proba:
+                if not -_PROBA_TOL <= value <= 1.0 + _PROBA_TOL:
+                    raise ValueError(
+                        f"record {record.id!r} has a probability {value} outside [0, 1]; "
+                        "the dump is corrupt"
+                    )
         return self
 
     def __len__(self) -> int:

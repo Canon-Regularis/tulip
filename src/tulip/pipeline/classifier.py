@@ -163,7 +163,16 @@ class DialectClassifier:
             self.pipeline_ = Pipeline([("features", self._build_features()), ("model", estimator)])
         else:
             self.pipeline_ = estimator
-        self.pipeline_.fit(batch.raws, batch.labels)
+        try:
+            self.pipeline_.fit(batch.raws, batch.labels)
+        except (ValueError, TypeError) as exc:
+            # Some feature/model params validate only at fit, past the construction
+            # guards above: a reversed char_tfidf ngram_range like (5, 2), say, builds
+            # fine but sklearn rejects it here. Name the configuration, not a traceback.
+            raise ConfigurationError(
+                f"could not fit {self.model_config.name!r} with the configured "
+                f"features/params: {exc}"
+            ) from exc
         self.classes_ = tuple(str(label) for label in np.asarray(self.pipeline_.classes_))
         self._train_samples = [sample for sample in samples if self._raw_of(sample) is not None]
         self._prediction_explainer = None  # explainer state is rebuilt lazily on demand
