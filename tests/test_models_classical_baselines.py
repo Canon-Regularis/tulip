@@ -233,3 +233,25 @@ def test_lightgbm_trains_with_string_labels(tfidf_corpus: tuple[object, np.ndarr
     assert float(np.mean(predictions == labels)) > 2 * CHANCE
     proba = model.predict_proba(matrix)
     np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+
+def test_label_encoded_classifier_params_and_repr() -> None:
+    from sklearn.linear_model import LogisticRegression
+
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.models.classical import LabelEncodedClassifier
+
+    inner = LogisticRegression(C=2.0)
+    wrapped = LabelEncodedClassifier(inner)
+    params = wrapped.get_params(deep=True)
+    assert params["estimator"] is inner
+    assert params["estimator__C"] == 2.0
+
+    replacement = LogisticRegression(C=5.0)
+    wrapped.set_params(estimator=replacement, estimator__C=9.0)
+    assert wrapped.estimator is replacement
+    assert wrapped.estimator.C == 9.0
+    assert "LabelEncodedClassifier(estimator=" in repr(wrapped)
+
+    with pytest.raises(ConfigurationError, match="unknown parameter"):
+        wrapped.set_params(nonsense=1)

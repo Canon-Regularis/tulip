@@ -197,3 +197,43 @@ def test_save_over_existing_file_raises(
     blocker.write_text("occupied", encoding="utf-8")
     with pytest.raises(DataError, match="not a directory"):
         save_model(model, blocker, {})
+
+
+def test_save_model_metadata_serialises_a_path_value(tmp_path) -> None:
+    # A Path in metadata is coerced to str by _json_default rather than crashing.
+    from sklearn.linear_model import LogisticRegression
+
+    from tulip.models.persistence import METADATA_FILENAME, save_model
+
+    model = LogisticRegression().fit([[0.0], [1.0]], ["a", "b"])
+    out = save_model(model, tmp_path / "m", metadata={"source": tmp_path})
+    sidecar = (out / METADATA_FILENAME).read_text(encoding="utf-8")
+    assert str(tmp_path).replace("\\", "\\\\") in sidecar or tmp_path.name in sidecar
+
+
+def test_save_model_on_an_unpicklable_model_errors_and_leaves_no_artifact(tmp_path) -> None:
+    import threading
+
+    import pytest
+
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.models.persistence import MODEL_FILENAME, save_model
+
+    class _Unpicklable:
+        def __init__(self) -> None:
+            self.lock = threading.Lock()  # a lock can never be pickled
+
+    target = tmp_path / "bad"
+    with pytest.raises(ConfigurationError, match="cannot be serialised"):
+        save_model(_Unpicklable(), target)
+    # The half-written model file must be cleaned up, never left partial.
+    assert not (target / MODEL_FILENAME).exists()
+
+
+def test_json_default_rejects_a_truly_unserialisable_value() -> None:
+    import pytest
+
+    from tulip.models.persistence import _json_default
+
+    with pytest.raises(TypeError, match="not JSON-serialisable"):
+        _json_default(object())
