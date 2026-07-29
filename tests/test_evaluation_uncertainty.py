@@ -81,3 +81,19 @@ def test_uncertainty_report_orders_and_renders() -> None:
     assert report.mean_total >= report.mean_aleatoric - 1e-9
     assert report.mean_epistemic >= 0.0
     assert "Uncertainty" in report.to_markdown()
+
+
+def test_member_probabilities_on_an_unfitted_classifier_raises() -> None:
+    import pytest
+
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.core.types import TaskType
+    from tulip.evaluation.uncertainty import member_probabilities
+    from tulip.labels.taxonomy import LabelLevel
+    from tulip.pipeline.classifier import DialectClassifier
+
+    clf = DialectClassifier(
+        model="voting", features=["char_tfidf"], task=TaskType.TEXT, target=LabelLevel.DIALECT
+    )
+    with pytest.raises(ConfigurationError, match="not fitted"):
+        member_probabilities(clf, ["baca hej kaj"])

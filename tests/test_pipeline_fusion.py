@@ -531,3 +531,38 @@ def test_load_wrong_kind_raises(tmp_path: Path) -> None:
     (artifact / "fusion.json").write_text('{"kind": "SomethingElse"}', encoding="utf-8")
     with pytest.raises(DataError, match="not saved by MultimodalClassifier"):
         MultimodalClassifier.load(artifact)
+
+
+# --------------------------------------------------------- weight/mask validation
+
+
+def test_weight_validation_rejects_empty_and_non_finite() -> None:
+    with pytest.raises(ConfigurationError, match="non-empty"):
+        WeightedAverageFusion(())
+    with pytest.raises(ConfigurationError, match="finite"):
+        WeightedAverageFusion((float("nan"), 0.5))
+    with pytest.raises(ConfigurationError, match="finite"):
+        LogarithmicPoolingFusion((float("inf"), 1.0))
+
+
+def test_weight_count_must_match_the_modality_count() -> None:
+    stack, mask = _stack_and_mask()  # 2 modalities
+    with pytest.raises(ConfigurationError, match="weight"):
+        WeightedAverageFusion((0.3, 0.3, 0.4)).fuse(stack, mask)
+
+
+def test_mask_shape_must_match_the_stack() -> None:
+    stack, _ = _stack_and_mask()  # (2, 4, 3)
+    bad = np.ones((2, 5), dtype=bool)  # wrong sample count
+    with pytest.raises(ConfigurationError, match="does not match"):
+        MaximumFusion().fuse(stack, bad)
+
+
+def test_stack_must_be_three_dimensional() -> None:
+    with pytest.raises(ConfigurationError, match="3-D"):
+        MaximumFusion().fuse(np.ones((2, 3)), np.ones((2, 3), dtype=bool))
+
+
+def test_parameter_free_strategy_config_is_empty() -> None:
+    assert MaximumFusion().config() == {}
+    assert ConfidenceWeightedFusion().config() == {}
