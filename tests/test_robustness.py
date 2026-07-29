@@ -236,3 +236,14 @@ def test_run_robustness_deterministic_and_degrades(
     # Clean is at least as good as the worst perturbed cell, within noise.
     worst = min(cell.f1_macro for cell in curve.cells)
     assert first.baseline.f1_macro >= worst - 0.1
+
+
+def test_perturbation_config_rejects_bad_levels() -> None:
+    from pydantic import ValidationError
+
+    from tulip.robustness import PerturbationConfig
+
+    with pytest.raises(ValidationError, match="non-empty"):
+        PerturbationConfig(name="typo_noise", levels=())
+    with pytest.raises(ValidationError, match="within"):
+        PerturbationConfig(name="typo_noise", levels=(0.5, 1.5))

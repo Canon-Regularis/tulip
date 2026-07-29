@@ -418,3 +418,11 @@ class TestEvaluateAndBenchmark:
         markdown = (tmp_path / "artifacts" / "cli-mini" / "benchmark.md").read_text("utf-8")
         assert "naive_bayes" in markdown
         assert "logistic_regression" in markdown
+
+
+def test_crossval_rejects_empty_seeds() -> None:
+    result = runner.invoke(
+        app, ["crossval", "benchmarks/configs/char_baseline.yaml", "--seeds", ""]
+    )
+    assert result.exit_code != 0
+    assert "seed" in result.output.lower()

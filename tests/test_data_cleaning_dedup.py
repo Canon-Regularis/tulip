@@ -133,3 +133,34 @@ def test_deduplicate_rejects_invalid_parameters() -> None:
         deduplicate_samples([], threshold=1.5)
     with pytest.raises(ConfigurationError, match="multiple of bands"):
         deduplicate_samples([], num_permutations=10, bands=3)
+
+
+def test_clean_sample_passthrough_and_copy() -> None:
+    from pathlib import Path
+
+    from tulip.core.types import DialectLabels, Sample
+    from tulip.data.cleaning import TextCleaner
+
+    cleaner = TextCleaner(collapse_whitespace=True, lowercase=True)
+    labels = DialectLabels(dialect="podhale")
+
+    audio = Sample(id="a", audio_path=Path("x.wav"), speaker_id="s", labels=labels)
+    assert cleaner.clean_sample(audio) is audio  # audio-only: unchanged
+
+    dirty = Sample(id="d", text="  Baca   HEJ  ", speaker_id="s", labels=labels)
+    result = cleaner.clean_sample(dirty)
+    assert result is not dirty
+    assert result.text == "baca hej"  # collapsed + lowercased -> new copy
+
+    assert repr(cleaner).startswith("TextCleaner(")
+
+
+def test_generic_manifest_loader_missing_configured_manifest_raises(tmp_path) -> None:
+    import pytest
+
+    from tulip.core.exceptions import DataError
+    from tulip.data.registry import DATASETS
+
+    loader = DATASETS.create("manifest", manifest="missing.csv")
+    with pytest.raises(DataError, match="configured manifest not found"):
+        list(loader.load(tmp_path))

@@ -316,3 +316,50 @@ def test_empty_digraph_list_raises(tmp_path: Path) -> None:
     )
     with pytest.raises(ConfigurationError, match="digraphs"):
         PhonologicalMarkerExtractor(isogloss_path=path).fit([])
+
+
+class TestIsoglossLoadingValidation:
+    @staticmethod
+    def _load(tmp_path, body: str):
+        from tulip.features.text.phonology import load_isoglosses
+
+        path = tmp_path / "iso.yaml"
+        path.write_text(body, encoding="utf-8")
+        return load_isoglosses(path)
+
+    def test_valid_pattern_and_digraph_load(self, tmp_path) -> None:
+        rules = self._load(
+            tmp_path,
+            "version: 1\nisoglosses:\n"
+            "  - {name: sl, kind: pattern, pattern: 'psi', exclude: [psie]}\n"
+            "  - {name: dg, kind: digraph, digraphs: [sz, cz]}\n",
+        )
+        assert len(rules) == 2
+        # rate over empty tokens is zero for both kinds
+        assert rules[0].rate("", []) == 0.0
+        assert rules[1].rate("", []) == 0.0
+
+    @pytest.mark.parametrize(
+        ("body", "match"),
+        [
+            ("version: 1\nisoglosses:\n  - just_a_string\n", "must be a mapping"),
+            ("version: 1\nisoglosses:\n  - {kind: pattern, pattern: psi}\n", "non-empty 'name'"),
+            (
+                "version: 1\nisoglosses:\n"
+                "  - {name: x, kind: pattern, pattern: psi, exclude: nope}\n",
+                "must be a list",
+            ),
+            (
+                "version: 1\nisoglosses:\n"
+                "  - {name: x, kind: pattern, pattern: psi, exclude: [5]}\n",
+                "non-string",
+            ),
+            (
+                "version: 1\nisoglosses:\n  - {name: x, kind: pattern, pattern: '['}\n",
+                "invalid 'pattern' regex",
+            ),
+        ],
+    )
+    def test_malformed_isoglosses_are_rejected(self, tmp_path, body: str, match: str) -> None:
+        with pytest.raises(ConfigurationError, match=match):
+            self._load(tmp_path, body)

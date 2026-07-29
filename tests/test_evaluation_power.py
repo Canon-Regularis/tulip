@@ -49,3 +49,12 @@ def test_validation() -> None:
 def test_markdown_reports_the_result() -> None:
     assert "power" in minimum_detectable_effect(144).to_markdown().lower()
     assert "no accuracy gap" in minimum_detectable_effect(3).to_markdown().lower()
+
+
+def test_binomial_tail_edge_cases() -> None:
+    from tulip.evaluation.power import _binomial_tail
+
+    assert _binomial_tail(10, 0, 0.5) == 1.0  # k <= 0: certain
+    assert _binomial_tail(10, 11, 0.5) == 0.0  # k > n: impossible
+    assert _binomial_tail(10, 3, 0.0) == 0.0  # p <= 0: no successes possible
+    assert _binomial_tail(10, 3, 1.0) == 1.0  # p >= 1: every trial succeeds, k <= n
