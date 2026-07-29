@@ -145,3 +145,47 @@ class TestIndexDeterminism:
         ModelRegistry(tmp_path / "reg").add(model_a, name="dialect", version="1")
         reopened = ModelRegistry(tmp_path / "reg")
         assert reopened.resolve("dialect@1").version == "1"
+
+
+class TestRegistryErrorBranches:
+    def test_promote_an_unregistered_version_raises(self, tmp_path: Path) -> None:
+        registry = ModelRegistry(tmp_path / "reg")
+        with pytest.raises(DataError, match="not registered"):
+            registry.promote("ghost", "1")
+
+    def test_resolve_an_unknown_reference_raises(self, model_a: Path, tmp_path: Path) -> None:
+        registry = ModelRegistry(tmp_path / "reg")
+        registry.add(model_a, name="dialect", version="1")
+        with pytest.raises(DataError, match="does not match"):
+            registry.resolve("dialect@999")
+
+    def test_promoting_the_same_version_twice_stays_production(
+        self, model_a: Path, tmp_path: Path
+    ) -> None:
+        registry = ModelRegistry(tmp_path / "reg")
+        registry.add(model_a, name="dialect", version="1")
+        first = registry.promote("dialect", "1")
+        again = registry.promote("dialect", "1")  # already production: a no-op path
+        assert first.stage is Stage.PRODUCTION
+        assert again.stage is Stage.PRODUCTION
+
+    def test_reading_a_sidecar_without_metadata_raises(self, tmp_path: Path) -> None:
+        # artifact_digest already requires metadata.json, so _read_sidecar's guard is
+        # reached directly rather than through add().
+        registry = ModelRegistry(tmp_path / "reg")
+        with pytest.raises(DataError, match="not a model artifact"):
+            registry._read_sidecar(tmp_path / "no_metadata_here")
+
+    def test_a_registry_index_without_entries_key_raises(self, tmp_path: Path) -> None:
+        root = tmp_path / "reg"
+        root.mkdir(parents=True)
+        (root / "registry.json").write_text('{"history": {}}', encoding="utf-8")
+        with pytest.raises(DataError, match="not a tulip registry index"):
+            ModelRegistry(root).entries()
+
+    def test_a_schema_invalid_registry_index_raises(self, tmp_path: Path) -> None:
+        root = tmp_path / "reg"
+        root.mkdir(parents=True)
+        (root / "registry.json").write_text('{"entries": [{"bad": "entry"}]}', encoding="utf-8")
+        with pytest.raises(DataError, match="not a valid"):
+            ModelRegistry(root).entries()

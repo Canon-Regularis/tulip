@@ -303,3 +303,15 @@ def test_read_manifest_jsonl_invalid_json_and_non_object(tmp_path) -> None:
     non_object.write_text('"just a string"\n', encoding="utf-8")
     with pytest.raises(DataError):
         list(read_manifest(non_object, columns=ManifestColumns()))
+
+
+def test_read_manifest_rejects_a_bad_columns_mapping(tmp_path) -> None:
+    import pytest
+
+    from tulip.core.exceptions import DataError
+    from tulip.data.manifest import read_manifest
+
+    manifest = tmp_path / "m.csv"
+    manifest.write_text("id,text,speaker_id\ns1,ok,spk\n", encoding="utf-8")
+    with pytest.raises(DataError, match="invalid manifest column mapping"):
+        list(read_manifest(manifest, columns={"not_a_field": "x"}))

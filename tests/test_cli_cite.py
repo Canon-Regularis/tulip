@@ -78,3 +78,52 @@ def test_cite_check_passes_on_committed_metadata() -> None:
     result = runner.invoke(app, ["cite", "--check"])
     assert result.exit_code == 0, result.output
     assert "agree" in result.output
+
+
+# -------------------------------------------------------- root/version/parity
+
+
+def test_find_repo_root_without_pyproject_raises(tmp_path) -> None:
+    import pytest
+
+    from tulip.cli._cite import find_repo_root
+
+    with pytest.raises(ConfigurationError, match="pyproject"):
+        find_repo_root(tmp_path)  # tmp_path and its parents hold no pyproject
+
+
+def test_project_version_missing_version_raises(tmp_path) -> None:
+    import pytest
+
+    from tulip.cli._cite import project_version
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
+    with pytest.raises(ConfigurationError, match="version string"):
+        project_version(tmp_path)
+
+
+def test_load_citation_missing_or_non_mapping_raises(tmp_path) -> None:
+    import pytest
+
+    from tulip.cli._cite import load_citation
+
+    with pytest.raises(ConfigurationError, match="no CITATION"):
+        load_citation(tmp_path)
+    (tmp_path / "CITATION.cff").write_text("- just\n- a list\n", encoding="utf-8")
+    with pytest.raises(ConfigurationError, match="not a mapping"):
+        load_citation(tmp_path)
+
+
+def test_check_version_parity_flags_zenodo_drift(tmp_path) -> None:
+    from tulip.cli._cite import check_version_parity
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "CITATION.cff").write_text(
+        'cff-version: 1.2.0\nversion: "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / ".zenodo.json").write_text('{"version": "9.9.9"}', encoding="utf-8")
+    drift = check_version_parity(tmp_path)
+    assert any(".zenodo.json" in message for message in drift)
+    assert not any("CITATION.cff" in message for message in drift)  # citation agrees
