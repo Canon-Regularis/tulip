@@ -140,3 +140,73 @@ class TestGeneratorConsistency:
 def test_apply_rules_module_helper() -> None:
     # The module-level forward helper round-trips through the bundled set.
     assert "psiwo" in apply_rules("piwo")
+
+
+# --------------------------------------------------------- custom-rule loading
+
+
+_VALID_RULE = """version: 1
+rules:
+  - name: rz_to_sz
+    map: {rz: sz}
+    where: anywhere
+    detectable: true
+    exclude: [rzeka]
+"""
+
+
+def _write_rules(tmp_path, body: str):
+    path = tmp_path / "rules.yaml"
+    path.write_text(body, encoding="utf-8")
+    return load_phonological_rules(path)
+
+
+class TestCustomRuleLoading:
+    def test_a_well_formed_rule_applies_and_reverses(self, tmp_path) -> None:
+        rules = _write_rules(tmp_path, _VALID_RULE)
+        assert len(rules) == 1
+        rule = rules[0]
+        assert rule.apply_token("rzeka2") == "szeka2"  # forward rz -> sz
+        assert rule.normalize_token("szeka2") == "rzeka2"  # reverse sz -> rz
+
+    def test_exclude_stoplist_blocks_rewrite_and_matches(self, tmp_path) -> None:
+        rule = _write_rules(tmp_path, _VALID_RULE)[0]
+        # 'rzeka' is on the stoplist: neither rewritten nor counted as applicable.
+        assert rule.apply_token("rzeka") == "rzeka"
+        assert rule.applicable_matches("rzeka") == []
+        assert rule.applicable_rate(["rzeka"]) == 0.0
+
+    def test_applicable_and_fired_rate_on_empty_tokens_are_zero(self, tmp_path) -> None:
+        rule = _write_rules(tmp_path, _VALID_RULE)[0]
+        assert rule.applicable_rate([]) == 0.0
+        assert rule.fired_rate([]) == 0.0
+
+    @pytest.mark.parametrize(
+        ("body", "match"),
+        [
+            ("version: 1\nrules:\n  - just_a_string\n", "must be a mapping"),
+            (
+                "version: 1\nrules:\n  - {name: a, map: {rz: sz}}\n  - {name: a, map: {cz: c}}\n",
+                "duplicate rule name",
+            ),
+            (
+                "version: 1\nrules:\n  - {name: r, map: {rz: sz}, where: sideways}\n",
+                "unknown where",
+            ),
+            (
+                "version: 1\nrules:\n  - {name: r, map: {rz: sz}, detectable: maybe}\n",
+                "must be a boolean",
+            ),
+            ("version: 1\nrules:\n  - {map: {rz: sz}}\n", "needs a non-empty 'name'"),
+            ("version: 1\nrules:\n  - {name: r, map: {}}\n", "non-empty 'map'"),
+            ("version: 1\nrules:\n  - {name: r, map: {rz: 5}}\n", "string -> string"),
+            ("version: 1\nrules:\n  - {name: r, map: {rz: ''}}\n", "empty 'map' key or value"),
+            (
+                "version: 1\nrules:\n  - {name: r, map: {rz: sz}, exclude: nope}\n",
+                "'exclude' must be a list",
+            ),
+        ],
+    )
+    def test_malformed_rules_are_rejected(self, tmp_path, body: str, match: str) -> None:
+        with pytest.raises(ConfigurationError, match=match):
+            _write_rules(tmp_path, body)
