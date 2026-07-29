@@ -126,3 +126,49 @@ def test_pipeline_fills_predicted_label(
     explainer, samples = indexed_explainer
     explanation = explainer.explain(pipeline, samples[0].text)
     assert explanation.predicted_label in set(labels)
+
+
+# --------------------------------------------------------------- validation
+
+
+def test_init_rejects_non_positive_k_and_snippet() -> None:
+    with pytest.raises(ConfigurationError, match="k must be"):
+        NearestExamplesExplainer(k=0)
+    with pytest.raises(ConfigurationError, match="snippet_chars"):
+        NearestExamplesExplainer(snippet_chars=0)
+
+
+def test_index_rejects_empty_samples() -> None:
+    with pytest.raises(ConfigurationError, match="zero samples"):
+        NearestExamplesExplainer().index([], TfidfVectorizer().fit(["baca hej", "kaj gynau"]))
+
+
+def test_index_rejects_a_transformer_without_transform(
+    synthetic_samples: list[Sample],
+) -> None:
+    with pytest.raises(ConfigurationError, match="transform"):
+        NearestExamplesExplainer().index(synthetic_samples, object())
+
+
+def test_index_rejects_a_row_count_mismatch(synthetic_samples: list[Sample]) -> None:
+    class _WrongRows:
+        def transform(self, texts: object) -> np.ndarray:
+            return np.zeros((len(synthetic_samples) + 3, 2))
+
+    with pytest.raises(ConfigurationError, match="rows for"):
+        NearestExamplesExplainer().index(synthetic_samples, _WrongRows())
+
+
+def test_explain_rejects_non_positive_k_override(
+    indexed_explainer: tuple[NearestExamplesExplainer, list[Sample]],
+) -> None:
+    explainer, samples = indexed_explainer
+    with pytest.raises(ConfigurationError, match="k must be"):
+        explainer.explain(None, samples[0].text, k=0)
+
+
+def test_l2_normalize_rejects_a_non_2d_dense_matrix() -> None:
+    from tulip.explain.neighbors import _l2_normalize
+
+    with pytest.raises(ConfigurationError, match="2-D"):
+        _l2_normalize(np.array([1.0, 2.0, 3.0]))  # 1-D

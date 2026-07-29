@@ -158,3 +158,70 @@ def test_non_pipeline_input_raises(fitted_pipeline: Pipeline) -> None:
 def test_empty_input_raises(fitted_pipeline: Pipeline) -> None:
     with pytest.raises(ConfigurationError, match="empty"):
         get_explainer("top_tfidf").explain(fitted_pipeline, "   ")
+
+
+# ---------------------------------------------------- binary / dense / validation
+
+
+def test_binary_model_expands_the_single_coefficient_row(
+    synthetic_texts_and_labels: tuple[list[str], list[str]],
+) -> None:
+    # sklearn stores one coef row for a 2-class model; the explainer must expand
+    # it into one row per class (the row for classes_[0] is the negation).
+    texts, labels = synthetic_texts_and_labels
+    binary = [(t, "podhale" if lab == "podhale" else "other") for t, lab in zip(texts, labels)]
+    bt, bl = [t for t, _ in binary], [lab for _, lab in binary]
+    pipeline = Pipeline(
+        [("tfidf", TfidfVectorizer()), ("clf", LogisticRegression(max_iter=2000, random_state=0))]
+    ).fit(bt, bl)
+    explanation = get_explainer("top_tfidf").explain(pipeline, PODHALE_QUERY)
+    assert explanation.predicted_label in {"podhale", "other"}
+    assert explanation.attributions
+    top = class_top_features(pipeline, k=3)
+    assert set(top) == {"podhale", "other"}
+
+
+def test_dense_feature_matrix_is_explained() -> None:
+    import numpy as np
+    from sklearn.base import BaseEstimator, TransformerMixin
+
+    class _DenseCounts(BaseEstimator, TransformerMixin):
+        _names = ("length", "a_count", "o_count")
+
+        def fit(self, X: object, y: object = None) -> _DenseCounts:
+            self.fitted_ = True  # sklearn check_is_fitted looks for a trailing-_ attr
+            return self
+
+        def transform(self, X: list[str]) -> np.ndarray:
+            return np.array(
+                [[len(x), x.lower().count("a"), x.lower().count("o")] for x in X], dtype=float
+            )
+
+        def get_feature_names_out(self, input_features: object = None) -> np.ndarray:
+            return np.asarray(self._names)
+
+    texts = ["baca owca hala", "prognoza pogody deszcz", "gryfny szynka", "morze kaszuby"]
+    labels = ["podhale", "standard", "silesia", "kashubia"]
+    pipeline = Pipeline(
+        [("dense", _DenseCounts()), ("clf", LogisticRegression(max_iter=2000, random_state=0))]
+    ).fit(texts, labels)
+    explanation = get_explainer("top_tfidf").explain(pipeline, "baca owca owca")
+    # The dense-features branch runs and yields attributions over the named columns.
+    assert explanation.attributions
+    assert all(a.token in {"length", "a_count", "o_count"} for a in explanation.attributions)
+
+
+def test_top_k_and_k_must_be_positive(fitted_pipeline: Pipeline) -> None:
+    with pytest.raises(ConfigurationError, match="top_k"):
+        get_explainer("top_tfidf", top_k=0)
+    with pytest.raises(ConfigurationError, match="k must be"):
+        class_top_features(fitted_pipeline, k=0)
+
+
+def test_feature_names_fall_back_to_positional_without_get_feature_names_out() -> None:
+    from tulip.explain.linear import _feature_names
+
+    class _NoNames:
+        pass
+
+    assert _feature_names(_NoNames(), 3) == ["feature_0", "feature_1", "feature_2"]
