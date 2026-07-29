@@ -129,6 +129,39 @@ def test_split_predictions_load_reports_configuration_error(tmp_path) -> None:
         SplitPredictions.load(corrupt)
 
 
+def test_predictions_dump_with_out_of_range_proba_is_rejected(tmp_path) -> None:
+    import json
+
+    from tulip.evaluation.predictions import SplitPredictions
+
+    # A structurally-valid dump whose probabilities fall outside [0, 1] used to
+    # load fine, then crash `tulip analyze` with a raw pydantic ValidationError when
+    # error_report built an Exemplar (confidence bounded le=1.0). It must be
+    # rejected cleanly at load instead, as a corrupt dump.
+    dump = {
+        "labels": ["podhale", "silesia", "kurpie"],
+        "metadata": {},
+        "model": "m",
+        "split": "test",
+        "records": [
+            {
+                "id": "s0",
+                "y_true": "podhale",
+                "y_pred": "podhale",
+                "proba": [1.5, -0.3, 0.1],  # out of range: corrupt
+                "source": "x",
+                "speaker_id": "k0",
+                "n_chars": 10,
+                "modality": "text",
+            }
+        ],
+    }
+    path = tmp_path / "predictions_test.json"
+    path.write_text(json.dumps(dump), encoding="utf-8")
+    with pytest.raises(ConfigurationError):
+        SplitPredictions.load(path)
+
+
 def test_split_fingerprint_load_missing_file_reports_dataerror(tmp_path) -> None:
     from tulip.data.fingerprint import SplitFingerprint
 
@@ -328,6 +361,34 @@ def test_feature_config_with_an_unknown_param_reports_configuration_error() -> N
 
     with pytest.raises(ConfigurationError):
         build_text_features([{"name": "char_tfidf", "params": {"bogus_kw": 1}}])
+
+
+def test_fit_time_bad_feature_param_reports_configuration_error() -> None:
+    from tulip.core.types import DialectLabels, Sample, TaskType
+    from tulip.labels.taxonomy import LabelLevel
+    from tulip.pipeline.classifier import DialectClassifier
+
+    # A reversed ngram_range builds a TfidfVectorizer fine, so the construction
+    # guard passes; sklearn only rejects it at fit time. That fit-time ValueError
+    # must surface as a clean ConfigurationError, not a raw traceback.
+    corpus = [
+        Sample(
+            id=f"s{i}",
+            text="baca hej ka gron" if i % 2 else "ja ci gynau tref",
+            speaker_id=f"spk{i}",
+            labels=DialectLabels(dialect="podhale" if i % 2 else "silesia"),
+        )
+        for i in range(8)
+    ]
+    classifier = DialectClassifier(
+        model="logistic_regression",
+        features=[{"name": "char_tfidf", "params": {"ngram_range": (5, 2)}}],
+        task=TaskType.TEXT,
+        target=LabelLevel.DIALECT,
+        seed=0,
+    )
+    with pytest.raises(ConfigurationError):
+        classifier.fit(corpus)
 
 
 def test_llm_cache_treats_a_non_object_json_file_as_a_miss(tmp_path) -> None:
