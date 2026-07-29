@@ -114,3 +114,27 @@ class TestLoadSpec:
         path = tmp_path / "empty.yaml"
         path.write_text("", encoding="utf-8")
         assert load_datasheet_spec(path) == DatasheetSpec()
+
+
+def test_load_datasheet_spec_rejects_unparsable_yaml(tmp_path) -> None:
+    import pytest
+
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.evaluation.datasheet import load_datasheet_spec
+
+    bad = tmp_path / "spec.yaml"
+    bad.write_text("motivation: [unclosed list\n", encoding="utf-8")  # invalid YAML
+    with pytest.raises(ConfigurationError, match="could not read datasheet spec"):
+        load_datasheet_spec(bad)
+
+
+def test_load_datasheet_spec_rejects_a_non_mapping(tmp_path) -> None:
+    import pytest
+
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.evaluation.datasheet import load_datasheet_spec
+
+    bad = tmp_path / "spec.yaml"
+    bad.write_text("- just\n- a list\n", encoding="utf-8")
+    with pytest.raises(ConfigurationError, match="must be a YAML mapping"):
+        load_datasheet_spec(bad)

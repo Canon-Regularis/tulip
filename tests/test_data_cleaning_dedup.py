@@ -111,3 +111,25 @@ class TestDeduplication:
         first = deduplicate_samples(samples)
         second = deduplicate_samples(samples)
         assert [s.id for s in first.samples] == [s.id for s in second.samples]
+
+
+def test_shingle_jaccard_edge_cases() -> None:
+    from tulip.data.dedup import shingle_jaccard
+
+    assert shingle_jaccard("", "") == 1.0  # both empty -> identical
+    assert shingle_jaccard("", "abcdef ghij") == 0.0  # one empty
+    # A text shorter than one shingle contributes itself as a single shingle.
+    assert shingle_jaccard("ab", "ab", shingle_size=5) == 1.0
+    assert shingle_jaccard("ab", "cd", shingle_size=5) == 0.0
+
+
+def test_deduplicate_rejects_invalid_parameters() -> None:
+    import pytest
+
+    from tulip.core.exceptions import ConfigurationError
+    from tulip.data.dedup import deduplicate_samples
+
+    with pytest.raises(ConfigurationError, match="threshold"):
+        deduplicate_samples([], threshold=1.5)
+    with pytest.raises(ConfigurationError, match="multiple of bands"):
+        deduplicate_samples([], num_permutations=10, bands=3)

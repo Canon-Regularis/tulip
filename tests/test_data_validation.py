@@ -262,3 +262,45 @@ def test_counts_expose_severity_and_dialect_tallies(tmp_path: Path) -> None:
     assert report.counts["error"] == 0
     assert report.counts["dialect:silesia"] == 2
     assert report.counts["dialect:podhale"] == 1
+
+
+# ----------------------------------------------------- additional error codes
+
+
+def test_partial_speaker_coverage_is_a_warning(tmp_path: Path) -> None:
+    manifest = _write(
+        tmp_path / "manifest.csv",
+        [
+            "id,text,speaker_id,dialect",
+            "s1,Baca poseł na grań.,spk-a,podhale",
+            "s2,Kaj żeś boł?,,silesia",  # no speaker: surrogate synthesised for this row
+        ],
+    )
+    report = validate_manifest(manifest)
+    assert "partial-speaker" in _warnings(report)
+
+
+def test_empty_manifest_is_an_empty_manifest_error(tmp_path: Path) -> None:
+    empty = tmp_path / "manifest.csv"
+    empty.write_text("", encoding="utf-8")
+    report = validate_manifest(empty)
+    assert "empty-manifest" in _errors(report)
+
+
+def test_jsonl_with_a_non_object_line_is_a_malformed_row_error(tmp_path: Path) -> None:
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text(
+        '{"id": "s1", "text": "Baca.", "speaker_id": "a", "dialect": "podhale"}\n'
+        "\n"  # blank line the shape scan skips
+        '"just a string, not an object"\n',
+        encoding="utf-8",
+    )
+    report = validate_manifest(manifest)
+    assert "malformed-row" in _errors(report)
+
+
+def test_to_markdown_reports_no_issues_when_there_are_none() -> None:
+    report = ManifestReport(path="m.csv", n_rows=3, n_usable=3, counts={}, issues=())
+    markdown = report.to_markdown()
+    assert "No issues detected." in markdown
+    assert "## Issues" not in markdown

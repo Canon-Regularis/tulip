@@ -276,3 +276,30 @@ class TestCommonVoiceLoader:
     def test_missing_file_raises_with_acquisition_hint(self, tmp_path: Path) -> None:
         with pytest.raises(DataError, match=r"commonvoice\.mozilla\.org"):
             list(CommonVoiceLoader().load(tmp_path))
+
+
+def test_read_manifest_missing_file_raises_dataerror(tmp_path) -> None:
+    import pytest
+
+    from tulip.core.exceptions import DataError
+    from tulip.data.manifest import ManifestColumns, read_manifest
+
+    with pytest.raises(DataError, match="not found"):
+        list(read_manifest(tmp_path / "nope.csv", columns=ManifestColumns()))
+
+
+def test_read_manifest_jsonl_invalid_json_and_non_object(tmp_path) -> None:
+    import pytest
+
+    from tulip.core.exceptions import DataError
+    from tulip.data.manifest import ManifestColumns, read_manifest
+
+    bad_json = tmp_path / "a.jsonl"
+    bad_json.write_text('{"id": "s1", "text": "ok", bad}\n', encoding="utf-8")
+    with pytest.raises(DataError, match="invalid JSON"):
+        list(read_manifest(bad_json, columns=ManifestColumns()))
+
+    non_object = tmp_path / "b.jsonl"
+    non_object.write_text('"just a string"\n', encoding="utf-8")
+    with pytest.raises(DataError):
+        list(read_manifest(non_object, columns=ManifestColumns()))

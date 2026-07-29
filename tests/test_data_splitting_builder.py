@@ -144,3 +144,27 @@ class TestDatasetBuilder:
         config = self._config(manifest_corpus).model_copy(update={"deduplicate": False})
         samples = DatasetBuilder(config).load_samples()
         assert len(samples) == 37  # duplicate survives; short row still filtered
+
+
+class TestSplittingEdgeCases:
+    def test_group_by_a_missing_attribute_raises(self) -> None:
+        with pytest.raises(DataError, match="no attribute"):
+            speaker_disjoint_split(make_samples(repeats=2), SplitConfig(group_by="not_an_attr"))
+
+    def test_stratify_by_none_still_produces_all_splits(self) -> None:
+        samples = make_samples(repeats=4)
+        splits = speaker_disjoint_split(samples, SplitConfig(seed=1, stratify_by=None))
+        assert splits.total == len(samples)
+        assert splits.train and splits.validation and splits.test
+
+    def test_load_splits_missing_directory_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(DataError, match="not found"):
+            load_splits(tmp_path / "does-not-exist")
+
+    def test_load_splits_malformed_file_raises(self, tmp_path: Path) -> None:
+        directory = tmp_path / "splits"
+        directory.mkdir()
+        for name in ("train", "validation", "test"):
+            (directory / f"{name}.jsonl").write_text("{not valid json\n", encoding="utf-8")
+        with pytest.raises(DataError, match="invalid split file"):
+            load_splits(directory)

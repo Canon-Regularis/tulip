@@ -170,3 +170,23 @@ def test_model_card_degrades_gracefully_on_empty_sidecar() -> None:
     assert "Classes: n/a" in card
     assert "No evaluation reports available." in card
     assert "No non-default parameters." in card
+
+
+def test_format_value_handles_each_type() -> None:
+    from tulip.evaluation.cards import _NA, _format_value
+
+    assert _format_value(None) == _NA
+    assert _format_value(True) == "true"  # bool before int (int subclass)
+    assert _format_value(False) == "false"
+    assert _format_value(5) == "5"
+    assert _format_value(2.5) == "2.5"
+    assert _format_value("hej") == "hej"
+    assert _format_value([2, 1]) == "[2, 1]"  # non-scalar -> sorted JSON
+
+
+def test_format_params_sorts_keys_and_handles_empty() -> None:
+    from tulip.evaluation.cards import _format_params
+
+    assert _format_params({}) == "n/a"
+    assert _format_params(None) == "n/a"
+    assert _format_params({"b": 2, "a": 1, "c": True}) == "a=1; b=2; c=true"
