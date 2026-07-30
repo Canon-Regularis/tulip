@@ -1,0 +1,55 @@
+[importlinter]
+root_package = tulip
+
+[importlinter:contract:frozen-base]
+name = Frozen base (core/labels/utils/config) never imports a higher layer
+type = forbidden
+source_modules =
+    tulip.core
+    tulip.labels
+    tulip.utils
+    tulip.config
+forbidden_modules =
+    tulip.data
+    tulip.models
+    tulip.features
+    tulip.evaluation
+    tulip.pipeline
+    tulip.explain
+    tulip.cli
+    tulip.serve
+    tulip.viz
+    tulip.robustness
+    tulip.deploy
+
+[importlinter:contract:labels-dependency-free]
+name = labels is dependency-free within tulip
+type = forbidden
+source_modules =
+    tulip.labels
+forbidden_modules =
+    tulip.core
+    tulip.utils
+    tulip.config
+
+[importlinter:contract:data-models-below-eval-and-pipeline]
+name = data and models sit below evaluation and pipeline (augment is the one documented exception)
+type = forbidden
+source_modules =
+    tulip.data
+    tulip.models
+forbidden_modules =
+    tulip.evaluation
+    tulip.pipeline
+ignore_imports =
+    tulip.data.augment -> tulip.robustness
+    tulip.data.augment -> tulip.robustness.report
+
+[importlinter:contract:fusion-strategies-leaf]
+name = fusion strategies stay independent of the classifiers they serve
+type = forbidden
+source_modules =
+    tulip.pipeline.fusion.strategies
+forbidden_modules =
+    tulip.pipeline.classifier
+    tulip.pipeline.fusion.classifier
