@@ -46,18 +46,23 @@ tulip card datasheet artifacts/build/dialektarium \
     --out artifacts/real-text/datasheet-dialektarium.md
 
 # (c) The subgroup bias analysis (stays local; paste its summary into the report).
-tulip analyze artifacts/real-text/predictions_test.json --fairness \
+#     The leaderboard does not persist per-sample predictions, so train the char
+#     config once to write predictions_test.json, then analyse that file.
+tulip train benchmarks/configs/real_text_char.yaml
+tulip analyze artifacts/benchmarks/real-text-char/predictions_test.json --fairness \
     --out artifacts/real-text/bias.md
 
-# (d) The paper-style methodology-and-results report.
-tulip card benchmark artifacts/real-text \
+# (d) The paper-style methodology-and-results report. The board is written one
+#     level below --out, under <suite-name>/.
+tulip card benchmark artifacts/real-text/real-text-leaderboard \
     --datasheet artifacts/real-text/datasheet-dialektarium.md \
     --bias artifacts/real-text/bias.md --out docs/benchmark.md
 
 # (e) The reproducibility check: rebuild the split from your local data and
-#     confirm it matches the committed fingerprint.
+#     confirm it matches the committed fingerprint. Each config writes its lock
+#     under artifacts/benchmarks/<config-name>/splits/.
 tulip repro verify-lock benchmarks/configs/real_text_char.yaml \
-    artifacts/real-text/split_lock.json
+    artifacts/benchmarks/real-text-char/splits/split_lock.json
 ```
 
 ## 3. What to commit

@@ -34,9 +34,10 @@ benchmark report, but the predictions themselves stay private.
 ## Producing and verifying it
 
 ```
-tulip benchmark real benchmarks/real_text_suite.yaml --data-root data/raw --out artifacts/real-text
-# review artifacts/real-text, then commit the four artifact kinds above here
-tulip repro verify-lock benchmarks/configs/real_text_char.yaml split_lock.json
+tulip leaderboard benchmarks/real_text_suite.yaml --out artifacts/real-text
+# review artifacts/real-text/real-text-leaderboard, then commit the four artifact kinds above here
+tulip repro verify-lock benchmarks/configs/real_text_char.yaml \
+    artifacts/benchmarks/real-text-char/splits/split_lock.json
 ```
 
 See `docs/guide/real-corpus.md` for the full runbook and the canonical manifest

@@ -1,40 +1,51 @@
-# Datasheet prose for the dialektarium corpus (TEMPLATE).
-# The raw corpus is assembled manually and is not redistributed with tulip; only
-# aggregate digests and metrics are committed. Fill each TODO from your own
-# collection notes, then render with `tulip card datasheet`.
+# Datasheet prose for the dialektarium corpus.
+# Renders via: tulip card datasheet <build-dir> \
+#     --spec benchmarks/datasheets/dialektarium.yaml --dataset dialektarium
+# The raw corpus is assembled manually and is never redistributed with tulip; only
+# aggregate digests and metrics are committed. Fields marked TODO are corpus-specific
+# facts only you can supply from your collection notes; the rest are already filled.
 
 motivation: >-
-  TODO: why this corpus was assembled. For example: to provide fine-grained,
-  geographically labelled real dialect text so Polish dialect identification can
-  be benchmarked speaker-disjoint rather than only on a synthetic fixture.
+  TODO: state why this corpus was assembled. A typical answer: to provide
+  fine-grained, geographically labelled real dialect text so Polish dialect
+  identification can be benchmarked speaker-disjoint on genuine material rather than
+  only on a synthetic fixture, and to ground the family/dialect/region/voivodeship
+  taxonomy in attested speech. Source: dialektarium.pl (no bulk download).
 
-funding: "TODO: funding source, or 'none'."
+funding: "TODO: funding source(s) for the collection and annotation, or 'none'."
 
 collection_process: >-
-  TODO: how the material was obtained and transcribed. dialektarium.pl has no bulk
-  download, so describe the manual transcription and labelling process, who did
-  it, and over what period.
+  TODO: describe how the material was obtained and transcribed. dialektarium.pl has
+  no bulk download, so cover which recordings or pages were used, how they were
+  transcribed to text, who did the transcription and labelling, over what period,
+  and how each sample was tied to a speaker and a locality.
 
 sampling_strategy: >-
-  TODO: how speakers, localities, and samples were selected, and any geographic or
-  demographic skew (which regions and voivodeships are over or under represented).
+  TODO: describe how speakers, localities, and samples were selected, the target
+  count per dialect, and any known geographic or demographic skew (which regions and
+  voivodeships are over- or under-represented, and why).
 
 preprocessing: >-
-  TODO: cleaning, normalisation, and deduplication applied before building the
-  manifest (encoding, punctuation, minimum length, near-duplicate removal).
+  TODO: describe the cleaning you applied before writing the manifest (encoding
+  normalisation, punctuation, speaker anonymisation). For reference, the benchmark
+  configs (benchmarks/configs/real_text_*.yaml) additionally apply clean=true,
+  deduplicate=true, and min_text_chars=20 at build time; note anything you did on top.
 
 uses: >-
-  Speaker-disjoint dialect identification benchmarking at family, dialect, region,
-  and voivodeship levels. TODO: note any out-of-scope uses.
+  Speaker-disjoint dialect identification benchmarking at the family, dialect,
+  region, and voivodeship levels, and demographic-bias slicing where age/gender
+  metadata is present. TODO: note any out-of-scope or discouraged uses.
 
 distribution_terms: >-
-  TODO: licence and redistribution terms. The raw corpus is not redistributed with
-  tulip; only the split fingerprint, provenance, and aggregate metrics are
-  committed, so the benchmark is reproducible in principle while the data stays
-  private.
+  The raw corpus is NOT redistributed with tulip. Only the split fingerprint
+  (split_lock.json), provenance, and aggregate metrics are committed, so the
+  benchmark is reproducible in principle while the underlying speech and transcripts
+  stay private. TODO: state the licence and terms under which you may hold and use
+  the source material.
 
-maintenance_contact: "TODO: contact for corrections and updates."
+maintenance_contact: "TODO: name and contact for corrections, updates, and takedown requests."
 
 ethical_legal: >-
-  TODO: consent and anonymisation of speakers, and any community sensitivities
-  around attributing speech to a named dialect or locality.
+  TODO: describe speaker consent and anonymisation, and any community sensitivities
+  around attributing speech to a named dialect or locality. Note whether speaker_ids
+  are pseudonymous and whether any locality is fine-grained enough to be identifying.
