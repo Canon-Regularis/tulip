@@ -206,7 +206,10 @@ def validate_manifest(
     samples: list[Sample] | None
     try:
         samples = list(read_manifest(path, columns=cols, audio_root=base))
-    except UnicodeDecodeError as exc:
+    # read_manifest converts any UnicodeDecodeError into a DataError (manifest.py),
+    # so this clause is unreachable in practice; kept as a defensive net and to
+    # preserve the specific encoding message should that contract ever change.
+    except UnicodeDecodeError as exc:  # pragma: no cover
         issues.append(
             ManifestIssue(
                 severity="error",

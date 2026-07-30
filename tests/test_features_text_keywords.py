@@ -7,29 +7,18 @@ whole-word, case-insensitive, diacritic-exact matching the module promises.
 
 from __future__ import annotations
 
-import sys
-import types
 from typing import TYPE_CHECKING
 
 import pytest
 
+from conftest import ensure_features_importable
 from tulip.core.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _import_guard() -> None:
-    try:
-        import tulip.features
-    except ModuleNotFoundError as exc:  # pragma: no cover - depends on build order
-        if exc.name != "tulip.features.audio":
-            raise
-        sys.modules["tulip.features.audio"] = types.ModuleType("tulip.features.audio")
-        import tulip.features  # noqa: F401
-
-
-_import_guard()
+ensure_features_importable()
 
 from tulip.features.registries import TEXT_FEATURES  # noqa: E402
 from tulip.features.text.keywords import (  # noqa: E402

@@ -7,28 +7,15 @@ per-token-rate logic is guarded on its own.
 
 from __future__ import annotations
 
-import sys
-import types
 from typing import Any
 
 import numpy as np
 import pytest
 
+from conftest import ensure_features_importable
 from tulip.core.exceptions import ConfigurationError
 
-
-def _import_guard() -> None:
-    """Keep tulip.features importable before the sibling audio package exists."""
-    try:
-        import tulip.features
-    except ModuleNotFoundError as exc:  # pragma: no cover - depends on build order
-        if exc.name != "tulip.features.audio":
-            raise
-        sys.modules["tulip.features.audio"] = types.ModuleType("tulip.features.audio")
-        import tulip.features  # noqa: F401
-
-
-_import_guard()
+ensure_features_importable()
 
 from tulip.features.registries import TEXT_FEATURES  # noqa: E402
 from tulip.features.text.affixes import AffixFrequencyExtractor  # noqa: E402

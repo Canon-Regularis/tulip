@@ -239,7 +239,10 @@ class ModelRegistry:
     def _read_sidecar(self, model_dir: Path | str) -> dict[str, Any]:
         """Read a persisted artifact's ``metadata.json`` as a dict."""
         path = Path(model_dir) / METADATA_FILENAME
-        if not path.is_file():
+        # add() digests the artifact first via artifact_digest, which already reads
+        # metadata.json and fails if it is absent, so this guard is unreachable
+        # through the one public caller; kept so a direct call still fails cleanly.
+        if not path.is_file():  # pragma: no cover
             raise DataError(f"{Path(model_dir)} is not a model artifact (no {METADATA_FILENAME})")
         return read_json_object(path, what="model sidecar")
 

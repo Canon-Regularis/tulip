@@ -61,6 +61,26 @@ def block_imports(monkeypatch: pytest.MonkeyPatch, *blocked: str) -> None:
     monkeypatch.setattr(importlib, "import_module", fake_import_module)
 
 
+def ensure_features_importable() -> None:
+    """Make ``tulip.features`` importable before its audio subpackage is built.
+
+    Importing ``tulip.features`` can pull in the sibling ``tulip.features.audio``
+    package, which is absent in a text-only checkout. Stub it so the text feature
+    tests import cleanly regardless of build order. Call this at a test module's
+    top level, before importing anything under ``tulip.features``.
+    """
+    import sys
+    import types
+
+    try:
+        import tulip.features
+    except ModuleNotFoundError as exc:  # pragma: no cover - depends on build order
+        if exc.name != "tulip.features.audio":
+            raise
+        sys.modules["tulip.features.audio"] = types.ModuleType("tulip.features.audio")
+        import tulip.features  # noqa: F401
+
+
 # Tiny synthetic corpus: crude dialect-flavoured Polish, multiple speakers per
 # dialect so speaker-disjoint splitting is exercisable. Not linguistically
 # faithful; only the statistical shape matters for tests.

@@ -169,8 +169,8 @@ def test_binary_model_expands_the_single_coefficient_row(
     # sklearn stores one coef row for a 2-class model; the explainer must expand
     # it into one row per class (the row for classes_[0] is the negation).
     texts, labels = synthetic_texts_and_labels
-    binary = [(t, "podhale" if lab == "podhale" else "other") for t, lab in zip(texts, labels)]
-    bt, bl = [t for t, _ in binary], [lab for _, lab in binary]
+    bt = list(texts)
+    bl = ["podhale" if lab == "podhale" else "other" for lab in labels]
     pipeline = Pipeline(
         [("tfidf", TfidfVectorizer()), ("clf", LogisticRegression(max_iter=2000, random_state=0))]
     ).fit(bt, bl)
