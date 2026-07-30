@@ -52,7 +52,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           # A PAT, not GITHUB_TOKEN, so the pushed commit re-triggers ci.yml.
           token: ${{ secrets.DEPENDABOT_UV_LOCK_TOKEN }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install uv
