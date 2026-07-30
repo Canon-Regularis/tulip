@@ -26,6 +26,7 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff format --check src tests
       - run: ruff check src tests
+      - run: lint-imports
 
   test:
     runs-on: ubuntu-latest

@@ -93,6 +93,8 @@ dev = [
     "types-PyYAML>=6.0.12.20260518",
     "pre-commit>=4.6.0",
     "hypothesis>=6.156.6",
+    # Enforces the frozen-module / layered-import architecture (see .importlinter).
+    "import-linter>=2.13",
 ]
 
 [project.scripts]

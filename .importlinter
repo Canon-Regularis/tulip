@@ -53,3 +53,50 @@ source_modules =
 forbidden_modules =
     tulip.pipeline.classifier
     tulip.pipeline.fusion.classifier
+
+[importlinter:contract:features-are-mid-tier]
+name = feature extractors never reach up into evaluation, pipeline, or the app layers
+type = forbidden
+source_modules =
+    tulip.features
+forbidden_modules =
+    tulip.evaluation
+    tulip.pipeline
+    tulip.explain
+    tulip.cli
+    tulip.serve
+    tulip.viz
+    tulip.robustness
+    tulip.deploy
+
+[importlinter:contract:explain-below-orchestration]
+name = explainers sit below the pipeline and app layers
+type = forbidden
+source_modules =
+    tulip.explain
+forbidden_modules =
+    tulip.pipeline
+    tulip.cli
+    tulip.serve
+    tulip.viz
+    tulip.deploy
+
+[importlinter:contract:root-leaf-helpers]
+name = the shared root helpers stay leaves, depending only on the frozen base
+type = forbidden
+source_modules =
+    tulip._serialize
+    tulip._stats
+    tulip._jsonio
+forbidden_modules =
+    tulip.data
+    tulip.models
+    tulip.features
+    tulip.evaluation
+    tulip.pipeline
+    tulip.explain
+    tulip.cli
+    tulip.serve
+    tulip.viz
+    tulip.robustness
+    tulip.deploy
