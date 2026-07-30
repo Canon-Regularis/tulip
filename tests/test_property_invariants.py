@@ -24,6 +24,8 @@ from tulip.core.types import DialectLabels, Sample
 from tulip.data.dedup import deduplicate_samples
 from tulip.data.splitting import speaker_disjoint_split
 from tulip.evaluation.metrics import compute_metrics
+from tulip.evaluation.power import minimum_detectable_effect
+from tulip.evaluation.significance import mcnemar_exact
 
 #: Real taxonomy dialects, so DialectLabels' family derivation exercises too.
 _DIALECTS = ("podhale", "silesia", "kashubia", "kurpie")
@@ -212,3 +214,70 @@ def test_confusion_row_sums_equal_the_true_class_counts(pair: tuple[list[str], l
     for index, label in enumerate(report.labels):
         assert int(matrix[index].sum()) == y_true.count(label)
     assert int(matrix.sum()) == len(y_true)
+
+
+# --------------------------------------------------------------- significance
+
+
+@st.composite
+def correctness_pairs(draw: st.DrawFn) -> tuple[list[bool], list[bool]]:
+    """Two aligned per-sample correctness vectors, as a paired test receives."""
+    n = draw(st.integers(min_value=1, max_value=200))
+    first = draw(st.lists(st.booleans(), min_size=n, max_size=n))
+    second = draw(st.lists(st.booleans(), min_size=n, max_size=n))
+    return first, second
+
+
+@_SETTINGS
+@given(pair=correctness_pairs())
+def test_mcnemar_p_is_a_probability_and_symmetric(pair: tuple[list[bool], list[bool]]) -> None:
+    """The two-sided p is a probability and does not depend on argument order."""
+    a, b = pair
+    da, db, p = mcnemar_exact(a, b)
+    da2, db2, p2 = mcnemar_exact(b, a)
+    assert 0.0 <= p <= 1.0
+    assert (da2, db2) == (db, da)  # swapping the models swaps the discordant counts
+    assert p == pytest.approx(p2)  # but leaves the two-sided p unchanged
+
+
+@_SETTINGS
+@given(pair=correctness_pairs())
+def test_mcnemar_p_is_one_when_disagreements_balance(pair: tuple[list[bool], list[bool]]) -> None:
+    """Equal discordant counts leave the models indistinguishable, so p is 1.0."""
+    a, b = pair
+    da, db, p = mcnemar_exact(a, b)
+    if da == db:
+        assert p == 1.0
+
+
+# ----------------------------------------------------------------------- power
+
+
+@_SETTINGS
+@given(
+    n=st.integers(min_value=1, max_value=5000),
+    alpha=st.floats(min_value=0.001, max_value=0.2),
+    power=st.floats(min_value=0.5, max_value=0.99),
+)
+def test_minimum_detectable_effect_reports_valid_fields(n: int, alpha: float, power: float) -> None:
+    report = minimum_detectable_effect(n, alpha=alpha, power=power)
+    assert report.n_samples == n
+    assert report.significant_wins >= 1
+    if report.detectable:
+        assert report.mde is not None
+        assert 0.0 < report.mde <= 1.0
+    else:
+        assert report.mde is None
+
+
+@_SETTINGS
+@given(n=st.integers(min_value=1, max_value=2000), extra=st.integers(min_value=1, max_value=2000))
+def test_more_samples_never_lose_detectability_or_raise_the_mde(n: int, extra: int) -> None:
+    # Adding paired samples can only help: an effect detectable at n stays
+    # detectable at n + extra, and the smallest detectable effect never grows.
+    small = minimum_detectable_effect(n)
+    large = minimum_detectable_effect(n + extra)
+    if small.detectable:
+        assert large.detectable
+        assert small.mde is not None and large.mde is not None
+        assert large.mde <= small.mde + 1e-12
