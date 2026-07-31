@@ -9,6 +9,14 @@ on:
     # Weekly, so a newly published query still finds an idle repository.
     - cron: "23 4 * * 1"
 
+# A burst of pushes to main only needs the newest commit analysed; cancel the
+# superseded scans. A pull_request run has a different ref, so it never cancels a
+# main scan, and the weekly cron shares main's group and is happy to yield to a
+# newer push.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
