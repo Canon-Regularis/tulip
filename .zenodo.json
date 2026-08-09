@@ -14,7 +14,7 @@
     "text-classification",
     "machine-learning"
   ],
-  "license": "MIT",
+  "license": "Apache 2.0",
   "title": "tulip: Polish Dialect Typology and Regional Speech Classification Analysis System",
   "upload_type": "software",
   "version": "0.1.0"
