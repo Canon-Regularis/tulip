@@ -164,7 +164,12 @@ def _add_abstention_layer(
         "Prediction abstained: no region reached the confidence threshold."
         "</div>"
     )
-    fmap.get_root().html.add_child(folium_mod.Element(note))
+    # folium 0.20 started shipping type information and narrowed get_root() to
+    # Element, whose declared interface has no .html; the object returned at
+    # runtime is the root Figure, which does.
+    fmap.get_root().html.add_child(  # type: ignore[attr-defined]
+        folium_mod.Element(note)
+    )
 
 
 def prediction_map(
