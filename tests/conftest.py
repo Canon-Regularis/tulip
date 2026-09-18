@@ -35,8 +35,9 @@ def fake_bigos_hub(monkeypatch: pytest.MonkeyPatch):
 
     calls = SimpleNamespace(load_dataset_args=None)
 
-    def load_dataset(name, config, *, split, streaming):
+    def load_dataset(name, config, *, split, streaming, revision=None):
         calls.load_dataset_args = (name, config, split, streaming)
+        calls.revision = revision
         return iter(BIGOS_HUB_RECORDS)
 
     module = ModuleType("datasets")

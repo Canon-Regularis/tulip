@@ -1,5 +1,5 @@
 # HerBERT fine-tuning: raw texts go straight to the transformer wrapper
-# (features stays empty). Requires: pip install "tulip[transformers]"
+# (features stays empty). Requires: pip install "tulip-dialect[transformers]"
 name: text-herbert
 seed: 42
 task: text

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from rich.markup import escape
 from rich.table import Table
 
 from tulip.cli._context import _console, _tulip_errors, datasets_app
@@ -91,7 +92,10 @@ def data_download(
         DownloadStatus.FAILED: "[red]failed[/red]",
     }
     for report in reports:
-        table.add_row(report.name, status_styles[report.status], report.detail)
+        # The detail carries acquisition prose and upstream error text, both of
+        # which contain "[...]" (pip extras, bracketed hints); rich would read
+        # those as markup and silently drop them.
+        table.add_row(report.name, status_styles[report.status], escape(report.detail))
     _console.print(table)
 
     manual = [report for report in reports if report.status is DownloadStatus.MANUAL]

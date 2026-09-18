@@ -1,5 +1,5 @@
 # Classical audio baseline: pooled MFCC + prosody features into logistic
-# regression. Requires: pip install "tulip[audio]"
+# regression. Requires: pip install "tulip-dialect[audio]"
 name: audio-baseline
 seed: 42
 task: audio

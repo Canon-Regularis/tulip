@@ -10,6 +10,7 @@ import pytest
 
 from tulip.core.exceptions import ConfigurationError, DataError, UnknownComponentError
 from tulip.data import DATASETS, DownloadStatus, catalog, download_datasets
+from tulip.data.loaders.bigos import DEFAULT_HF_DATASET, PARQUET_REVISION
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -25,11 +26,14 @@ class TestBigosDownload:
         loader.download(tmp_path / "bigos")
 
         assert fake_bigos_hub.load_dataset_args == (
-            "michaljunczyk/pl-asr-bigos",
+            DEFAULT_HF_DATASET,
             None,
             "train",
             True,
         )
+        # The dataset branch is a loading script, unreadable on datasets>=4, so
+        # the loader must stream the Hub's parquet conversion of it instead.
+        assert fake_bigos_hub.revision == PARQUET_REVISION
         # The manifest mode (default) must now work fully offline.
         samples = list(DATASETS.create("bigos").load(tmp_path / "bigos"))
         assert len(samples) == 3  # empty-text record skipped
@@ -305,5 +309,5 @@ class TestDownloadDatasets:
         by_name = {report.name: report for report in reports}
         assert by_name["bigos"].status is DownloadStatus.FAILED
         assert "hf auth login" in by_name["bigos"].detail
-        assert "huggingface.co/datasets/michaljunczyk/pl-asr-bigos" in by_name["bigos"].detail
+        assert f"huggingface.co/datasets/{DEFAULT_HF_DATASET}" in by_name["bigos"].detail
         assert by_name["dgp"].status is DownloadStatus.MANUAL  # run continued

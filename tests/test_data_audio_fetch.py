@@ -1,15 +1,21 @@
 """Tests for audio fetch: materialising Hub clips for bigos and common_voice_pl.
 
 Every test runs offline: the ``datasets`` library is stubbed with in-memory
-records. Real usage disables decoding (``Audio(decode=False)``), so a streamed
-record carries the clip's original encoded ``bytes``; the fakes here mirror that
-by carrying ``bytes`` too, and the loaders write them verbatim, needing no audio
-extra. The decoded-``array`` fallback is exercised directly against
-``write_hub_clip``.
+records, and BIGOS's tarball fetch is stubbed with a local archive.
+
+The two loaders get their clips differently, and the fakes mirror that. Common
+Voice streams with decoding disabled (``Audio(decode=False)``), so each record
+carries the clip's original encoded ``bytes`` and the loader writes them
+verbatim, needing no audio extra. BIGOS cannot: its dataset branch is a loading
+script that ``datasets>=4`` refuses to run, so the loader streams the Hub's
+parquet conversion, which carries no audio column at all, and pulls the bytes
+from the per-subset release tarball keyed on ``audiopath_bigos``. The
+decoded-``array`` fallback is exercised directly against ``write_hub_clip``.
 """
 
 from __future__ import annotations
 
+import io
 import sys
 import wave
 from types import ModuleType, SimpleNamespace
@@ -21,27 +27,36 @@ from conftest import block_imports
 from tulip.core.exceptions import ConfigurationError, DataError, MissingDependencyError
 from tulip.data import DATASETS
 from tulip.data.loaders._hub_audio import write_hub_clip
+from tulip.data.loaders.bigos import DEFAULT_HF_DATASET
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-#: BIGOS-shaped Hub records carrying the clip's original bytes (decode disabled).
+#: BIGOS-shaped records as the Hub's parquet conversion serves them: transcript,
+#: speaker, and the clip's *name*. That conversion carries no audio column, so the
+#: bytes come from the release tarball keyed on ``audiopath_bigos``.
 BIGOS_AUDIO_RECORDS: list[dict[str, object]] = [
     {
         "ref_orig": "Pierwsze audio.",
         "speaker_id": "spk-1",
         "dataset": "sub-a",
-        "audioname": "clip0.wav",
-        "audio": {"path": "clip0.wav", "bytes": b"RIFF-clip0-fake"},
+        "audioname": "clip0",
+        "audiopath_bigos": "clip0.wav",
     },
     {
         "ref_orig": "Drugie audio.",
         "speaker_id": "spk-2",
         "dataset": "sub-a",
-        "audioname": "clip1.wav",
-        "audio": {"path": "clip1.wav", "bytes": b"RIFF-clip1-fake"},
+        "audioname": "clip1",
+        "audiopath_bigos": "clip1.wav",
     },
 ]
+
+#: Clip bytes the fake tarball serves, keyed by member name.
+BIGOS_TAR_PAYLOAD: dict[str, bytes] = {
+    "clip0.wav": b"RIFF-clip0-fake",
+    "clip1.wav": b"RIFF-clip1-fake",
+}
 
 #: Common-Voice-shaped Hub records: original mp3 bytes plus transcript and accent.
 CV_AUDIO_RECORDS: list[dict[str, object]] = [
@@ -94,14 +109,48 @@ def _install_fake_hub(
     """Stub the ``datasets`` library so ``load_dataset`` streams ``records``."""
     calls = SimpleNamespace(args=None, cast=None)
 
-    def load_dataset(name, config=None, *, split, streaming):
+    def load_dataset(name, config=None, *, split, streaming, revision=None):
         calls.args = (name, config, split, streaming)
+        calls.revision = revision
         return _FakeHubStream(records, calls)
 
     module = ModuleType("datasets")
     module.load_dataset = load_dataset
     module.Audio = lambda **kwargs: ("Audio", kwargs)  # feature stub the cast records
     monkeypatch.setitem(sys.modules, "datasets", module)
+    return calls
+
+
+def _install_fake_tarball(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    payload: dict[str, bytes] | None = None,
+) -> SimpleNamespace:
+    """Stub ``huggingface_hub`` so BIGOS audio comes from a local tarball.
+
+    Mirrors the real release layout: a flat ``.tar.gz`` whose member names are
+    exactly the ``audiopath_bigos`` values, which is how the loader matches
+    clips to records.
+    """
+    import tarfile
+
+    payload = BIGOS_TAR_PAYLOAD if payload is None else payload
+    archive = tmp_path / "fake-bigos.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        for name, blob in payload.items():
+            member = tarfile.TarInfo(name)
+            member.size = len(blob)
+            tar.addfile(member, io.BytesIO(blob))
+
+    calls = SimpleNamespace(requested=[])
+
+    def hf_hub_download(repo_id, filename, *, repo_type=None, revision=None):
+        calls.requested.append((repo_id, filename, repo_type))
+        return str(archive)
+
+    module = ModuleType("huggingface_hub")
+    module.hf_hub_download = hf_hub_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", module)
     return calls
 
 
@@ -158,19 +207,24 @@ class TestWriteHubClip:
 
 
 class TestBigosAudioFetch:
-    def test_audio_download_disables_decoding(
+    def test_audio_is_fetched_from_the_per_subset_release_tarball(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        calls = _install_fake_hub(monkeypatch, BIGOS_AUDIO_RECORDS)
+        _install_fake_hub(monkeypatch, BIGOS_AUDIO_RECORDS)
+        tar = _install_fake_tarball(monkeypatch, tmp_path)
+
         DATASETS.create("bigos").download(tmp_path / "bigos", audio=True)
-        # The crux: the clip column is fetched without decoding, so no audio
-        # backend (soundfile/torchcodec) is needed to materialise clips.
-        assert calls.cast == ("audio", ("Audio", {"decode": False}))
+
+        # The crux: the parquet conversion the loader streams has no audio
+        # column, so clips come from the release tarball for that subset/split,
+        # and only the subsets actually wanted are fetched.
+        assert tar.requested == [(DEFAULT_HF_DATASET, "data/sub-a/train.tar.gz", "dataset")]
 
     def test_audio_download_writes_clips_and_round_trips(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         _install_fake_hub(monkeypatch, BIGOS_AUDIO_RECORDS)
+        _install_fake_tarball(monkeypatch, tmp_path)
         root = tmp_path / "bigos"
 
         DATASETS.create("bigos").download(root, audio=True)
@@ -183,7 +237,23 @@ class TestBigosAudioFetch:
         assert samples[0].audio_path is not None
         assert samples[0].audio_path.is_file()  # the manifest path resolves to a real clip
         assert samples[0].audio_path.parent == root / "clips"
-        assert samples[0].audio_path.read_bytes() == b"RIFF-clip0-fake"  # original bytes verbatim
+        assert samples[0].audio_path.read_bytes() == b"RIFF-clip0-fake"  # tar bytes verbatim
+
+    def test_clips_absent_from_the_tarball_are_dropped_not_dangled(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # A manifest row whose clip never materialised would fail validation
+        # later with a missing-file error; the row must be dropped instead.
+        _install_fake_hub(monkeypatch, BIGOS_AUDIO_RECORDS)
+        _install_fake_tarball(monkeypatch, tmp_path, {"clip0.wav": b"RIFF-clip0-fake"})
+        root = tmp_path / "bigos"
+
+        DATASETS.create("bigos").download(root, audio=True)
+
+        samples = list(DATASETS.create("bigos").load(root))
+        assert [s.text for s in samples] == ["Pierwsze audio."]
+        assert samples[0].audio_path is not None
+        assert samples[0].audio_path.is_file()
 
     def test_text_mode_writes_no_audio_column_or_clips(
         self, fake_bigos_hub: SimpleNamespace, tmp_path: Path
@@ -198,6 +268,7 @@ class TestBigosAudioFetch:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         _install_fake_hub(monkeypatch, BIGOS_AUDIO_RECORDS)
+        _install_fake_tarball(monkeypatch, tmp_path)
         root = tmp_path / "bigos"
         DATASETS.create("bigos").download(root, audio=True, limit=1)
         assert len(list((root / "clips").glob("*.wav"))) == 1
@@ -351,6 +422,7 @@ class TestDownloadDatasetsAudioCapability:
         from tulip.data import DownloadStatus, download_datasets
 
         _install_fake_hub(monkeypatch, BIGOS_AUDIO_RECORDS)
+        _install_fake_tarball(monkeypatch, tmp_path)
         reports = download_datasets(["bigos"], tmp_path, options={"audio": True})
         assert reports[0].status is DownloadStatus.DOWNLOADED
         assert len(list((tmp_path / "bigos" / "clips").glob("*.wav"))) == 2
@@ -365,8 +437,49 @@ class TestCliDownloadAudio:
         from tulip.cli.app import app
 
         _install_fake_hub(monkeypatch, BIGOS_AUDIO_RECORDS)
+        _install_fake_tarball(monkeypatch, tmp_path)
         result = CliRunner().invoke(
             app, ["data", "download", "bigos", "--audio", "--root", str(tmp_path)]
         )
         assert result.exit_code == 0, result.output
         assert len(list((tmp_path / "bigos" / "clips").glob("*.wav"))) == 2
+
+
+class TestBigosSubsetAccumulation:
+    def test_fetching_one_subset_keeps_another_subsets_rows(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # Audio ships one tarball per source corpus, so a corpus gets assembled a
+        # few subsets at a time. Rewriting the whole manifest each run made every
+        # fetch silently discard the previous one.
+        root = tmp_path / "bigos"
+        first = [dict(BIGOS_AUDIO_RECORDS[0], dataset="sub-a")]
+        second = [dict(BIGOS_AUDIO_RECORDS[1], dataset="sub-b")]
+
+        _install_fake_hub(monkeypatch, first)
+        _install_fake_tarball(monkeypatch, tmp_path, {"clip0.wav": b"RIFF-clip0-fake"})
+        DATASETS.create("bigos", subsets=["sub-a"]).download(root, audio=True)
+
+        _install_fake_hub(monkeypatch, second)
+        _install_fake_tarball(monkeypatch, tmp_path, {"clip1.wav": b"RIFF-clip1-fake"})
+        DATASETS.create("bigos", subsets=["sub-b"]).download(root, audio=True)
+
+        subsets = sorted(s.metadata.get("subset") for s in DATASETS.create("bigos").load(root))
+        assert subsets == ["sub-a", "sub-b"]
+
+    def test_unscoped_fetch_still_replaces_the_manifest(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # Without a subset filter the fetch is authoritative, so a re-run must
+        # not accumulate stale rows forever.
+        root = tmp_path / "bigos"
+        _install_fake_hub(monkeypatch, [dict(BIGOS_AUDIO_RECORDS[0], dataset="sub-a")])
+        _install_fake_tarball(monkeypatch, tmp_path, {"clip0.wav": b"RIFF-clip0-fake"})
+        DATASETS.create("bigos", subsets=["sub-a"]).download(root, audio=True)
+
+        _install_fake_hub(monkeypatch, [dict(BIGOS_AUDIO_RECORDS[1], dataset="sub-b")])
+        _install_fake_tarball(monkeypatch, tmp_path, {"clip1.wav": b"RIFF-clip1-fake"})
+        DATASETS.create("bigos").download(root, audio=True)  # no subsets: replaces
+
+        subsets = sorted(s.metadata.get("subset") for s in DATASETS.create("bigos").load(root))
+        assert subsets == ["sub-b"]
