@@ -423,3 +423,110 @@ def test_marker_density_guards_the_denominator_not_the_marker_set() -> None:
     # ZeroDivisionError (which the earlier `if not markers` guard let through).
     assert DialectIntensityExtractor._marker_density([], frozenset({"baca"})) == 0.0
     assert DialectIntensityExtractor._marker_density(["baca", "kaj"], frozenset()) == 0.0
+
+
+def test_cli_error_boundary_keeps_the_pip_extra_in_the_install_hint() -> None:
+    # rich reads "[...]" as markup, so an unescaped MissingDependencyError
+    # rendered 'pip install "tulip-dialect[hf]"' as 'pip install "tulip-dialect"'
+    # -- a command that installs none of what the user was missing.
+    from typer.testing import CliRunner
+
+    from tulip.cli._context import _tulip_errors, app
+    from tulip.core.exceptions import MissingDependencyError
+
+    @app.command("boom-missing-extra")
+    @_tulip_errors
+    def _boom() -> None:
+        raise MissingDependencyError("datasets", extra="hf", purpose="the Hub")
+
+    try:
+        result = CliRunner().invoke(app, ["boom-missing-extra"])
+        assert result.exit_code == 1
+        assert "tulip-dialect[hf]" in result.output
+    finally:
+        app.registered_commands = [
+            command for command in app.registered_commands if command.name != "boom-missing-extra"
+        ]
+
+
+def test_download_table_keeps_bracketed_text_in_the_detail_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Same markup bug one layer up: `tulip data download` renders each report's
+    # detail into a rich table, and a failing hf-extra download puts
+    # 'pip install "tulip-dialect[hf]"' in that detail.
+    from pathlib import Path
+
+    from typer.testing import CliRunner
+
+    from tulip.cli.app import app
+    from tulip.data.download import DownloadReport, DownloadStatus
+
+    monkeypatch.setenv("COLUMNS", "200")
+    # The command imports download_datasets lazily from tulip.data, so patch it
+    # at that binding rather than on the command module.
+    monkeypatch.setattr(
+        "tulip.data.download_datasets",
+        lambda *args, **kwargs: [
+            DownloadReport(
+                name="bigos",
+                status=DownloadStatus.FAILED,
+                destination=Path("data/raw/bigos"),
+                detail='Install it with: pip install "tulip-dialect[hf]"',
+            )
+        ],
+    )
+
+    result = CliRunner().invoke(app, ["data", "download", "bigos"])
+    assert "[hf]" in result.output
+
+
+def test_emit_report_does_not_parse_report_markdown_as_markup() -> None:
+    # Report markdown is data. A bootstrap confidence interval renders as
+    # "[0.48, 0.71]", which rich would parse as a style tag and drop.
+    from tulip.cli._context import _console
+
+    with _console.capture() as captured:
+        _console.print("ci: [0.48, 0.71]", markup=False)
+    assert "[0.48, 0.71]" in captured.get()
+
+
+def test_bigos_defaults_are_reachable_on_modern_datasets() -> None:
+    # The loader used to default to michaljunczyk/pl-asr-bigos with split="train".
+    # That dataset ships a `test` split only, so the default configuration could
+    # never load anything; and its dataset branch is a loading script, which
+    # datasets>=4 refuses to run. Both defaults must stay on the parquet
+    # conversion of the maintained v2 release.
+    from tulip.data.loaders.bigos import (
+        DEFAULT_HF_DATASET,
+        PARQUET_REVISION,
+        BigosLoader,
+    )
+
+    loader = BigosLoader()
+    assert DEFAULT_HF_DATASET == "amu-cai/pl-asr-bigos-v2"
+    assert PARQUET_REVISION == "refs/convert/parquet"
+    assert loader._hf_dataset == DEFAULT_HF_DATASET
+    assert loader._revision == PARQUET_REVISION
+
+
+def test_bigos_script_removal_is_reported_as_itself(monkeypatch: pytest.MonkeyPatch) -> None:
+    # datasets>=4 raises "Dataset scripts are no longer supported". That used to
+    # fall through to the gated-dataset remediation, sending the user off to
+    # re-accept access conditions they already held.
+    import types
+
+    from tulip.data.loaders.bigos import BigosLoader
+
+    def _boom(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("Dataset scripts are no longer supported, but found bigos.py")
+
+    fake = types.SimpleNamespace(load_dataset=_boom)
+    monkeypatch.setattr("tulip.data.loaders.bigos.optional_import", lambda *a, **k: fake)
+
+    with pytest.raises(DataError) as excinfo:
+        list(BigosLoader()._stream_records())
+    message = str(excinfo.value)
+    assert "script support" in message
+    assert "refs/convert/parquet" in message
+    assert "accept the access conditions" not in message

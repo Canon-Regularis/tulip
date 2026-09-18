@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from tulip import __version__
@@ -81,7 +82,11 @@ def _tulip_errors(command: _CommandT) -> _CommandT:
         except TulipError as exc:
             if _state.verbose:
                 raise
-            _errors.print(f"error: {exc}")
+            # Escape the message: rich reads "[...]" as markup, and a
+            # MissingDependencyError's install hint ends in the pip extra, so an
+            # unescaped "tulip-dialect[hf]" renders as "tulip-dialect" and tells
+            # the user to run a command that does not install what they need.
+            _errors.print(f"error: {escape(str(exc))}")
             raise typer.Exit(code=1) from exc
 
     return wrapper  # type: ignore[return-value]  # functools.wraps preserves the signature
@@ -202,7 +207,10 @@ def _emit_report(
     if json_output:
         _console.print_json(report.model_dump_json())
     else:
-        _console.print(markdown if markdown is not None else report.to_markdown())
+        # markup=False: report markdown is data, not styled output, and a cell
+        # like a "[0.48, 0.71]" confidence interval would otherwise be parsed as
+        # markup and vanish from the table.
+        _console.print(markdown if markdown is not None else report.to_markdown(), markup=False)
 
 
 def _read_json_mapping(path: Path, *, what: str) -> dict[str, Any]:
